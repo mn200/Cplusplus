@@ -1,0 +1,184 @@
+\documentclass[dvips,xcolor=pst,color=usenames]{beamer}
+
+\usetheme{Madrid}
+\usepackage{url}
+\usepackage{pstricks}
+\usepackage{pst-tree}
+\usepackage{pst-node}
+\usepackage{proof}
+\usepackage{fancyvrb}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamercolor{math text}{fg=blue}
+\newcommand{\structcol}{\usebeamercolor[fg]{structure}}
+
+\title[Formally Defining C++]{Formally Defining C++\\
+  Why, How, \& What Exactly}
+\author{Michael Norrish}
+\institute{National ICT Australia}
+\titlegraphic{\includegraphics[width=0.3\textwidth]{nicta-colour-on-pale.eps}}
+\date{25 April 2006}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\section{Introduction}
+
+\section{Why?}
+\frame{
+  \frametitle{Why Describe a Language?}
+
+\textbf{Reason \#1:}
+
+\begin{quote}
+To establish a contract between the {\red users} and
+{\red implementors} of a language
+\end{quote}
+
+\pause
+\begin{center}
+\begin{tabular}{lp{0.6\textwidth}}
+{\structcol Users} & Programmers; those who submit source code to a language
+  implementation and expect a particular behaviour in return\\[3mm]
+{\structcol Implementors} & Programmers; those who write a language
+  implementation which other programmers will feed with source code
+\end{tabular}
+\end{center}
+
+}
+
+\frame{
+  \frametitle{A Language Contract}
+
+{\structcol \bfseries Manages Expectations}
+
+\begin{itemize}
+\item Users expect \texttt{\structcol i = i + 1} to add one to
+  variable \texttt{\structcol i}
+
+\item Implementors can rely on users not attempting to divide by
+  zero (in C/C++ anyway)
+\end{itemize}
+
+\pause
+\bigskip\bigskip
+{\structcol \bfseries Is Not an Implementation}
+
+\begin{itemize}
+\item Even for a language like Perl.
+  \begin{itemize}
+  \item After all, people report bugs
+    against Perl implementations.   Something other than the
+    implementation is defining what is and is not correct.
+  \end{itemize}
+\end{itemize}
+
+}
+
+\frame{
+  \frametitle{Language Contracts are Written in English}
+
+To wit (ISO/IEC 14882:2003, \S3.5, para 8):
+\begin{quote}
+\small
+Names not covered by these rules have no linkage.  Moreover, except as
+noted, a name declared in a local scope (3.3.2) has no linkage.  A
+name with no linkage (notably, the name of a class or enumeration
+declared in a local scope (3.3.2)) shall not be used to declare an
+entity with linkage.  If a declaration uses a typedef name, it is the
+linkage of the type name to which the typedef refers that is
+considered. [Example: ...] This implies that names with no linkage
+cannot be used as template arguments (14.3).
+\end{quote}
+
+If the user and the implementor disagree on the meaning of the
+contract, how can such a dispute be resolved?
+
+}
+
+\frame{
+  \frametitle{Formal Contracts}
+
+  [``Formal'' $=$ ``Mathematical'']
+
+  \medskip
+  \begin{itemize}
+  \item Mathematical reasoning is a route to certainty
+  \item Computers are designed to behave like (discrete-state)
+    mathematical objects \pause
+    \begin{itemize}
+    \item when they don't, the ``hardware contract'' has been broken
+    \end{itemize}
+    \pause
+    \medskip
+  \item Programming languages can be described mathematically
+    \medskip
+    \pause
+  \item More, high-level programming languages can be described
+    \emph{abstractly}, in a high-level way
+    \begin{itemize}
+    \item without requiring the description of a translation to machine
+      code
+    \item will describe how this is done when I describe {\structcol ``How?''}
+    \end{itemize}
+  \end{itemize}
+
+}
+
+\frame{
+  \frametitle{Advantages of Formal Contracts}
+
+  Mathematical methods can be used to determine exactly what a
+  language guarantees/requires.
+
+  \bigskip\bigskip
+  A rigorous understanding of a language can motivate definition of
+  {\red language subsets}.  (E.g., MISRA C)
+
+  \bigskip A formal definition for a language can be the basis for the
+  development of powerful {\red static analysis tools}.
+}
+
+\frame{
+  \frametitle{Static Analysis Tools}
+
+  \begin{itemize}
+  \item Many successful tools exist in this domain already, but most
+    are
+    \begin{itemize}
+    \item unsound,
+    \item incomplete, and
+    \item can only be used to find bugs, not to
+      provide much certainty about correctness
+    \end{itemize}
+
+    \bigskip
+  \item Full program verification: the ultimate static analysis.
+
+    But
+    \begin{itemize}
+    \item Retrospective program verification is impossible
+    \item Reliability must be built in from the outset
+    \item Formality is needed in the specification as well as the
+      description of the implementation language
+    \end{itemize}
+
+  \end{itemize}
+
+}
+
+
+
+\section{How?}
+
+\section{What Exactly?}
+
+\end{document}
+
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
