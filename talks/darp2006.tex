@@ -6,6 +6,7 @@
 \usepackage{pst-tree}
 \usepackage{pst-node}
 \usepackage{proof}
+\usepackage{pst-grad}
 \usepackage{fancyvrb}
 
 \setbeamertemplate{navigation symbols}{}
@@ -158,9 +159,9 @@ contract, how can such a dispute be resolved?
 
     But
     \begin{itemize}
-    \item Retrospective program verification is impossible
-    \item Reliability must be built in from the outset
-    \item Formality is needed in the specification as well as the
+    \item retrospective program verification is impossible
+    \item reliability must be built in from the outset
+    \item formality is needed in the specification as well as the
       description of the implementation language
     \end{itemize}
 
@@ -168,7 +169,70 @@ contract, how can such a dispute be resolved?
 
 }
 
+\frame{
+  \frametitle{One Possible Static Analysis Scenario}
 
+\psset{unit=1mm,linewidth=.1mm}
+\begin{pspicture}(120,70)
+% high-level source
+\rput(0,-2.5){
+  \psframe[shadow=true,shadowcolor=CornflowerBlue,shadowsize=1pt,framearc=.2,linecolor=blue](0,70)(40,35)
+  \rput(20,63){\parbox{3cm}{\centering \blue High-level Source\\(Spec)}}
+  \psset{linecolor=blue,linestyle=dotted,linewidth=.2mm}
+  \rput(0,-5){
+    \psline(5,60)(35,60)
+    \psline(5,55)(35,55)
+    \psline(5,50)(35,50)
+    \psline(5,45)(35,45)
+  }
+}
+% low-level code
+\rput(0,0){
+  \psframe[shadow=true,framearc=0,linecolor=Brown](80,70)(120,30)
+  \rput(100,65){\textcolor{Brown}{\texttt{Low-level Code}}}
+  \psset{linecolor=Brown,linestyle=dotted,linewidth=.2mm}
+  \rput(80,-5){
+    \psline(5,60)(35,60)
+    \psline(5,55)(35,55)
+    \psline(5,50)(35,50)
+    \psline(5,45)(35,45)
+    \psline(5,40)(35,40)
+  }
+}
+% down left
+\pscurve[linecolor=blue,linewidth=1.25]{->}(20,32.5)(25,22)(50,18)(55,15)
+% down right
+\pscurve[linecolor=Brown,linewidth=1.25]{->}(100,30)(95,22)(70,18)(65,15)
+% translation arrow
+\rput(0,0){
+  \psline[linewidth=.8]{->}(40,50)(80,50)
+  \rput(60,55){\psovalbox[fillcolor=CornflowerBlue,fillstyle=solid,linestyle=none]{\textbf{Translation}}}
+}
+\rput(60,10){\parbox{4cm}{\centering Verification\\(Equivalence Check)}}
+\end{pspicture}
+
+The translation might be done by a third-party tool, but rigorous
+descriptions of source and target languages are required.
+
+}
+
+\frame{
+  \frametitle{Why C++ ?}
+
+C++
+\begin{itemize}
+\item is a popular object-oriented application-level language
+\item provides higher-level abstractions than C
+\item \dots while still compiling to efficient code
+\item high-level abstractions can lead to cleaner/safer/more reliable implementations
+\end{itemize}
+
+}
+
+\frame{
+  \frametitle{Why Not C++ ?}
+
+}
 
 \section{How?}
 
