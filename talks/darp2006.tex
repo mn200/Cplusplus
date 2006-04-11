@@ -24,9 +24,15 @@
 
 \frame{\titlepage}
 
-\section{Introduction}
+\section*{Introduction}
+
+\frame{
+  \frametitle{Outline}
+  \tableofcontents
+}
 
 \section{Why?}
+\subsection{Why Formal Language Description}
 \frame{
   \frametitle{Why Describe a Language?}
 
@@ -174,9 +180,10 @@ contract, how can such a dispute be resolved?
 
 \psset{unit=1mm,linewidth=.1mm}
 \begin{pspicture}(120,70)
+\psframe[fillstyle=solid,fillcolor=yellow!15!white,linestyle=none](-2,71)(122,0)
 % high-level source
 \rput(0,-2.5){
-  \psframe[shadow=true,shadowcolor=CornflowerBlue,shadowsize=1pt,framearc=.2,linecolor=blue](0,70)(40,35)
+  \psframe[framearc=.2,linecolor=blue,linewidth=.2mm,fillstyle=solid,fillcolor=white](0,70)(40,35)
   \rput(20,63){\parbox{3cm}{\centering \blue High-level Source\\(Spec)}}
   \psset{linecolor=blue,linestyle=dotted,linewidth=.2mm}
   \rput(0,-5){
@@ -216,6 +223,8 @@ descriptions of source and target languages are required.
 
 }
 
+
+\subsection{Why C++}
 \frame{
   \frametitle{Why C++ ?}
 
@@ -230,11 +239,123 @@ C++
 }
 
 \frame{
-  \frametitle{Why Not C++ ?}
+  \frametitle{C++ Features}
+
+  \begin{itemize}
+  \item \textbf{Inheritance} (multiple, public and private), giving
+    \begin{itemize}
+    \item \textbf{Sub-class polymorphism} (cats behave like mammals,
+      like animals)
+    \end{itemize}
+  \item \textbf{Parametric Polymorphism} (templates, ``generic code'')
+  \item \textbf{Function Overloading} (functions of the same name with
+    different types)
+  \item \textbf{Exceptions}
+  \item \textbf{Hierarchical Name-spaces}
+  \end{itemize}
+
+
+}
+
+\frame{
+  \frametitle{Why Not Formalise C++ ?}
+
+(See previous slide\dots)
+
+\bigskip
+Semantic complexity of many interacting features is intimidating.
+\begin{itemize}
+\item ``No-one knows all of C++''
+\end{itemize}
+
+\bigskip
+How would one know that a formal semantics was correct?
+\begin{itemize}
+\item Indeed, what does \emph{correctness} mean here?
+\end{itemize}
 
 }
 
 \section{How?}
+
+\frame{
+  \frametitle{How?}
+\tableofcontents[current]
+}
+\subsection{Operational Semantics---Simple Examples}
+\frame{
+  \frametitle{Operational Semantics}
+
+I propose to write a formal description of C++ using the technique
+known as operational semantics.
+
+\bigskip This can been seen as
+\begin{quote}
+\structcol writing an interpreter in logic
+\end{quote}
+
+\pause\bigskip This is an interpreter that can use the full (not
+necessarily executable) expressive-ness of logic and mathematics
+(sets, quantifiers, functions \dots).
+
+\medskip It can
+\begin{itemize}
+\item model under-specification
+\item model non-determinism
+\end{itemize}
+
+}
+
+\frame{
+  \frametitle{Operational Semantics---Generalities}
+
+An operational definition typically is a set of rules of the form
+\[
+\infer{\mathit{start} \rightarrow \mathit{result}}{
+    \mathit{premiss}_1 &
+    \cdots &
+    \mathit{premiss}_n}
+\]
+meaning
+\begin{quote}
+\structcol
+If the premisses hold then it is the case that $\mathit{start}$ can
+become/evolve~to/evaluate~to $\mathit{result}$.
+\end{quote}
+
+\bigskip
+(Use of {\structcol can} rather than {\structcol must} above allows
+for non-determinism.)
+}
+
+\frame{
+  \frametitle{Operational Semantics---Example Rules}
+
+Rules for $\textsf{if}$:
+\[
+\begin{array}{c}
+\infer{\textsf{if}\;G\;\textsf{then}\;e_1\;\textsf{else}\;e_2
+  \;\,\rightarrow\,\; v_1}{
+  G \;\,\rightarrow\;\,\textsf{True} &&
+  e_1 \;\,\rightarrow\;\,v_1
+}\\[1cm]
+\infer{\textsf{if}\;G\;\textsf{then}\;e_1\;\textsf{else}\;e_2
+  \;\,\rightarrow\,\; v_2}{
+  G \;\,\rightarrow\;\,\textsf{False} &&
+  e_2 \;\,\rightarrow\;\,v_2
+}
+\end{array}
+\]
+
+These are fine for $\textsf{if}$-expressions that do not have side
+effects.
+
+
+}
+
+\subsection{C: Witness to Practicality}
+
+\subsection{Probable Approaches}
 
 \section{What Exactly?}
 
