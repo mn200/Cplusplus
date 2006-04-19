@@ -6,7 +6,7 @@
 \usepackage{pst-tree}
 \usepackage{pst-node}
 \usepackage{proof}
-\usepackage{pst-grad}
+%\usepackage{pst-grad}
 \usepackage{fancyvrb}
 
 \setbeamertemplate{navigation symbols}{}
@@ -252,6 +252,9 @@ C++
     different types)
   \item \textbf{Exceptions}
   \item \textbf{Hierarchical Name-spaces}
+  \item \textbf{Tweaks/Additions to C} (references (not just
+    pointers), extended sorts of casts, the \texttt{\structcol const}
+    modifier)
   \end{itemize}
 
 
@@ -306,12 +309,16 @@ necessarily executable) expressive-ness of logic and mathematics
 
 }
 
+\newcommand{\semarrow}{\;\,\rightarrow\;\,}
+
+
+
 \frame{
   \frametitle{Operational Semantics---Generalities}
 
 An operational definition typically is a set of rules of the form
 \[
-\infer{\mathit{start} \rightarrow \mathit{result}}{
+\infer{\mathit{start} \semarrow \mathit{result}}{
     \mathit{premiss}_1 &
     \cdots &
     \mathit{premiss}_n}
@@ -335,14 +342,14 @@ Rules for $\textsf{if}$:
 \[
 \begin{array}{c}
 \infer{\textsf{if}\;G\;\textsf{then}\;e_1\;\textsf{else}\;e_2
-  \;\,\rightarrow\,\; v_1}{
-  G \;\,\rightarrow\;\,\textsf{True} &&
-  e_1 \;\,\rightarrow\;\,v_1
+  \semarrow v_1}{
+  G \semarrow \textsf{True} & &
+  e_1 \semarrow v_1
 }\\[1cm]
 \infer{\textsf{if}\;G\;\textsf{then}\;e_1\;\textsf{else}\;e_2
-  \;\,\rightarrow\,\; v_2}{
-  G \;\,\rightarrow\;\,\textsf{False} &&
-  e_2 \;\,\rightarrow\;\,v_2
+  \semarrow v_2}{
+  G \semarrow\textsf{False} & &
+  e_2 \semarrow v_2
 }
 \end{array}
 \]
@@ -350,12 +357,402 @@ Rules for $\textsf{if}$:
 These are fine for $\textsf{if}$-expressions that do not have side
 effects.
 
+}
+
+\frame{
+  \frametitle{Operational Semantics---Modularity}
+
+  The ``style'' is to write independent rules for specific syntactic
+  forms.
+
+  \bigskip
+  For example, take the previous slide's rules for $\textsf{if}$, and
+  add in a rule for $+$:
+\[
+\infer{e_1 \,{\red +} \,e_2 \semarrow v_1 + v_2}{
+  e_1 \semarrow v_1 & & e_2 \semarrow v_2
+}
+\] (Note two different flavours of $+$ !)
+
+\bigskip
+Adding in treatment of language's arithmetic operators is simple.
 
 }
 
+\frame{
+  \frametitle{Operational Semantics---Rules Can Refer to Each Other}
+
+
+With rule for unary negation:
+\[
+\infer{{\red -}e \semarrow -v}{e \semarrow v}
+\]
+
+\bigskip
+can define binary subtraction in terms of $+$:
+\[
+\infer{e_1\,{\red -}\,e_2 \semarrow v}{e_1 \,{\red+\,-}e_2 \semarrow
+  v}
+\]
+
+\bigskip
+(Rules need not be \emph{primitive recursive}: premiss in rule for
+binary subtraction is ``larger'' than conclusion.)
+
+}
+
+%% slides on extensibility - handling guards that evaluate to numbers
+
+\frame{
+  \frametitle{Operational Semantics---Extensibility}
+
+Rules for $\textsf{if}$
+\[
+\begin{array}{c}
+\infer{\textsf{if}\;G\;\textsf{then}\;e_1\;\textsf{else}\;e_2
+  \semarrow v_1}{
+  G \semarrow \textsf{True} & &
+  e_1 \semarrow v_1
+}\\[1cm]
+\infer{\textsf{if}\;G\;\textsf{then}\;e_1\;\textsf{else}\;e_2
+  \semarrow v_2}{
+  G \semarrow\textsf{False} & &
+  e_2 \semarrow v_2
+}
+\end{array}
+\]
+assume that $G$ will evaluate to $\textsf{True}$ or $\textsf{False}$.
+
+\medskip
+What if we want to allow a C-like situation where non-zero numbers
+count as \textsf{True}?
+
+}
+
+\frame{
+  \frametitle{Operational Semantics---Extensibility}
+
+To handle numbers as truth values, add two new rules:
+\[
+\begin{array}{c}
+\infer{\textsf{if}\;G\;\textsf{then}\;e_1\;\textsf{else}\;e_2
+  \semarrow v_1}{
+  G \semarrow n & n \neq 0&
+  e_1 \semarrow v_1
+}\\[1cm]
+\infer{\textsf{if}\;G\;\textsf{then}\;e_1\;\textsf{else}\;e_2
+  \semarrow v_2}{
+  G \semarrow 0 & &
+  e_2 \semarrow v_2
+}
+\end{array}
+\]
+
+Before there was no behaviour defined for guards that evaluated to
+numbers; now our system has been extended to allow it.
+
+\medskip
+(Could equally cause such an event to raise an exception/abort\dots)
+
+\pause\medskip
+Note also how easy it would be to get the system to evaluate (and
+ignore) the branch not taken.
+
+}
+
+
+%% slides on adding environments/states for side effects
+\frame{
+  \frametitle{Operational Semantics: Adding More Complexity}
+
+Programming languages usually include variables.
+
+\medskip
+Variables have values that need to be looked up in some sort of
+{\red environment} or {\red state}.
+
+\medskip
+Change pattern of rule to be
+\[
+\infer{\langle\mathit{thing},\sigma_0\rangle \semarrow
+  \mathit{result}}{\cdots}
+\]
+where the result will probably include a $\sigma$, representing the
+updated state of memory.
+
+}
+
+\newcommand{\bfsemi}{\textsf{\bfseries ;}}
+\frame{
+  \frametitle{Operational Semantics: Statements}
+
+The $\mathit{result}$ is just a state.
+
+\bigskip
+Sequential composition:
+\[
+\infer{\langle \mathit{stmt}_1\,\bfsemi\,\mathit{stmt}_2,\;\sigma_0\rangle
+  \semarrow \sigma_2}{
+  \langle\mathit{stmt}_1,\;\sigma_0\rangle \semarrow \sigma_1 &
+  \langle\mathit{stmt}_2,\;\sigma_1\rangle \semarrow \sigma_2}
+\]
+\bigskip
+A loop rule:
+\[
+\infer{\langle\textsf{while}\;G\;\textsf{do}\;\mathit{body},\;\sigma_0\rangle
+  \semarrow \sigma}{
+  \langle\textsf{if}\;G\;\textsf{then}\;(\mathit{body}\bfsemi\;\textsf{while}\;G\;\textsf{do}\;\mathit{body}),\;\sigma_0\rangle \semarrow \sigma}
+\]
+}
+
+\newcommand{\plusplus}{\!+\!\hspace{-1pt}+}
+\frame{
+  \frametitle{Operational Semantics: Expressions with Side Effects}
+
+Form of rule becomes:
+\[
+\infer{\langle e,\sigma_0\rangle \semarrow
+  \langle v, \sigma\rangle}{\cdots}
+\]
+
+
+\bigskip
+For example, a post-increment operator \emph{\`a la} C:
+\[
+\infer{\langle \mathit{var}\plusplus, \;\sigma\rangle
+  \semarrow \langle v,\;
+  \sigma[\mathit{var}\mapsto v + 1\rangle}{
+  \mbox{state }\sigma\mbox{ maps }\mathit{var}\mbox{ to value }v}
+\]
+
+\bigskip\pause (Note though that this is {\red not} a valid way of
+modelling what happens in C/C++.)
+
+}
+
+\frame{
+  \frametitle{Operational Semantics: Types, Well-formedness}
+
+A similar style can be used to specify types for expressions.
+
+\medskip
+Often written with extra typing context $\Gamma$ (which records
+types for variables):
+\[
+\infer{\Gamma \vdash e : \tau}{\cdots}
+\]
+read: ``Given context $\Gamma$, expression $e$ has type $\tau$''
+
+\pause\medskip
+A colon instead of an arrow ($\rightarrow$); \\
+\qquad a static description instead of a dynamic one.
+
+\medskip
+For example:
+\[
+\infer{\Gamma \vdash e\plusplus : \tau}{
+  \Gamma \vdash e : \tau &
+  e\mbox{ an l-value} &
+  \tau\mbox{ a scalar type}
+}
+\]
+
+}
+
+\frame{
+  \frametitle{Operational Semantics: Summary}
+
+\begin{itemize}
+\item a well-understood, standard, technology
+\item extensible
+\item modular
+\item mechanisable (\emph{i.e.}, allowing mechanical proof)
+
+\medskip
+\item capable of dealing with real-world languages
+
+\end{itemize}
+
+}
+
+
 \subsection{C: Witness to Practicality}
 
+\frame{
+  \frametitle{Specifying C}
+
+Features of C demonstrates strengths of approach.
+
+\medskip
+Capable of handling C (and C++) exotica such as
+\begin{itemize}
+\item sequence points
+\item unspecified order of evaluation
+\item low-level memory model (pointer arithmetic, \&c)
+\item under-specified (``implementation defined'') aspects such as
+  \begin{itemize}
+  \item number of bits in a byte
+  \item size of types such as \texttt{\structcol long} and
+    \texttt{\structcol short}
+  \item representation of negative numbers (twos-complement,
+    ones-complement, sign-magnitude)
+  \end{itemize}
+\end{itemize}
+
+}
+
+% handling interleaved execution order
+
+\frame[containsverbatim]{
+  \frametitle{C Exotica: Interleaved Execution Order}
+
+In C, the expression
+\begin{Verbatim}[formatcom=\structcol]
+   printf("a") + printf("b") + printf("c")
+\end{Verbatim}
+can print any of the six orderings of \texttt{\structcol a}, \texttt{\structcol
+  b}, \texttt{\structcol c}.
+
+\bigskip
+This can be modelled with rules for $+$:
+\[
+\begin{array}{c@{\hspace{1cm}}c}
+\infer{e_1 \,{\red +}\, e_2 \semarrow e_1' \,{\red +}\, e_2}{e_1 \semarrow e_1'} &
+\infer{e_1 \,{\red +}\, e_2 \semarrow e_1 \,{\red +} e_2'}{e_2 \semarrow e_2'}\\[5mm]
+\multicolumn{2}{c}{
+\infer{v_1 \,{\red +}\, v_2 \semarrow v_1 + v_2}{}}
+\end{array}
+\]
+
+(This represents a slightly different style of rule than
+previously---syntax evolves ``step-by-step''.)
+
+}
+
 \subsection{Probable Approaches}
+
+\frame{
+  \frametitle{Approaches to Handling C++ Features---Examples}
+
+{\structcol \bfseries Object orientation}
+\begin{itemize}
+\item Classes are {\structcol struct} values with added ``member'' functions
+\item Runtime sub-class inheritance is typically implemented with a
+  \texttt{\structcol vtable} (a pointer in the \texttt{\structcol
+    struct})
+  \begin{itemize}
+  \item a formal semantics can model this by encoding the value's type
+    inside the \texttt{\structcol struct}
+  \end{itemize}
+\end{itemize}
+
+{\structcol \bfseries References}
+\begin{itemize}
+\item Simply modelled as addresses
+\end{itemize}
+
+\smallskip
+{\structcol \bfseries Templates}
+\begin{itemize}
+\item Less clear, particularly as all the ``action'' happens at
+  compile time.
+\end{itemize}
+
+}
+
+\subsection{Validation of the Semantics}
+
+\frame{
+  \frametitle{Validation}
+
+It's impossible to \emph{\structcol prove} that a formal semantics
+corresponds to the ISO standard (a prose document).
+
+\bigskip Nor, with as complicated a language as C++, would simply
+eye-balling the text of the formal description be enough.
+
+\bigskip
+How then can we accept that another description is correct?
+
+\bigskip
+(One might ask the same question of any C++ compiler\dots)
+
+
+}
+
+% done mechanically at all
+
+\frame{
+  \frametitle{Validation Through Mechanisation}
+
+\begin{center}
+\fbox{The formal description will be written with HOL}
+\end{center}
+
+\bigskip\bigskip
+HOL is
+\begin{itemize}
+\item an interactive proof assistant (theorem proving) system
+\item implements higher-order logic (thus the name)
+\item well-established technology (20+ years' history)
+\item well-suited to operational semantics
+\end{itemize}
+
+\bigskip
+Using a tool means pen-and-paper errors (typos \&c) can't arise.
+
+}
+
+% simple sanity-check proofs possible
+\frame{
+  \frametitle{Validation Through Proof}
+
+\begin{center}
+\fbox{Proofs can certify important properties of the description}
+\end{center}
+
+\bigskip
+\bigskip
+Properties are not intended to be exciting new results, but things
+expected to be true---also known as ``sanity checks''.
+
+\bigskip
+Properties might include
+\begin{itemize}
+\item Equivalence of certain forms, e.g.:
+\begin{eqnarray*}
+\texttt{if (0) }s_1\texttt{ else }s_2 &=& s_2 \\
+\texttt{for (i=0;i<10;i++);} &=& \texttt{i = 10;}
+\end{eqnarray*}
+\item Simple facts, e.g.:
+\begin{quote}
+if an expression does not contain an assignment, or any function
+calls, it does not affect the contents of memory
+\end{quote}
+\end{itemize}
+
+
+}
+
+% simple symbolic evaluation of straight-line code
+\frame{
+  \frametitle{Validation Through Execution}
+
+\begin{center}
+\fbox{Semantics can be used as an interpreter}
+\end{center}
+
+\bigskip\bigskip
+Just as compilers can be tested against validation suites, so too can
+the formal description.
+
+\bigskip
+This is a specialised form of proof, about the behaviour of specific
+programs.
+
+
+}
+
 
 \section{What Exactly?}
 
