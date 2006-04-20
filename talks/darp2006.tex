@@ -750,11 +750,59 @@ the formal description.
 This is a specialised form of proof, about the behaviour of specific
 programs.
 
+}
+
+\section{What Exactly?}
+
+\frame{
+  \frametitle{What Exactly?}
+
+The semantics can cover more and more of C++ in phases.
+\begin{center}
+\begin{tabular}{lp{0.6\textwidth}}
+C++$\black_0$ & C (existing work)\\[3mm]
+C++$\black_1$ & add basic object orientation: dynamic dispatch,
+inheritance and reference types\\ [3mm]
+C++$\black_2$ & Multiple inheritance, \texttt{\structcol const}
+keyword, object lifetimes \\[3mm]
+C++$\black_3$ & Access modifiers (\texttt{\structcol private},
+\texttt{\structcol public}), templates, exceptions\\[3mm]
+\dots & \dots
+\end{tabular}
+\end{center}
+
+}
+
+\frame{
+  \frametitle{Analysis of Vulnerabilities}
+
+A working practice document like MISRA C forbids programmers from
+doing {\structcol ``bad things''}.
+
+\bigskip
+But there are multiple sorts of {\structcol ``bad thing''}.
+
+\bigskip For example, the library function \texttt{\structcol strcpy}
+is a classic source of buffer overflow bugs
+\begin{itemize}
+\item it's easy to check that a programmer hasn't broken this rule
+  when a program is written
+\end{itemize}
+
+\bigskip
+But other restrictions are not so easy\dots
+
+}
+
+\frame{
+  \frametitle{Dynamic Vulnerabilities}
+
+
 
 }
 
 
-\section{What Exactly?}
+
 
 \end{document}
 
