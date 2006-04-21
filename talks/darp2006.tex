@@ -477,8 +477,8 @@ Change pattern of rule to be
 \infer{\langle\mathit{thing},\sigma_0\rangle \semarrow
   \mathit{result}}{\cdots}
 \]
-where the result will probably include a $\sigma$, representing the
-updated state of memory.
+where the $\mathit{result}$ will probably include a $\sigma$,
+representing the updated state of memory.
 
 }
 
@@ -521,7 +521,7 @@ For example, a post-increment operator \emph{\`a la} C:
 \[
 \infer{\langle \mathit{var}\plusplus, \;\sigma\rangle
   \semarrow \langle v,\;
-  \sigma[\mathit{var}\mapsto v + 1\rangle}{
+  \sigma[\mathit{var}\mapsto v + 1]\rangle}{
   \mbox{state }\sigma\mbox{ maps }\mathit{var}\mbox{ to value }v}
 \]
 
@@ -618,7 +618,7 @@ This can be modelled with rules for $+$:
 \[
 \begin{array}{c@{\hspace{1cm}}c}
 \infer{e_1 \,{\red +}\, e_2 \semarrow e_1' \,{\red +}\, e_2}{e_1 \semarrow e_1'} &
-\infer{e_1 \,{\red +}\, e_2 \semarrow e_1 \,{\red +} e_2'}{e_2 \semarrow e_2'}\\[5mm]
+\infer{e_1 \,{\red +}\, e_2 \semarrow e_1 \,{\red +}\, e_2'}{e_2 \semarrow e_2'}\\[5mm]
 \multicolumn{2}{c}{
 \infer{v_1 \,{\red +}\, v_2 \semarrow v_1 + v_2}{}}
 \end{array}
@@ -701,6 +701,9 @@ HOL is
 \bigskip
 Using a tool means pen-and-paper errors (typos \&c) can't arise.
 
+\smallskip
+(Analogous to getting a compiler's source code to compile.)
+
 }
 
 % simple sanity-check proofs possible
@@ -773,6 +776,7 @@ C++$\black_3$ & Access modifiers (\texttt{\structcol private},
 
 }
 
+\subsection{Vulnerability Analysis}
 \frame{
   \frametitle{Analysis of Vulnerabilities}
 
@@ -785,8 +789,9 @@ But there are multiple sorts of {\structcol ``bad thing''}.
 \bigskip For example, the library function \texttt{\structcol strcpy}
 is a classic source of buffer overflow bugs
 \begin{itemize}
-\item it's easy to check that a programmer hasn't broken this rule
-  when a program is written
+\item it's easy to check that a programmer hasn't broken the rule
+  forbidding \texttt{\structcol strcpy}'s use when a program is
+  written
 \end{itemize}
 
 \bigskip
@@ -797,11 +802,59 @@ But other restrictions are not so easy\dots
 \frame{
   \frametitle{Dynamic Vulnerabilities}
 
+More {\structcol ``bad things''}:
+\begin{itemize}
+\item Dividing by (integer) zero
+\item Running off the end of an array
+\end{itemize}
+
+\bigskip
+These can't be eliminated/avoided in a decidable way, except by
+drastic measures.
+
+\bigskip Nor do typical C/C++ run-time implementations detect these as
+they occur (contrast Java).
+
+}
+
+\frame{
+  \frametitle{Dynamic Vulnerabilities}
+
+Dynamic vulnerabilities might be avoided by
+\begin{itemize}
+\item \textbf{testing}---``can only show the presence, not the
+  absence, of errors''
+  \begin{itemize}
+  \item failure of run-time systems to trap errors can make bugs
+    harder to detect
+  \end{itemize}
+
+\smallskip
+\item \textbf{static analysis}---``argue that a particular run-time
+  fault can not occur''
+
+  \smallskip
+  Where ``argument'' might be:
+  \begin{itemize}
+  \item code inspection
+  \item tool use
+  \item formal verification (must be built on a formal language
+    description)
+  \end{itemize}
+\end{itemize}
+
 
 
 }
 
 
+\frame{
+  \frametitle{Summary}
+
+
+
+
+}
 
 
 \end{document}
