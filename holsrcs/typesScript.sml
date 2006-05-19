@@ -115,13 +115,13 @@ val CHAR_BIT = new_specification ("CHAR_BIT", ["CHAR_BIT"],
   prove(--`?x. 8n <= x`--, PROVE_TAC [LESS_OR_EQ]));
 
 local
-  open integerTheory Rsyntax numSyntax
+  open integerTheory numSyntax
   val i = ==`:int`== and n = ==`:num`==
   val consts = [("CHAR",        "127",        "255",  8),
                 ("SHRT",      "32767",      "65535", 16),
                 ("INT",       "32767",      "65535", 16),
                 ("LONG", "2147483647", "4294967295", 32)]
-  val fromNum = mk_const{Name = "int_of_num", Ty = ``:num -> int``}
+  val fromNum = mk_const("int_of_num", ``:num -> int``)
   fun c2n (s, sgn, usgn, uexp) = let
     val smax = intSyntax.term_of_int (Arbint.fromString sgn)
     val smin = --`~ ^smax`--
@@ -132,7 +132,8 @@ local
     val sminvar = Psyntax.mk_var(sminstr, i)
     val smaxvar = Psyntax.mk_var(smaxstr, i)
     val umaxvar = Psyntax.mk_var(umaxstr, i)
-    val sminterm = --`^sminvar <= ^smin`--
+    val sminterm = --`(^sminvar = ~^smaxvar) \/
+                      (^sminvar = ~^smaxvar - 1)`--
     val smaxterm =
       --`^smax <= ^smaxvar /\ (^smaxvar = (^umaxvar - 1) / 2)`--
     val umaxterm =
@@ -147,21 +148,58 @@ local
     SHRT_MIN <= SCHAR_MIN /\
     SCHAR_MAX <= SHRT_MAX /\ SHRT_MAX <= INT_MAX /\
     INT_MAX <= (LONG_MAX:int)`--
+  val uchar_max_term = ``UCHAR_MAX : int = 2 ** CHAR_BIT - 1``
   val vars = map #2 humdinger
   val answers = map #4 humdinger
-  val body = list_mk_conj(transterm::(map #3 humdinger))
+  val body = list_mk_conj(uchar_max_term::transterm::(map #3 humdinger))
   val goal = list_mk_exists(vars, body)
+  val eqsub = intLib.ARITH_PROVE ``((x:int - y <= z - y) = (x <= z)) /\
+                                   ((x - y = z - y) = (x = z))``
+  val useful = prove(
+    ``(&(2 ** x) - 1i = (&(2 ** y) - 1 - 1) / 2) = (y = x + 1)``,
+    EQ_TAC THENL [
+      STRIP_TAC THEN Cases_on `y` THENL [
+        FULL_SIMP_TAC (srw_ss()) [INT_EQ_SUB_RADD],
+        FULL_SIMP_TAC (srw_ss()) [EXP] THEN
+        `&(2 * 2 ** n) - 1i - 1 = 2 * (2 ** n - 1)`
+           by (SIMP_TAC (srw_ss()) [INT_SUB_LDISTRIB] THEN
+               intLib.ARITH_TAC) THEN
+        FULL_SIMP_TAC (srw_ss()) [INT_DIV_LMUL, eqsub] THEN
+        DECIDE_TAC
+      ],
+      SRW_TAC [][EXP_ADD] THEN
+      `&(2 ** x * 2) - 1i - 1 = 2 * (2 ** x - 1)`
+         by (SIMP_TAC (srw_ss()) [INT_SUB_LDISTRIB] THEN
+             intLib.ARITH_TAC) THEN
+      ASM_SIMP_TAC (srw_ss()) [INT_DIV_LMUL]
+    ])
+
+
   val sat_thm = prove(
     goal,
-    MAP_EVERY EXISTS_TAC answers THEN
-    SIMP_TAC (srw_ss()) [INT_LE_NEG, INT_SUB, INT_DIV, INT_LE, INT_INJ,
-                         INT_MUL] THEN
-    REPEAT CONJ_TAC THENL [
-      Q.EXISTS_TAC `8`,
-      Q.EXISTS_TAC `16`,
-      Q.EXISTS_TAC `16`,
-      Q.EXISTS_TAC `32`
-    ] THEN SIMP_TAC (srw_ss()) [INT_INJ, INT_EXP, INT_SUB]);
+    MAP_EVERY Q.EXISTS_TAC [`~(2 ** (CHAR_BIT - 1) - 1)`,
+                            `2 ** (CHAR_BIT - 1) - 1`,
+                            `2 ** CHAR_BIT - 1`,
+                            `~(2 ** (CHAR_BIT + 7) - 1)`,
+                            `(2 ** (CHAR_BIT + 7) - 1)`,
+                            `2 ** (CHAR_BIT + 8) - 1`,
+                            `~(2 ** (CHAR_BIT + 15) - 1)`,
+                            `(2 ** (CHAR_BIT + 15) - 1)`,
+                            `2 ** (CHAR_BIT + 16) - 1`,
+                            `~(2 ** (CHAR_BIT + 31) - 1)`,
+                            `(2 ** (CHAR_BIT + 31) - 1)`,
+                            `2 ** (CHAR_BIT + 32) - 1`] THEN
+    SIMP_TAC (srw_ss() ++ ARITH_ss) [eqsub, INT_LE_SUB_RADD,
+                                     INT_LE_SUB_LADD] THEN
+    SUBST_ALL_TAC (SYM (EVAL ``2n ** 7``)) THEN
+    SUBST_ALL_TAC (SYM (EVAL ``2n ** 8``)) THEN
+    SUBST_ALL_TAC (SYM (EVAL ``2n ** 15``)) THEN
+    SUBST_ALL_TAC (SYM (EVAL ``2n ** 16``)) THEN
+    SUBST_ALL_TAC (SYM (EVAL ``2n ** 31``)) THEN
+    SUBST_ALL_TAC (SYM (EVAL ``2n ** 32``)) THEN
+    SIMP_TAC (srw_ss()) [] THEN
+    SIMP_TAC (srw_ss()) [useful] THEN ASSUME_TAC CHAR_BIT THEN
+    intLib.ARITH_TAC)
   fun s2c str = {const_name = str, fixity = Prefix}
 in
   val sizes = Rsyntax.new_specification {
