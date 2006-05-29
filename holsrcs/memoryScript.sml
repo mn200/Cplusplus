@@ -323,39 +323,55 @@ val int_representation = prove(
   ``?(rep_int : CPP_Type -> int -> byte list option)
      (int_value : CPP_Type -> byte list -> int option).
        (!b:byte. int_value (Unsigned Char) [b] = SOME (int_of_num (w2n b))) /\
-       (!i. rep_int (Unsigned Char) i =
-              SOME [n2w (Num (i % UCHAR_MAX))]) /\
+       (!i. 0 <= i /\ i <= UCHAR_MAX ==>
+            (rep_int (Unsigned Char) i = SOME [n2w (Num i)])) /\
        (!b. ~word_msb b ==>
             (int_value (Signed Char) [b] = int_value (Unsigned Char) [b])) /\
        (!b. word_msb b ==>
                ?i. (int_value (Signed Char) [b] = SOME i) /\
-                   SCHAR_MIN <= i /\ i <= 0)``,
-  Q.EXISTS_TAC `\ty i. if ty = Unsigned Char then
-                         SOME [n2w (Num (i % UCHAR_MAX))]
-                       else NONE` THEN SIMP_TAC (srw_ss()) [] THEN
-  Q.EXISTS_TAC `\ty bytes. if ty = Unsigned Char then
-                             SOME (&(w2n (HD bytes)))
-                           else if char_onecomp then
-                             if word_msb (HD bytes) then
-                               SOME (~(& (w2n (HD bytes - word_L))))
-                             else SOME (w2i (HD bytes))
-                           else SOME (w2i (HD bytes))` THEN
-  SIMP_TAC (srw_ss()) [] THEN CONJ_TAC THENL [
+                   SCHAR_MIN <= i /\ i <= 0) /\
+       (!i. SCHAR_MIN <= i /\ i <= SCHAR_MAX ==>
+            ?b. (rep_int (Signed Char) i = SOME [b]) /\
+                (int_value (Signed Char) [b] = SOME i)) /\
+       (rep_int BChar = if BCHAR_IS_SIGNED then rep_int (Signed Char)
+                        else rep_int (Unsigned Char)) /\
+       (int_value BChar = if BCHAR_IS_SIGNED then int_value (Signed Char)
+                          else int_value (Unsigned Char))``,
+  Q.EXISTS_TAC
+    `\ty i.
+         if (ty = Unsigned Char) \/ (ty = BChar) /\ ~BCHAR_IS_SIGNED then
+           SOME [n2w (Num (i % 2 ** CHAR_BIT))]
+         else if (ty = Signed Char) \/ (ty = BChar) /\ BCHAR_IS_SIGNED then
+           if char_onecomp then
+             if i < 0 then SOME [n2w (Num (~i)) + word_L]
+             else SOME [n2w (Num i)]
+           else SOME [i2w i]
+         else NONE` THEN SIMP_TAC (srw_ss()) [] THEN
+  Q.EXISTS_TAC
+    `\ty bytes.
+       if (ty = Unsigned Char) \/ (ty = BChar) /\ ~BCHAR_IS_SIGNED then
+         SOME (&(w2n (HD bytes)))
+       else if (ty = Signed Char) \/ (ty = BChar) /\ BCHAR_IS_SIGNED then
+         if char_onecomp then
+           if word_msb (HD bytes) then
+             SOME (~(& (w2n (HD bytes - word_L))))
+           else SOME (w2i (HD bytes))
+         else SOME (w2i (HD bytes))
+       else NONE` THEN
+  SIMP_TAC (srw_ss()) [FUN_EQ_THM] THEN REPEAT CONJ_TAC THENL [
+    REPEAT STRIP_TAC THEN
+    `?n. i = &n` by (Q.SPEC_THEN `i` STRIP_ASSUME_TAC INT_NUM_CASES THEN
+                     FULL_SIMP_TAC (srw_ss()) []) THEN
+    SRW_TAC [][],
+
     SRW_TAC [][integer_wordTheory.w2i_def],
+
     Q.X_GEN_TAC `w` THEN STRIP_TAC THEN
     Q.ISPEC_THEN `w` STRIP_ASSUME_TAC wordsTheory.ranged_word_nchotomy THEN
-    FULL_SIMP_TAC (srw_ss())
-                  [wordsTheory.word_msb_n2w,
-                   DECIDE ``SUC x - x = 1``,
-                   bitTheory.BIT_def, bitTheory.BITS_def,
-                   bitTheory.MOD_2EXP_def, bitTheory.DIV_2EXP_def] THEN
-    `2 ** (CHAR_BIT - 1) <= n`
-       by (SPOSE_NOT_THEN ASSUME_TAC THEN
-           `n < 2 ** (CHAR_BIT - 1)` by DECIDE_TAC THEN
-           FULL_SIMP_TAC (srw_ss()) [LESS_DIV_EQ_ZERO]) THEN
+    FULL_SIMP_TAC (srw_ss()) [wordsTheory.word_msb_n2w_numeric] THEN
     `0 < n` by METIS_TAC [LESS_LESS_EQ_TRANS, bitTheory.ZERO_LT_TWOEXP] THEN
-    `INT_MAX (UNIV : byte_index set) < n`
-       by SRW_TAC [ARITH_ss][integer_wordTheory.INT_MAX_def] THEN
+    `INT_MAX (UNIV : byte_index set) < &n`
+       by SRW_TAC [ARITH_ss][integer_wordTheory.INT_MAX_def, INT_SUB] THEN
     `n <= UINT_MAX (UNIV : byte_index set)`
        by SRW_TAC [ARITH_ss][integer_wordTheory.UINT_MAX_def] THEN
     SRW_TAC [][integer_wordTheory.w2i_n2w_neg, INT_LE_SUB_RADD,
@@ -383,7 +399,56 @@ val int_representation = prove(
       `SCHAR_MIN = ~SCHAR_MAX - 1`
          by METIS_TAC [char_onecomp_def, type_size_constants] THEN
       SRW_TAC [][SCHAR_MAX, INT_LE_SUB_RADD]
-    ]
+    ],
+
+    Q.X_GEN_TAC `i` THEN STRIP_TAC THEN
+    Cases_on `char_onecomp` THENL [
+      ASM_SIMP_TAC (srw_ss()) [] THEN
+      Cases_on `i < 0` THENL [
+        ASM_SIMP_TAC (srw_ss()) [word_msb_n2w_numeric, word_add_n2w,
+                                 word_L_def] THEN
+        `?n. (i = ~&n) /\ ~(n = 0)`
+           by (Q.SPEC_THEN `i` STRIP_ASSUME_TAC INT_NUM_CASES  THEN
+               FULL_SIMP_TAC (srw_ss()) []) THEN
+        ASM_SIMP_TAC (srw_ss() ++ ARITH_ss) [word_sub_n2w_1] THEN
+        `SCHAR_MIN = ~SCHAR_MAX` by METIS_TAC [char_onecomp_def] THEN
+        FULL_SIMP_TAC (srw_ss()) [SCHAR_MAX] THEN
+        `&n + 1 <= &(2 ** (CHAR_BIT - 1))` by intLib.ARITH_TAC THEN
+        `n + 1 <= 2 ** (CHAR_BIT - 1)`
+           by FULL_SIMP_TAC (srw_ss()) [INT_ADD] THEN
+        `n + 2 ** (CHAR_BIT - 1) < 2 ** CHAR_BIT`
+           by (ASSUME_TAC TWICE_SCHAR_MAX THEN DECIDE_TAC) THEN
+        SRW_TAC [][LESS_MOD] THEN DECIDE_TAC,
+
+        ASM_SIMP_TAC (srw_ss()) [word_msb_n2w_numeric] THEN
+        `?n. (i = &n)`
+           by (Q.SPEC_THEN `i` STRIP_ASSUME_TAC INT_NUM_CASES THEN
+               FULL_SIMP_TAC (srw_ss()) []) THEN
+        FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [SCHAR_MAX, INT_SUB] THEN
+        `n < 2 ** CHAR_BIT`
+           by (`~(2n ** (CHAR_BIT - 1) = 0)` by SRW_TAC [][] THEN
+               ASSUME_TAC TWICE_SCHAR_MAX THEN
+               DECIDE_TAC) THEN
+        `0 < 2n ** (CHAR_BIT - 1)` by SRW_TAC [][] THEN
+        ASM_SIMP_TAC (srw_ss() ++ ARITH_ss)[LESS_MOD] THEN
+        MATCH_MP_TAC integer_wordTheory.w2i_n2w_pos THEN
+        SRW_TAC [][integer_wordTheory.INT_MAX_def, INT_SUB]
+      ],
+
+      (* not one's complement (or sign-magnitude either) *)
+      ASM_SIMP_TAC (srw_ss()) [] THEN
+      MATCH_MP_TAC integer_wordTheory.w2i_i2w THEN
+      `SCHAR_MIN = ~SCHAR_MAX - 1`
+         by METIS_TAC [type_size_constants, char_onecomp_def] THEN
+      FULL_SIMP_TAC (srw_ss()) [integer_wordTheory.INT_MAX_def,
+                                integer_wordTheory.INT_MIN_def,
+                                SCHAR_MAX]
+    ],
+
+
+    Cases_on `BCHAR_IS_SIGNED` THEN SRW_TAC [][],
+    Cases_on `BCHAR_IS_SIGNED` THEN SRW_TAC [][]
+
   ])
 
 val C_INT_REP = new_specification(
