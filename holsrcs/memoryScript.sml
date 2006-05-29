@@ -2,7 +2,7 @@
 
 (* Michael Norrish *)
 
-(* all bits zero must be a representation of zero *)
+(* NOTE: all bits zero must be a representation of zero *)
 
 (* pro-forma *)
 open HolKernel boolLib Parse bossLib BasicProvers
@@ -556,6 +556,10 @@ val align_det = store_thm(
 val roundup_def = Define`
   roundup base n = if n MOD base = 0 then n else (n DIV base + 1) * base
 `;
+
+(* C++ NOTE: classes must have non-zero size, even if they contain
+   no fields.  *)
+
 
 val (offsizeof_rules, offsizeof_ind, offsizeof_cases) = Hol_reln`
 
