@@ -490,10 +490,13 @@ val ptr_align = new_specification("ptr_align",
   ["ptr_align"],
   prove(``?f. !ty. 1 <= f ty /\ f ty <= ptr_size ty /\ (f BChar = f Void)``,
         Q.EXISTS_TAC `K 1` THEN SRW_TAC [][ptr_size]))
+
+(* CCOM
 val bool_align = new_specification("bool_align",
   ["bool_align"],
   prove(``?n. 1 <= n /\ n <= bool_size``,
         ASSUME_TAC bool_size THEN intLib.ARITH_TAC))
+*)
 
 (* alignment of the basic integral types *)
 val bit_align = Define`
@@ -511,7 +514,9 @@ val _ = overload_on ("set", ``list$LIST_TO_SET``)
 val (align_rules, align_ind, align_cases) = Hol_reln`
   (!smap. align smap BChar 1) /\  (* same as Char *)
 
+(*CCOM
   (!smap. align smap Bool bool_align) /\
+*)
 
   (!smap ty. align smap (Signed ty) (bit_align ty)) /\
 
@@ -519,7 +524,9 @@ val (align_rules, align_ind, align_cases) = Hol_reln`
 
   (!smap ty. align smap (Ptr ty) (ptr_align ty)) /\
 
+(*CCOM
   (!smap c ty. align smap (MPtr c ty) (ptr_align ty)) (* BAD_ASSUMPTION *) /\
+*)
 
   (!smap ty n a. align smap ty a ==> align smap (Array ty n) a) /\
 
@@ -558,14 +565,20 @@ val roundup_def = Define`
 `;
 
 (* C++ NOTE: classes must have non-zero size, even if they contain
-   no fields.  *)
+   no fields.
+
+   By way of contrast, in C classes (i.e., structs) must have at least one
+   field.
+*)
 
 
 val (offsizeof_rules, offsizeof_ind, offsizeof_cases) = Hol_reln`
 
   (!s. sizeof s BChar 1) /\
 
+(*CCOM
   (!s. sizeof s Bool bool_size) /\
+*)
 
   (!s b. sizeof s (Signed b) (bit_size b)) /\
 
@@ -573,7 +586,9 @@ val (offsizeof_rules, offsizeof_ind, offsizeof_cases) = Hol_reln`
 
   (!s t. sizeof s (Ptr t) (ptr_size t)) /\
 
+(*CCOM
   (!s c t. sizeof s (MPtr c t) (ptr_size t)) /\ (* BAD_ASSUMPTION *)
+*)
 
   (!s m n t. sizeof s t m ==> sizeof s (Array t n) (m * n)) /\
 
@@ -603,8 +618,8 @@ val det_lemma = prove(
               !off2. offset s tylist n off2 ==> (off1 = off2))``,
   HO_MATCH_MP_TAC offsizeof_ind THEN REPEAT CONJ_TAC THEN
   REPEAT GEN_TAC THENL [
-    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
-    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
+    (*CCOM ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
+    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][], *)
     ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
     ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
     ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],

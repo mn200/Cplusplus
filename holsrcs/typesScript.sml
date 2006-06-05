@@ -14,12 +14,12 @@ val _ = Hol_datatype `basic_integral_type = Char | Short | Int | Long`;
 
 val _ = Hol_datatype
   `CPP_Type =
-     Void | BChar (* "Basic char" *) | Bool | (* Wchar_t | *)
+     Void | BChar (* "Basic char" *) | (*CCOM Bool | (* Wchar_t | *) *)
      Unsigned of basic_integral_type |
      Signed of basic_integral_type |
      Ptr of CPP_Type |
-     MPtr of string => CPP_Type | (* member pointer *)
-     Ref of CPP_Type |
+     (*CCOM MPtr of string => CPP_Type | (* member pointer *)
+     Ref of CPP_Type | *)
      Array of CPP_Type => num |
      Class of string | Float | Double | LDouble |
      Function of CPP_Type => CPP_Type list`;
@@ -31,6 +31,7 @@ val ptrdiff_t = Rsyntax.new_specification {
     ``?t. t IN {Signed Char; Signed Short; Signed Int; Signed Long}``,
     SIMP_TAC (srw_ss()) [EXISTS_OR_THM]))};
 
+(*CCOM
 (* protection types for fields *)
 val _ = Hol_datatype`
   protection = Private | Public | Protected
@@ -41,6 +42,7 @@ val _ = Hol_datatype`
 val _ = Hol_datatype `
   class_member = ClassFld of protection => CPP_Type
 `;
+*)
 
 (* 3.9.2 p1 "implicit" *)
 val function_type_def = Define`
@@ -49,15 +51,17 @@ val function_type_def = Define`
 `;
 val _ = export_rewrites ["function_type_def"]
 
+(*CCOM
 (* 3.9.2 p1 "implicit" *)
 val ref_type_def = Define`
   (ref_type (Ref t0) = T) /\ (ref_type x = F)
 `;
 val _ = export_rewrites ["function_type_def"]
+*)
 
 (* 3.9 p9 *)
 val object_type_def = Define`
-  object_type t = ~function_type t /\ ~ref_type t /\ ~(t = Void)
+  object_type t = ~function_type t /\ (*CCOM ~ref_type t /\ *) ~(t = Void)
 `;
 
 (* 3.9.1 p7 *)
@@ -65,7 +69,7 @@ val integral_type_def = Define`
   (integral_type (Signed i) = T) /\
   (integral_type (Unsigned i) = T) /\
   (integral_type BChar = T) /\
-  (integral_type Bool = T) /\
+(*CCOM   (integral_type Bool = T) /\ *)
   (integral_type x = F)
 `;
 val _ = export_rewrites ["integral_type_def"]
@@ -91,16 +95,19 @@ val pointer_type_def = Define `
 `;
 val _ = export_rewrites ["pointer_type_def"]
 
+(*CCOM
 (* 3.9.2 p1 "implicit" *)
 val mpointer_type_def = Define`
   (mpointer_type (MPtr c t) = T) /\
   (mpointer_type x = F)
 `;
 val _ = export_rewrites ["mpointer_type_def"]
+*)
 
 (* 3.9 p10 *)
 val scalar_type_def = Define`
-  scalar_type t = pointer_type t \/ mpointer_type t \/ arithmetic_type t
+  scalar_type t = pointer_type t (*CCOM \/ mpointer_type t *)\/
+                  arithmetic_type t
 `;
 
 (* 3.9.2 p1 "implicit" *)
@@ -213,7 +220,7 @@ fun crossprod l1 l2 =
   in
       flatten (map (fn f => f l2) (map elprod l1))
   end;
-val int_types = ``Bool`` :: ``BChar`` :: map mk_comb
+val int_types = (*CCOM ``Bool`` :: *) ``BChar`` :: map mk_comb
   (crossprod [--`Signed`--, --`Unsigned`--]
              [--`Char`--, --`Short`--, --`Int`--, --`Long`--])
 (* \#line cholera-model.nw 242 *)
@@ -228,8 +235,8 @@ val _ = new_constant("BCHAR_IS_SIGNED", ``:bool``)
 val type_min_def = Define `
   (type_min (Unsigned x) = 0) /\
   (type_min (Signed x) = sgn_min x) /\
-  (type_min BChar = if BCHAR_IS_SIGNED then sgn_min Char else 0) /\
-  (type_min Bool = 0)
+  (type_min BChar = if BCHAR_IS_SIGNED then sgn_min Char else 0) (*CCOM /\
+  (type_min Bool = 0) *)
 `;
 
 val type_min = save_thm(
@@ -255,7 +262,7 @@ val usgn_max_def = Define`
 val type_max_def = Define`
   (type_max (Unsigned x) = usgn_max x) /\
   (type_max (Signed x) = sgn_max x) /\
-  (type_max Bool = 1) /\
+  (*CCOM  (type_max Bool = 1) /\ *)
   (type_max BChar = if BCHAR_IS_SIGNED then sgn_max Char else usgn_max Char)
 `;
 
@@ -276,7 +283,7 @@ val type_range = Define`
 (* 4.5 *)
 val integral_promotions_def = Define`
   integral_promotions t =
-    if t IN {Bool; BChar; Unsigned Char; Signed Char; Unsigned Short;
+    if t IN {(*CCOM Bool; *) BChar; Unsigned Char; Signed Char; Unsigned Short;
              Signed Short}
     then
       if type_range t SUBSET type_range (Signed Int) then
@@ -323,17 +330,19 @@ val nodups_lfi_det_lemma = prove(
    might be a valid declarator *)
 val wf_type_defn = Hol_defn "wf_type" `
   (* 8.3.2 p4 *)
-  (wf_type abs_classes (Ptr ty) = ~ref_type ty /\ wf_type abs_classes ty) /\
+  (wf_type abs_classes (Ptr ty) = (*CCOM ~ref_type ty /\ *)
+                                  wf_type abs_classes ty) /\
 
+  (*CCOM
   (* 8.3.3 p3 *)
   (wf_type abs_classes (MPtr c ty) = ~ref_type ty /\ ~(ty = Void) /\
-                                     wf_type abs_classes ty) /\
+                                     wf_type abs_classes ty) /\ *)
 
   (* 8.3.4 p1 *)
   (wf_type abs_classes (Array bt n) =
       ~(n = 0) /\ ~(bt = Void) /\
-      ~function_type bt /\ ~ref_type bt /\
-      ~abs_classes bt /\ wf_type abs_classes bt) /\
+      ~function_type bt /\ (*CCOM ~ref_type bt /\
+      ~abs_classes bt /\ *) wf_type abs_classes bt) /\
 
   (* 8.3.5 - note that variadic functions are not modelled
        para 6: return type not array or function
@@ -361,23 +370,31 @@ val _ = save_thm("wf_type_ind", wf_type_ind)
 open BasicProvers
 val _ = export_rewrites ["wf_type_def"]
 
+(* SANITY *)
 val integral_types_well_formed = store_thm(
   "integral_types_well_formed",
   ``!t. integral_type t ==> !ac. wf_type ac t``,
   Cases_on `t` THEN SRW_TAC [][]);
+
+(* SANITY *)
 val arithmetic_types_well_formed = store_thm(
   "arithmetic_types_well_formed",
   ``!t. arithmetic_type t ==> !ac. wf_type ac t``,
   Cases_on `t` THEN SRW_TAC [][arithmetic_type_def]);
+
+(* SANITY *)
 val ua_converted_types_well_formed = store_thm(
   "ua_converted_types_well_formed",
   ``!t1 t2 ac. wf_type ac (ua_conversions t1 t2)``,
   SRW_TAC [][ua_conversions_def, LET_THM]);
+
 val ptrdiff_t_well_formed = store_thm(
   "ptrdiff_t_well_formed",
   ``!ac. wf_type ac ptrdiff_t``,
   STRIP_ASSUME_TAC (SIMP_RULE (srw_ss()) [] ptrdiff_t) THEN
   ASM_SIMP_TAC (srw_ss()) []);
+
+(* SANITY *)
 val integral_promotions_safe = store_thm(
   "integral_promotions_safe",
   ``(!t. integral_type t ==> integral_type (integral_promotions t)) /\
@@ -385,12 +402,16 @@ val integral_promotions_safe = store_thm(
            arithmetic_type (integral_promotions t))``,
   CONJ_TAC THEN Cases_on `t` THEN
   SRW_TAC [][integral_promotions_def, arithmetic_type_def]);
+
+(* SANITY *)
 val ua_conversions_safe = store_thm(
   "ua_conversions_safe",
   ``!t1 t2. arithmetic_type t1 /\ arithmetic_type t2 ==>
             arithmetic_type (ua_conversions t1 t2)``,
   SRW_TAC [][arithmetic_type_def, LET_THM, integral_promotions_def,
              ua_conversions_def]);
+
+(* SANITY *)
 val type_classes = store_thm(
   "type_classes",
   ``(!t. (pointer_type t ==> ~arithmetic_type t) /\

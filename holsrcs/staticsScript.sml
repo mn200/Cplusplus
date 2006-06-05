@@ -143,171 +143,158 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
                ==>
            expr_type s RValue e t) /\
 
-  (!s e bt n. expr_type s LValue (^e e) (^t (Array bt n))
+  (!s e bt n. expr_type s LValue e (Array bt n)
                  ==>
-              expr_type s RValue (^e e) (^t (Ptr bt))) /\
+              expr_type s RValue e (Ptr bt)) /\
 
-  (!s n. expr_type s RValue (^e (Cnum n)) (^t (Signed Int))) /\
+  (!s n. expr_type s RValue (Cnum n) (Signed Int)) /\
 
-  (!s c. expr_type s RValue (^e (Cchar c)) (^t (Signed Int))) /\
+  (!s c. expr_type s RValue (Cchar c) (Signed Int)) /\
 
   (!smap tmap t.
-      well_formed_type smap t ==>
-      expr_type (smap,tmap) RValue (^e (Cnullptr t)) (^t (Ptr t))) /\
+      wf_type smap t ==>
+      expr_type (smap,tmap) RValue (Cnullptr t) (Ptr t)) /\
 
   (!smap tmap n.
-      well_formed_type smap (tmap n) /\ ~(tmap n = Void)
+      wf_type smap (tmap n) /\ ~(tmap n = Void)
          ==>
-      expr_type (smap,tmap) LValue (^e (Var n)) (^t (tmap n))) /\
+      expr_type (smap,tmap) LValue (Var n) (tmap n)) /\
 
   (!smap tmap n t.
-      well_formed_type smap t /\ ~(t = Void)
+      wf_type smap t /\ ~(t = Void)
          ==>
-      expr_type (smap,tmap) LValue (^e (LVal n t)) (^t t)) /\
+      expr_type (smap,tmap) LValue (LVal n t) t) /\
 
   (!smap tmap v t.
-      well_formed_type smap t /\ ~array_type t
+      wf_type smap t /\ ~array_type t
          ==>
-      expr_type (smap,tmap) RValue (^e (ECompVal v t)) (^t t)) /\
+      expr_type (smap,tmap) RValue (ECompVal v t) t) /\
 
-  (!s e t.  expr_type s RValue (^e e) (^t t)
+  (!s e t.  expr_type s RValue e t
               ==>
-            expr_type s RValue (^e (RValreq e)) (^t t)) /\
+            expr_type s RValue (RValreq e) t) /\
 
   (!smap tmap e t t0.
-      well_formed_type smap t /\ (scalar_type t \/ (t = Void)) /\
-      expr_type (smap, tmap) RValue (^e e) (^t t0)
+      wf_type smap t /\ (scalar_type t \/ (t = Void)) /\
+      expr_type (smap, tmap) RValue e t0
           ==>
-      expr_type (smap,tmap) RValue (^e (Cast t e)) (^t t)) /\
+      expr_type (smap,tmap) RValue (Cast t e) t) /\
 
-  (!env v t. expr_type env v (^e UndefinedExpr) (^t t)) /\
+  (!env v t. expr_type env v UndefinedExpr t) /\
 
   (!s e1 e2 rt args.
-       expr_type s RValue (^e e1)  (^t (Function rt args)) /\
-       expr_type s RValue (^el e2) (^tl args)
+       expr_type s RValue e1  (Function rt args) /\
+       expr_typel s e2 args
           ==>
-       expr_type s RValue (^e (FnApp e1 e2)) (^t rt)) /\
+       expr_type s RValue (FnApp e1 e2) rt) /\
 
-(!s e1 e2 rt args.
-     expr_type s RValue (^e e1)  (^t (Function rt args)) /\
-     expr_type s RValue (^el e2) (^tl args) ==>
-     expr_type s RValue (^e (FnApp_sqpt e1 e2)) (^t rt))
-(* \#line cholera-model.nw 2337 *)
-                          /\
+  (!s e1 e2 rt args.
+       expr_type s RValue e1  (Function rt args) /\
+       expr_typel s e2 args
+          ==>
+       expr_type s RValue (FnApp_sqpt e1 e2) rt) /\
 
-(* \#line cholera-model.nw 2516 *)
-(!s e t. expr_type s LValue (^e e) (^t t) /\ scalar_type t ==>
-         expr_type s RValue (^e (PostInc e)) (^t t)) /\
+  (!s e t.
+       expr_type s LValue e t /\ scalar_type t ==>
+       expr_type s RValue (PostInc e) t) /\
 
-(!s e t0 f t. expr_type s RValue (^e e) (^t t0) /\
-              unary_op_type f t0 t ==>
-              expr_type s RValue (^e (CApUnary f e)) (^t t)) /\
+  (!s e t0 f t. expr_type s RValue e t0 /\
+                unary_op_type f t0 t ==>
+                expr_type s RValue (CApUnary f e) t) /\
 
-(!s e1 t1 e2 t2 t f.
-     expr_type s RValue (^e e1) (^t t1) /\
-     expr_type s RValue (^e e2) (^t t2) /\
-     binary_op_type f t1 t2 t ==>
-     expr_type s RValue (^e (CApBinary f e1 e2)) (^t t))
-(* \#line cholera-model.nw 2338 *)
-                            /\
+  (!s e1 t1 e2 t2 t f.
+       expr_type s RValue e1 t1 /\
+       expr_type s RValue e2 t2 /\
+       binary_op_type f t1 t2 t ==>
+       expr_type s RValue (CApBinary f e1 e2) t) /\
 
-(* \#line cholera-model.nw 2535 *)
-(!s e1 t1 e2 t2.
-     expr_type s RValue (^e e1) (^t t1) /\
-     expr_type s RValue (^e e2) (^t t2) /\
-     scalar_type t1 /\ scalar_type t2 ==>
-     expr_type s RValue (^e (CAnd e1 e2)) (^t (Signed Int))) /\
+  (!s e1 t1 e2 t2.
+       expr_type s RValue e1 t1 /\
+       expr_type s RValue e2 t2 /\
+       scalar_type t1 /\ scalar_type t2 ==>
+       expr_type s RValue (CAnd e1 e2) (Signed Int)) /\
 
-(!s e1 t1 e2 t2.
-     expr_type s RValue (^e e1) (^t t1) /\
-     expr_type s RValue (^e e2) (^t t2) /\
-     scalar_type t1 /\ scalar_type t2 ==>
-     expr_type s RValue (^e (COr e1 e2)) (^t (Signed Int))) /\
-(* \#line cholera-model.nw 2551 *)
-(!s e t. expr_type s RValue (^e e) (^t t) /\ scalar_type t ==>
-         expr_type s RValue (^e (CAndOr_sqpt e)) (^t (Signed Int))) /\
-(* \#line cholera-model.nw 2601 *)
-(!s e1 gty e2 t2 e3 t3 restype.
-     expr_type s RValue (^e e1) (^t gty) /\
-     expr_type s RValue (^e e2) (^t t2)  /\
-     expr_type s RValue (^e e3) (^t t3)  /\
-     cond_typing_conds (gty, t2, t3, restype) ==>
-     expr_type s RValue  (^e (CCond e1 e2 e3)) (^t restype))
-(* \#line cholera-model.nw 2339 *)
-                                    /\
+  (!s e1 t1 e2 t2.
+       expr_type s RValue e1 t1 /\
+       expr_type s RValue e2 t2 /\
+       scalar_type t1 /\ scalar_type t2
+         ==>
+       expr_type s RValue (COr e1 e2) (Signed Int)) /\
 
-(* \#line cholera-model.nw 2632 *)
-(!s e1 lhs_t e2 rhs_t f b.
-     expr_type s LValue (^e e1) (^t lhs_t) /\
-     expr_type s RValue (^e e2) (^t rhs_t) /\
-     ass_type_conds (f, lhs_t, rhs_t) ==>
-     expr_type s RValue (^e (Assign f e1 e2 b)) (^t lhs_t))
-(* \#line cholera-model.nw 2340 *)
-                                /\
+  (!s e t. expr_type s RValue e t /\ scalar_type t ==>
+           expr_type s RValue (CAndOr_sqpt e) (Signed Int)) /\
 
-(* \#line cholera-model.nw 2617 *)
-(!s e t. expr_type s RValue (^e e) (^t (Ptr t)) /\ ~(t = Void) ==>
-         expr_type s LValue (^e (Deref e)) (^t t)) /\
+  (!s e1 gty e2 t2 e3 t3 restype.
+       expr_type s RValue e1 gty /\
+       expr_type s RValue e2 t2  /\
+       expr_type s RValue e3 t3  /\
+       cond_typing_conds (gty, t2, t3, restype)
+         ==>
+       expr_type s RValue  (CCond e1 e2 e3) restype) /\
 
-(!s e t. expr_type s LValue (^e e) (^t t) ==>
-         expr_type s RValue (^e (Addr e)) (^t (Ptr t)))
-(* \#line cholera-model.nw 2341 *)
-                                        /\
+  (!s e1 lhs_t e2 rhs_t f b.
+       expr_type s LValue e1 lhs_t /\
+       expr_type s RValue e2 rhs_t /\
+       ass_type_conds (f, lhs_t, rhs_t) ==>
+       expr_type s RValue (Assign f e1 e2 b) lhs_t) /\
 
-(* \#line cholera-model.nw 2650 *)
-(!s tm e sn n t.
-     expr_type (s,tm) LValue (^e e) (^t (Struct sn)) /\
-     lookup_field_info (s sn) n t ==>
-     expr_type (s,tm) LValue (^e (SVar e n)) (^t t)) /\
+  (!s e t. expr_type s RValue e (Ptr t) /\ ~(t = Void) ==>
+           expr_type s LValue (Deref e) t) /\
 
-(!s tm e sn n t.
-     expr_type (s, tm) RValue (^e e) (^t (Struct sn)) /\
-     lookup_field_info (s sn) n t /\ ~array_type t ==>
-     expr_type (s, tm) RValue (^e (SVar e n)) (^t t))
-(* \#line cholera-model.nw 2342 *)
-                                    /\
+  (!s e t. expr_type s LValue e t ==>
+           expr_type s RValue (Addr e) (Ptr t)) /\
 
-(* \#line cholera-model.nw 2665 *)
-(!s. expr_type s RValue (^el []) (^tl [])) /\
+  (!s tm e sn n t.
+       expr_type (s,tm) LValue e (Class sn) /\
+       lookup_field_info (s sn) n t ==>
+       expr_type (s,tm) LValue (SVar e n) t) /\
 
-(!s hde hdt tle tlt.
-     expr_type s RValue (^e hde)  (^t hdt) /\
-     expr_type s RValue (^el tle) (^tl tlt) ==>
-     expr_type s RValue (^el (hde :: tle)) (^tl (hdt :: tlt)))
-  /\
-(* \#line cholera-model.nw 2681 *)
-(!s e1 e2 t0 t. expr_type s RValue (^e e2) (^t t) /\
-                expr_type s RValue (^e e1) (^t t0) ==>
-                expr_type s RValue (^e (CommaSep e1 e2)) (^t t))
-(* \#line cholera-model.nw 2343 *)
-                                     `
-end;
-(* \#line cholera-model.nw 2353 *)
+  (!s tm e sn n t.
+       expr_type (s, tm) RValue e (Class sn) /\
+       lookup_field_info (s sn) n t /\ ~array_type t ==>
+       expr_type (s, tm) RValue (SVar e n) t) /\
+
+  (!s e1 e2 t0 t.
+       expr_type s RValue e2 t /\
+       expr_type s RValue e1 t0 ==>
+       expr_type s RValue (CommaSep e1 e2) t) /\
+
+  (!s. expr_typel s [] []) /\
+
+  (!s hde hdt tle tlt.
+       expr_type s RValue hde  hdt /\
+       expr_typel s tle tlt
+         ==>
+       expr_typel s (hde :: tle) (hdt :: tlt))
+`
+
+infix >-
+fun (f >- g) = g o f
 val e_cases =
   (concl >- strip_forall >- snd >- strip_disj >-
    map (strip_exists >- snd >- rhs))
-  (cholexprTheory.CExpr_nchotomy)
+  (expressionsTheory.CExpr_nchotomy)
 val lvalue_typing = save_thm(
   "lvalue_typing",
   LIST_CONJ
     (map (GEN_ALL o
           (fn t =>
            (ONCE_REWRITE_CONV [expr_type_cases] THENC SIMP_CONV (srw_ss()) [])
-          ``expr_type env LValue (INL ^t) t``)) e_cases));
+          ``expr_type env LValue ^t t``)) e_cases));
 (* \#line cholera-model.nw 2370 *)
 val rvalue_typing = save_thm(
   "rvalue_typing",
   LIST_CONJ (map (GEN_ALL o (fn t =>
     (ONCE_REWRITE_CONV [expr_type_cases] THENC SIMP_CONV (srw_ss()) [])
-    ``expr_type env RValue (INL ^t) t``)) e_cases));
+    ``expr_type env RValue ^t t``)) e_cases));
 val list_etype_rewrites =
   CONJ (GEN_ALL
           ((ONCE_REWRITE_CONV [expr_type_cases] THENC
-            SIMP_CONV hol_ss []) ``expr_type s v (INR []) t``))
+            SIMP_CONV (srw_ss()) []) ``expr_typel s [] t``))
        (GEN_ALL
           ((ONCE_REWRITE_CONV [expr_type_cases] THENC
-            SIMP_CONV hol_ss [])
-           ``expr_type s v (INR (CONS e es)) t``))
+            SIMP_CONV (srw_ss()) [])
+           ``expr_typel s (e:: es) t``))
 val expr_type_rewrites = save_thm(
   "expr_type_rewrites",
   LIST_CONJ [lvalue_typing, rvalue_typing, list_etype_rewrites]);
@@ -601,4 +588,3 @@ val expr_type_blank_lists = store_thm(
 val _ = export_theory();
 
 
-val _ = export_theory();
