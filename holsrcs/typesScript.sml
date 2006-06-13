@@ -310,20 +310,6 @@ val ua_conversions_def = Define`
       else Signed Int
 `;
 
-val lookup_field_info = new_definition(
-  "lookup_field_info",
-  ``lookup_field_info s n t = MEM (n,t) s``);
-val nodup_flds = new_definition(
-  "nodup_flds",
-  ``nodup_flds s = ALL_DISTINCT (MAP FST s)``);
-val nodups_lfi_det_lemma = prove(
-  ``!s n t.
-       nodup_flds s ==>
-       lookup_field_info s n t ==>
-       !t'. lookup_field_info s n t' ==> (t' = t)``,
-  SRW_TAC [][nodup_flds, lookup_field_info] THEN Induct_on `s` THEN
-  SRW_TAC [][listTheory.MEM_MAP] THEN
-  FULL_SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD] THEN PROVE_TAC []);
 
 (* wf_type is a predicate checking type "well-formedness".  It doesn't check
    the validity of class/struct declarations, only whether or not something
