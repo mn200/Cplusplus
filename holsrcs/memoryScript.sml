@@ -44,7 +44,7 @@ val byte_index_BIJ_count = store_thm(
 (* prove that the size of the byte_index type is CHAR_BIT *)
 val dimindex_byte_index = store_thm(
   "dimindex_byte_index",
-  ``dimindex (s : byte_index -> bool) = CHAR_BIT``,
+  ``dimindex (:byte_index) = CHAR_BIT``,
   SRW_TAC [][fcpTheory.dimindex, FINITE_byte_index] THEN
   METIS_TAC [FINITE_BIJ_CARD_EQ, FINITE_COUNT, CARD_COUNT, FINITE_byte_index,
              byte_index_BIJ_count]);
@@ -84,7 +84,7 @@ val x_less_CHAR_BIT = prove(
   --`!x. x < 8 ==> x < CHAR_BIT`--,
   ASSUME_TAC CHAR_BIT THEN DECIDE_TAC);
 val exp2CB_gt_2 = prove(
-  --`2 <= 2 EXP CHAR_BIT`--,
+  --`2 <= 2n ** CHAR_BIT`--,
   Q_TAC SUFF_TAC `1 <= CHAR_BIT` THEN1
     METIS_TAC [EXP_BASE_LE_MONO, DECIDE ``1n < 2``, EXP_1] THEN
   ASSUME_TAC x_less_CHAR_BIT THEN intLib.ARITH_TAC)
@@ -164,8 +164,8 @@ val ptr_size = new_specification (
 val int_sizeof_def = Define`
   (int_sizeof (Signed x) = bit_size x) /\
   (int_sizeof (Unsigned x) = bit_size x) /\
-  (int_sizeof BChar = 1) /\
-  (int_sizeof Bool = bool_size)
+  (int_sizeof BChar = 1) (* CCOM /\
+  (int_sizeof Bool = bool_size) *)
 `;
 
 (* There are a few encoding functions required to turn bytes from
@@ -285,7 +285,7 @@ val mod_sub_lemma = prove(
 val word_sub_n2w_1 = prove(
   ``m <= n ==> (n2w n - n2w m = n2w (n - m))``,
   SRW_TAC [][word_sub_def, word_2comp_def, word_add_n2w] THEN
-  `0 < 2 ** dimindex (UNIV : 'a set)` by SRW_TAC [][] THEN
+  `0 < 2 ** dimindex (:'a)` by SRW_TAC [][] THEN
   SRW_TAC [][mod_sub_lemma] THEN
   Q_TAC SUFF_TAC `!x y c. 0 < c ==> ((x MOD c + y) MOD c = (x + y) MOD c)`
         THEN1 SRW_TAC [][] THEN
@@ -300,10 +300,8 @@ val CHAR_BIT_BOUNDS = store_thm(
 
 val TWICE_SCHAR_MAX = store_thm(
   "TWICE_SCHAR_MAX",
-  ``2n * 2 ** (CHAR_BIT - 1) = 2 ** CHAR_BIT``,
-  `CHAR_BIT = SUC (CHAR_BIT - 1)`
-     by (ASSUME_TAC CHAR_BIT_BOUNDS THEN DECIDE_TAC) THEN
-  METIS_TAC [EXP, MULT_COMM])
+  ``2n * MSB(:byte_index) = TOP (:byte_index)``,
+  METIS_TAC [wordsTheory.TOP_IS_TWICE_MSB])
 
 val SCHAR_MAX = store_thm(
   "SCHAR_MAX",
@@ -362,18 +360,20 @@ val int_representation = prove(
     REPEAT STRIP_TAC THEN
     `?n. i = &n` by (Q.SPEC_THEN `i` STRIP_ASSUME_TAC INT_NUM_CASES THEN
                      FULL_SIMP_TAC (srw_ss()) []) THEN
-    SRW_TAC [][],
+    SRW_TAC [][wordsTheory.TOP_def],
 
     SRW_TAC [][integer_wordTheory.w2i_def],
 
     Q.X_GEN_TAC `w` THEN STRIP_TAC THEN
     Q.ISPEC_THEN `w` STRIP_ASSUME_TAC wordsTheory.ranged_word_nchotomy THEN
     FULL_SIMP_TAC (srw_ss()) [wordsTheory.word_msb_n2w_numeric] THEN
-    `0 < n` by METIS_TAC [LESS_LESS_EQ_TRANS, bitTheory.ZERO_LT_TWOEXP] THEN
-    `INT_MAX (UNIV : byte_index set) < &n`
+    ASSUME_TAC (INST_TYPE [alpha |-> ``:byte_index``]
+                          wordsTheory.TOP_IS_TWICE_MSB) THEN
+    `0 < n` by DECIDE_TAC THEN
+    `INT_MAX (:byte_index) < &n`
        by SRW_TAC [ARITH_ss][integer_wordTheory.INT_MAX_def, INT_SUB] THEN
-    `n <= UINT_MAX (UNIV : byte_index set)`
-       by SRW_TAC [ARITH_ss][integer_wordTheory.UINT_MAX_def] THEN
+    `&n <= UINT_MAX (:byte_index)`
+       by SRW_TAC [ARITH_ss][integer_wordTheory.UINT_MAX_def, INT_SUB] THEN
     SRW_TAC [][integer_wordTheory.w2i_n2w_neg, INT_LE_SUB_RADD,
                INT_LE_SUB_LADD] THEN
     `1 <= CHAR_BIT` by (ASSUME_TAC CHAR_BIT THEN DECIDE_TAC) THEN
@@ -384,21 +384,17 @@ val int_representation = prove(
       SRW_TAC [][SCHAR_MAX] THEN
       SRW_TAC [ARITH_ss][word_sub_n2w_1, bitTheory.MOD_2EXP_LT] THEN
       SRW_TAC [ARITH_ss][GSYM INT_SUB] THEN
-      Q_TAC SUFF_TAC `2n * (2 ** (CHAR_BIT - 1)) = 2 ** CHAR_BIT` THEN1
-            intLib.ARITH_TAC THEN
-      SRW_TAC [][TWICE_SCHAR_MAX],
+      `2n ** (CHAR_BIT - 1) = MSB(:byte_index)`
+         by SRW_TAC [][wordsTheory.MSB_def] THEN
+      Q_TAC SUFF_TAC `&n < 2 * &(MSB(:byte_index))` THEN1 intLib.ARITH_TAC THEN
+      FULL_SIMP_TAC (srw_ss()) [],
 
       `SCHAR_MIN = ~SCHAR_MAX - 1`
          by METIS_TAC [char_onecomp_def, type_size_constants] THEN
       SRW_TAC [][SCHAR_MAX, INT_LE_SUB_LADD] THEN
-      Q.MATCH_ABBREV_TAC `~x + y <= z:int` THEN
-      Q_TAC SUFF_TAC `y <= x + z` THEN1 intLib.ARITH_TAC THEN
-      Q.UNABBREV_ALL_TAC THEN SRW_TAC [][INT_ADD] THEN
-      ASSUME_TAC TWICE_SCHAR_MAX THEN DECIDE_TAC,
-
-      `SCHAR_MIN = ~SCHAR_MAX - 1`
-         by METIS_TAC [char_onecomp_def, type_size_constants] THEN
-      SRW_TAC [][SCHAR_MAX, INT_LE_SUB_RADD]
+      `2n ** (CHAR_BIT - 1) = MSB(:byte_index)`
+        by SRW_TAC [][wordsTheory.MSB_def] THEN
+      SRW_TAC [ARITH_ss][]
     ],
 
     Q.X_GEN_TAC `i` THEN STRIP_TAC THEN
@@ -413,11 +409,16 @@ val int_representation = prove(
         ASM_SIMP_TAC (srw_ss() ++ ARITH_ss) [word_sub_n2w_1] THEN
         `SCHAR_MIN = ~SCHAR_MAX` by METIS_TAC [char_onecomp_def] THEN
         FULL_SIMP_TAC (srw_ss()) [SCHAR_MAX] THEN
-        `&n + 1 <= &(2 ** (CHAR_BIT - 1))` by intLib.ARITH_TAC THEN
-        `n + 1 <= 2 ** (CHAR_BIT - 1)`
+        `2n ** (CHAR_BIT - 1) = MSB(:byte_index)`
+           by SRW_TAC [][wordsTheory.MSB_def] THEN
+        POP_ASSUM SUBST_ALL_TAC THEN
+        `&n + 1 <= &(MSB(:byte_index))` by intLib.ARITH_TAC THEN
+        `n + 1 <= MSB(:byte_index)`
            by FULL_SIMP_TAC (srw_ss()) [INT_ADD] THEN
-        `n + 2 ** (CHAR_BIT - 1) < 2 ** CHAR_BIT`
-           by (ASSUME_TAC TWICE_SCHAR_MAX THEN DECIDE_TAC) THEN
+        `n + MSB(:byte_index) < TOP(:byte_index)`
+           by (ASSUME_TAC (INST_TYPE [alpha |-> ``:byte_index``]
+                                     wordsTheory.TOP_IS_TWICE_MSB) THEN
+               DECIDE_TAC) THEN
         SRW_TAC [][LESS_MOD] THEN DECIDE_TAC,
 
         ASM_SIMP_TAC (srw_ss()) [word_msb_n2w_numeric] THEN
@@ -425,14 +426,17 @@ val int_representation = prove(
            by (Q.SPEC_THEN `i` STRIP_ASSUME_TAC INT_NUM_CASES THEN
                FULL_SIMP_TAC (srw_ss()) []) THEN
         FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [SCHAR_MAX, INT_SUB] THEN
-        `n < 2 ** CHAR_BIT`
-           by (`~(2n ** (CHAR_BIT - 1) = 0)` by SRW_TAC [][] THEN
-               ASSUME_TAC TWICE_SCHAR_MAX THEN
+        `2n ** (CHAR_BIT - 1) = MSB(:byte_index)`
+           by SRW_TAC [][wordsTheory.MSB_def] THEN
+        POP_ASSUM SUBST_ALL_TAC THEN
+        ASSUME_TAC TWICE_SCHAR_MAX THEN
+        `n < TOP(:byte_index)`
+           by (ASSUME_TAC (INST_TYPE [alpha |-> ``:byte_index``]
+                                     wordsTheory.ZERO_LT_TOP) THEN
                DECIDE_TAC) THEN
-        `0 < 2n ** (CHAR_BIT - 1)` by SRW_TAC [][] THEN
+        `0 < MSB(:byte_index)` by SRW_TAC [ARITH_ss][] THEN
         ASM_SIMP_TAC (srw_ss() ++ ARITH_ss)[LESS_MOD] THEN
-        MATCH_MP_TAC integer_wordTheory.w2i_n2w_pos THEN
-        SRW_TAC [][integer_wordTheory.INT_MAX_def, INT_SUB]
+        SRW_TAC [ARITH_ss][integer_wordTheory.w2i_n2w_pos]
       ],
 
       (* not one's complement (or sign-magnitude either) *)
@@ -442,7 +446,7 @@ val int_representation = prove(
          by METIS_TAC [type_size_constants, char_onecomp_def] THEN
       FULL_SIMP_TAC (srw_ss()) [integer_wordTheory.INT_MAX_def,
                                 integer_wordTheory.INT_MIN_def,
-                                SCHAR_MAX]
+                                SCHAR_MAX, wordsTheory.MSB_def]
     ],
 
 
