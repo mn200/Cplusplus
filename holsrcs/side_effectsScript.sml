@@ -54,6 +54,18 @@ val null_ise_def = Define`
   null_ise ise = (se_affects ise = EMPTY)
 `;
 
+val mark_ref_def = Define`
+  mark_ref st sz se0 se =
+       ?r. (r = range_set st sz) /\ DISJOINT r se0.update_map /\
+           (se = se0 with ref_map updated_by BAG_UNION (BAG_OF_SET r))
+`
+
+(* SANITY *)
+val mark_ref_det = store_thm(
+  "mark_ref_det",
+  ``mark_ref st sz se0 se1 /\ mark_ref st sz se0 se2 ==> (se1 = se2)``,
+  SRW_TAC [][mark_ref_def])
+
 val null_ise_THM = store_thm(
   "null_ise_THM",
   ``!ise. null_ise ise = (SND ise = [])``,
