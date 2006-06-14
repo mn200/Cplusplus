@@ -1,0 +1,22 @@
+ANNOTATIONS
+-----------
+
+Various uppercase keywords appear in comments in the source-files.
+These indicate various issues.
+
+CCOM
+   some HOL text pertaining only to C++ has been commented out so that
+   a set of theories for C can be put together.
+
+ASSUMPTION
+   an assumption is made about the standard that may not be entirely
+   warranted, but will almost certainly be true of all possible
+   implementations, and was arguably in the heads of the standard's
+   authors.
+
+BAD_ASSUMPTION
+   an assumption that has been made for expediency's sake, and should
+   be revisited
+
+SANITY
+   the following theorem is a sanity check of the semantics
