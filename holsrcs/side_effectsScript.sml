@@ -21,22 +21,6 @@ open typesTheory memoryTheory expressionsTheory statementsTheory statesTheory
 
 val _ = new_theory "side_effects";
 
-val _ = type_abbrev("se", ``:num # byte list``)
-
-val _ = Hol_datatype `se_info = <| pending_ses : se->num ;
-                                   update_map  : num->bool ;
-                                   ref_map     : num->num |>`;
-
-val se_info_component_equality = theorem "se_info_component_equality"
-val _ = overload_on ("update_map", ``se_info_update_map``)
-val _ = overload_on ("ref_map", ``se_info_ref_map``)
-val _ = overload_on ("pending_ses", ``se_info_pending_ses``)
-
-val base_se_def = Define`
-  base_se = <| pending_ses := {| |}; update_map := {};
-               ref_map := {| |}
-            |>
-`;
 
 val is_null_se_def = Define`
   is_null_se se = (se.pending_ses = EMPTY_BAG)
@@ -91,8 +75,8 @@ val select_se_def = Define`
 
 val apply_ise_def = Define`
   apply_ise ise (se0:se_info) se =
-      ?u. (u = se_affects ise) /\ DISJOINT (update_map se0) u /\
-          DISJOINT (SET_OF_BAG (ref_map se0)) u /\
+      ?u. (u = se_affects ise) /\ DISJOINT se0.update_map u /\
+          DISJOINT (SET_OF_BAG se0.ref_map) u /\
           (se = update_map_fupd ($UNION u) se0)
 `;
 

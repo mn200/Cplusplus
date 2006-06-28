@@ -17,7 +17,8 @@ local open side_effectsTheory statesTheory operatorsTheory in end
 val _ = new_theory "dynamics";
 
 
-(* \#line cholera-model.nw 4898 *)
+(* an e-context is a function defining contexts where expression evaluation
+   can occur *)
 val valid_econtext_def = Define`
   valid_econtext f =
       (?f' e1. f = CApBinary f' e1) \/
@@ -98,24 +99,29 @@ val lval2rval_det = store_thm(
   METIS_TAC [sizeof_det, TypeBase.one_one_of ``:'a option``,
              side_effectsTheory.mark_ref_det])
 
+(* SANITY *)
 val lval2rval_is_lval = store_thm(
   "lval2rval_is_lval",
   ``!s0 e0 se0 X.
       lval2rval (s0, e0, se0) X ==> ?n t. e0 = LVal n t``,
   SIMP_TAC (srw_ss() ++ DNF_ss) [lval2rval_def, pairTheory.FORALL_PROD])
 
+(* SANITY *)
 val lval2rval_ecompval = store_thm(
   "lval2rval_ecompval",
   ``!s0 v t se0 X. ~(lval2rval (s0, ECompVal v t, se0) X)``,
   SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD, CExpr_distinct,
                        lval2rval_def]);
 
+(* SANITY *)
 val lval2rval_results = store_thm(
   "lval2rval_results",
   ``!X s e se. lval2rval X (s,e,se) ==>
                (?v t. e = ECompVal v t) \/ (e = UndefinedExpr)``,
   SIMP_TAC (srw_ss() ++ DNF_ss) [pairTheory.FORALL_PROD, lval2rval_def])
 
+(* an lv-context is a function defining where lvalue to rvalue reduction can
+   occur *)
 val valid_lvcontext_def = Define`
   valid_lvcontext f =
         (?f' e1. f = CApBinary f' e1) \/
@@ -131,12 +137,15 @@ val valid_lvcontext_def = Define`
         (?t. f = Cast t)
 `
 
+(* SANITY *)
 val lvcontexts_are_econtexts = store_thm(
   "lvcontexts_are_econtexts",
   --`!f. valid_lvcontext f ==> valid_econtext f`--,
   SRW_TAC [][valid_lvcontext_def, valid_econtext_def, FUN_EQ_THM] THEN
   SRW_TAC [][] THEN METIS_TAC [])
 
+(* malloc s0 ty a is true if a is a valid address for a value of type ty,
+   and is currently unallocated *)
 val malloc_def = Define`
   malloc s0 ty a =
      ?sz aln. sizeof (sizeofmap s0) ty sz /\
@@ -145,7 +154,9 @@ val malloc_def = Define`
               ~(a = 0) /\ (a MOD aln = 0) /\
               a + sz < 2 EXP (CHAR_BIT * ptr_size ty)
 `
-(* \#line cholera-model.nw 5731 *)
+
+(* rec_i_vars installs a list variables, updating varmap, typemap and allocmap
+*)
 val rec_i_vars_def = Define`
   (rec_i_vars st1 [] st2 = (st1 = st2)) /\
   (rec_i_vars st1 ((nm, ty) :: tail) st2 =
@@ -154,411 +165,339 @@ val rec_i_vars_def = Define`
          malloc st1 ty a /\
          rec_i_vars
             (st1 with
-                <| varmap updated_by (\v. override v (FST hd) a) ;
-                   typemap updated_by (\t. override t (FST hd) (SND hd));
+                <| varmap updated_by (\v. v |+ (nm, a)) ;
+                   typemap updated_by (\t. t |+ (nm, ty));
                    allocmap updated_by ((UNION) (range_set a n))
                 |>)
             tail
-            st2) \/
-           (!a. ~malloc st1 a n) /\ (resv = F) /\ (st2 = st1)))``
-};
-val install_vars = new_definition(
-  "install_vars",
-  ``install_vars st1 fn st2 resv =
+            st2)
+`
+
+(* install_vars installs the parameter information for a particular function *)
+val install_vars_def = Define`
+  install_vars st1 fn st2 =
+        fn IN FDOM st1.fnmap /\
         rec_i_vars (st1 with <| varmap := st1.gvarmap ;
                                 typemap := st1.gtypemap ;
                                 strmap := st1.gstrmap |>)
-                   ((st1.fnmap fn).parameters)
-                   st2 resv``);
-(* \#line cholera-model.nw 5778 *)
-val rec_i_vals = new_recursive_definition {
-  name = "rec_i_vals",
-  rec_axiom = listTheory.list_Axiom,
-  def = (--`
-    (rec_i_vals st1 [] vallist st2 res =
-       (vallist = []) /\ (st1 = st2) /\ res) /\
-    (rec_i_vals s0 (CONS (phd:string#CType) ptl) vallist s res =
-       ?vval vtype vtl pname ptype.
-          (vallist = CONS (ECompVal vval vtype) vtl) /\
-          (phd = (pname, ptype)) /\
-          ((?s1 newval rs.
-             convert_val s0.strmap (vval, vtype) (newval, ptype) /\
-             (rs = range_set (s0.varmap pname) (LENGTH newval)) /\
-             (s1 = val2mem s0 (s0.varmap pname) newval
+                   ((st1.fnmap ' fn).parameters)
+                   st2
+`
+
+val parameter_coerce_def = Define`
+  parameter_coerce (v1,ty1) (v2,ty2) =
+    (integral_type ty1 /\ integral_type ty2 \/
+     (?ty0. {ty1; ty2} = {Ptr Void; Ptr ty0})) /\
+    (?i. (INT_VAL ty1 v1 = SOME i) /\
+         (SOME v2 = REP_INT ty2 i))
+       \/
+    (ty1 = ty2) /\ (v1 = v2)
+`;
+
+
+(* installs values into memory *)
+val rec_i_vals_def = Define`
+    (rec_i_vals st1 [] vallist st2 = (vallist = []) /\ (st1 = st2)) /\
+    (rec_i_vals s0 ((pname, ptype) :: ptl) vallist s =
+       ?vval vtype vtl.
+          (vallist = ECompVal vval vtype :: vtl) /\
+          ?s1 newval rs.
+             parameter_coerce (vval, vtype) (newval, ptype) /\
+             (rs = range_set (s0.varmap ' pname) (LENGTH newval)) /\
+             (s1 = val2mem s0 (s0.varmap ' pname) newval
                    with <| initmap updated_by ((UNION) rs) ;
                            allocmap updated_by ((UNION) rs) |>) /\
-             rec_i_vals s1 ptl vtl s res) \/
-           (!nv. ~convert_val s0.strmap (vval,vtype) (nv, ptype)) /\
-           (res = F)))`--)};
+             rec_i_vals s1 ptl vtl s)
+`
 
-val install_values = new_definition (
-  "install_values",
-  ``install_values s0 fn pvl s1 res =
-          rec_i_vals s0 (s0.fnmap fn).parameters pvl s1 res``);
-(* \#line cholera-model.nw 5695 *)
-val pass_parameters = new_definition (
-  "pass_parameters",
-  ``pass_parameters s0 fnid pv s res =
-      ?s1 res'.
-        install_vars s0 fnid s1 res' /\
-        (res'
-         => install_values s1 fnid pv s res
-         |  (res = F) /\ (s = s0))``);
-(* \#line cholera-model.nw 3199 *)
-val se = (==`:num # (MemObj list)`==) (* these two are here for *)
-val qse = ty_antiq se;                (* the benefit of cholmeaning *)
-val se_info = (==`:se_info`==)
-val qse_info = ty_antiq se_info
-val paired_se = (==`:se_info # se_info`==)
-val qpaired_se = ty_antiq paired_se
-val sse = (==`:se_info#CState`==)
-val qsse = ty_antiq sse
-(* \#line cholera-model.nw 4570 *)
-open Datatype
-val _ = Hol_datatype `
-  meaningfuls =  mExpr of CExpr => se_info |
-                 mTCExpr of CExpr => se_info |
-                 mStmt of CStmt | mStmtl of CStmt list |
-                 mVarD of var_decl | mVarDl of var_decl list`;
-val meaningfuls = TypeBase.axiom_of ``:meaningfuls``
-(* \#line cholera-model.nw 4589 *)
-val is_mExprish = Define`
+val install_values_def = Define`
+  install_values s0 fn pvl s1 = rec_i_vals s0 (s0.fnmap ' fn).parameters pvl s1
+`
+
+val pass_parameters_def = Define`
+  pass_parameters s0 fnid pv s =
+      ?s1. install_vars s0 fnid s1 /\ install_values s1 fnid pv s
+`;
+
+val _ = overload_on ("mExpr", ``statements$NormE``)
+val _ = overload_on ("mStmt", ``statements$EStmt``)
+
+val is_mExprish_def = Define`
     (is_mExprish (mExpr e se) = T) /\
-    (is_mExprish (mTCExpr e se) = T) /\
-    (is_mExprish (mStmt s) = F) /\ (is_mExprish (mStmtl sl) = F) /\
-    (is_mExprish (mVarD v) = F) /\ (is_mExprish (mVarDl vl) = F)`;
-val _ = Define`
-    (is_mStmtish (mExpr e ses) = F) /\
-    (is_mStmtish (mTCExpr e se) = F) /\
-    (is_mStmtish (mStmt s) = T) /\ (is_mStmtish (mStmtl sl) = T) /\
-    (is_mStmtish (mVarD v) = F) /\ (is_mStmtish (mVarDl vl) = F)`;
-val _ = Define`
-        (is_mVarDish (mExpr e ses) = F) /\
-        (is_mVarDish (mTCExpr e se) = F) /\
-        (is_mVarDish (mStmt s) = F) /\ (is_mVarDish (mStmtl sl) = F) /\
-        (is_mVarDish (mVarD v) = T) /\ (is_mVarDish (mVarDl vl) = T)`;
-val is_mlistish = Define`
-    (is_mlistish (mExpr e ses) = F) /\
-    (is_mlistish (mTCExpr e se) = F) /\
-    (is_mlistish (mStmt s) = F) /\ (is_mlistish (mStmtl sl) = T) /\
-    (is_mlistish (mVarD v) = F) /\ (is_mlistish (mVarDl vl) = T)`;
-val is_mExpr = new_definition(
-  "is_mExpr",
-  --`is_mExpr m = is_mExprish m /\ ~is_mlistish m`--);
-val is_mStmt = new_definition(
-  "is_mStmt",
-  --`is_mStmt m = is_mStmtish m /\ ~is_mlistish m`--);
-(* \#line cholera-model.nw 4621 *)
-val out_mExpr = new_recursive_definition {
-  name = "out_mExpr", rec_axiom = meaningfuls,
-  def = (--`(out_mExpr (mExpr e se) = (e, se)) /\
-            (out_mExpr (mTCExpr e se) = (e, se))`--)
-};
-val out_mStmt = new_recursive_definition {
-  name = "out_mStmt", rec_axiom = meaningfuls,
-  def = (--`out_mStmt (mStmt s) = s`--)
-};
-val out_mStmtl = new_recursive_definition {
-  name = "out_mStmtl", rec_axiom = meaningfuls,
-  def = (--`out_mStmtl (mStmtl s) = s`--)
-};
-(* \#line cholera-model.nw 4659 *)
-val _ = Hol_datatype
-              `meaning_val = ExprVal of CExpr => se_info |
-                             FunArgsVal of CExpr list => se_info |
-                             StmtVal | RetVal of MemObj list |
-                             BreakVal | ContVal | VarDeclVal |
-                             Undefined`;
-val meaning_val = TypeBase.axiom_of ``:meaning_val``
-val is_retval = new_definition(
-  "is_retval",
-  (--`is_retval v = (?v'. v = RetVal v')`--));
-val is_interruptval = new_definition (
-  "is_interruptval",
-  (--`is_interruptval v = (v = ContVal) \/ (v = BreakVal) \/
-                          (?mv. v = RetVal mv)`--));
-(* \#line cholera-model.nw 4680 *)
-val traplink = new_definition(
-  "traplink",
-  --`traplink tt v = (tt = ContTrap) /\ (v = ContVal) \/
-                     (tt = BreakTrap) /\ (v = BreakVal)`--);
-(* \#line cholera-model.nw 4521 *)
-val memval = ty_antiq (==`:MemObj list`==);
-val _ = print "About to define meaning relation\n";
-local
-  val mng  =
-    (--`meaning:meaningfuls -> CState ->
-                (CState # meaning_val) -> bool`--)
-  val ev = (--`ExprVal`--)
-  val evl = (--`FunArgsVal`--)
-in
-  val (meaning_rules, meaning_ind, meaning_cases) = IndDefLib.Hol_reln`
+    (is_mExprish _ = F)
+`;
 
-(* \#line cholera-model.nw 4772 *)
+val out_mExpr_def = Define`
+  (out_mExpr (mExpr e se) = (e, se))
+`
+
+val signed_int_def = Define`
+  signed_int i = THE (REP_INT (Signed Int) i)
+`
+
+local
+  val _ = print "About to define meaning relation\n";
+  val mng  =
+    ``meaning:ExtE -> CState -> (CState # ExtE) -> bool``
+  val ev = ``mExpr``
+  val _ = set_trace "inddef strict" 1
+in
+  val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
+
 (!n se s.
    ^mng (mExpr (Cnum n) se) s
-        (s, ^ev (ECompVal (num2mval int_size n) (Signed Int)) se)) /\
-(* \#line cholera-model.nw 4791 *)
+        (s, ^ev (ECompVal (signed_int (&n)) (Signed Int)) se)) /\
+
 (!n se s.
     ^mng (mExpr (Cchar n) se) s
-         (s, ^ev (ECompVal (num2mval int_size n) (Signed Int)) se)) /\
+         (s, ^ev (ECompVal (signed_int (&n)) (Signed Int)) se)) /\
+
 (!t se s.
     ^mng (mExpr (Cnullptr t) se) s
-         (s, ^ev (ECompVal (num2mval ptr_size 0) (Ptr t)) se)) /\
-(!n se s.
-    ^mng (mExpr (CFunRef n) se) s
-         (s, ^ev (ECompVal (create_memval_fnref n) (s.typemap n)) se)) /\
-(* \#line cholera-model.nw 4826 *)
+         (s, ^ev (ECompVal (THE (REP_INT (Ptr t) 0)) (Ptr t)) se)) /\
+
 (!vname se s.
+    object_type (s.typemap ' vname) /\ vname IN FDOM s.typemap ==>
     ^mng (mExpr (Var vname) se) s
-         (s, ^ev (LVal (s.varmap vname) (s.typemap vname)) se))
-(* \#line cholera-model.nw 4800 *)
-                                            /\
-(* \#line cholera-model.nw 4849 *)
-(!s v t v' t' se.
-    convert_val s.strmap (v, t) (v', t') ==>
+         (s, ^ev (LVal (s.varmap ' vname) (s.typemap ' vname)) se)) /\
+
+(!vname se s ty.
+    (ty = s.typemap ' vname) /\
+    function_type ty /\ vname IN FDOM s.typemap ==>
+    meaning (mExpr (Var vname) se) s
+            (s, ^ev (ECompVal (s.fnvals ' vname) (Ptr ty)) se)) /\
+
+(!s v t v' t' se i.
+    (INT_VAL t v = SOME i) /\ (SOME v' = REP_INT t' i) ==>
     ^mng (mExpr (Cast t' (ECompVal v t)) se) s
          (s, ^ev (ECompVal v' t') se)) /\
-(* \#line cholera-model.nw 4859 *)
+
 (!v t t' se s.
-    (!v'. ~convert_val s.strmap (v, t) (v', t')) ==>
-    ^mng (mExpr (Cast t' (ECompVal v t)) se) s (s, ^ev UndefinedExpr se))
-(* \#line cholera-model.nw 4801 *)
-                           /\
-(* \#line cholera-model.nw 4884 *)
+    (INT_VAL t v = NONE) ==>
+    ^mng (mExpr (Cast t' (ECompVal v t)) se) s (s, ^ev UndefinedExpr se)) /\
+
+(!v t t' se s i.
+    (INT_VAL t v = SOME i) /\ (REP_INT t' i = NONE) ==>
+    ^mng (mExpr (Cast t' (ECompVal v t)) se) s (s, ^ev UndefinedExpr se)) /\
+
+
 (!f e se0 s0 e' se s.
     ^mng (mExpr e se0) s0 (s, ^ev e' se) /\
     valid_econtext f ==>
     ^mng (mExpr ((f:CExpr->CExpr) e) se0) s0 (s, ^ev (f e') se)) /\
-(* \#line cholera-model.nw 4947 *)
+
+(!f e se0 s0 s stmt c.
+    ^mng (mExpr e se0) s0 (s, mStmt stmt c) /\
+    valid_econtext f ==>
+    ^mng (mExpr (f e) se0) s0 (s, mStmt stmt (\v rt. f (c v rt)))) /\
+
+
 (!f se s.
     valid_econtext f \/ (?asfn lhs b. f = \e. Assign asfn lhs e b) ==>
     ^mng (mExpr (f UndefinedExpr) se) s (s, ^ev UndefinedExpr se)) /\
-(* \#line cholera-model.nw 5054 *)
+
 (!f e0 se0 s0 s e se.
    valid_lvcontext f /\ lval2rval (s0,e0,se0) (s,e,se) ==>
    ^mng (mExpr ((f:CExpr->CExpr) e0) se0) s0 (s, ^ev (f e) se)) /\
-(* \#line cholera-model.nw 5112 *)
+
 (!e se0 s0 s se.
     apply_se (se0, s0) (se, s) ==>
     ^mng (mExpr e se0) s0 (s, ^ev e se)) /\
-(* \#line cholera-model.nw 5124 *)
+
 (!e se0 s0.
     (!se s. ~(apply_se (se0, s0) (se, s))) /\
     ~is_null_se se0 /\ ~(e = UndefinedExpr) ==>
     ^mng (mExpr e se0) s0 (s0, ^ev UndefinedExpr se0)) /\
-(* \#line cholera-model.nw 5141 *)
+
 (!v t e2 se s0.
     is_null_se se ==>
     ^mng (mExpr (CommaSep (ECompVal v t) e2) se) s0
          (s0, ^ev (RValreq e2) base_se)) /\
-(* \#line cholera-model.nw 5151 *)
+
 (!v t se s. ^mng (mExpr (RValreq (ECompVal v t)) se) s
                  (s, ^ev (ECompVal v t) se)) /\
-(* \#line cholera-model.nw 5211 *)
+
 (!f v1 type1 v2 type2 se0 s.
    (!res restype. ~binop_meaning s f v1 type1 v2 type2 res restype) ==>
    ^mng (mExpr (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se0) s
         (s, ^ev UndefinedExpr se0)) /\
+
 (!s f v1 type1 v2 type2 res restype se.
     binop_meaning s f v1 type1 v2 type2 res restype ==>
     ^mng (mExpr (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se) s
          (s, ^ev (ECompVal res restype) se)) /\
-(* \#line cholera-model.nw 5181 *)
+
 (!s f ival t result rt se.
-   unop_meaning s f ival t result rt ==>
+   unop_meaning f ival t result rt ==>
    ^mng (mExpr (CApUnary f (ECompVal ival t)) se) s
         (s, ^ev (ECompVal result rt) se)) /\
+
 (!s0 se0 f ival t.
-     (!res rt. ~(unop_meaning s0 f ival t res rt)) ==>
+     (!res rt. ~(unop_meaning f ival t res rt)) ==>
      ^mng (mExpr (CApUnary f (ECompVal ival t)) se0) s0
           (s0, ^ev UndefinedExpr se0)) /\
-(* \#line cholera-model.nw 5263 *)
+
 (!v t se s sub2.
-    (coerce_to_num v = 0) /\ scalar_type t ==>
+    (INT_VAL t v = SOME 0) ==>
     ^mng (mExpr (CAnd (ECompVal v t) sub2) se) s
-         (s, ^ev (ECompVal (num2mval int_size 0) (Signed Int)) se)) /\
+         (s, ^ev (ECompVal (THE (REP_INT (Signed Int) 0)) (Signed Int)) se)) /\
+
 (!v t se s sub2.
-    ~(coerce_to_num v = 0) /\ is_null_se se /\ scalar_type t ==>
+    ~(INT_VAL t v = SOME 0) /\ is_null_se se ==>
     ^mng (mExpr (CAnd (ECompVal v t) sub2) se) s
          (s, ^ev (CAndOr_sqpt sub2) base_se)) /\
 (!v t se s.
    scalar_type t ==>
    ^mng (mExpr (CAndOr_sqpt (ECompVal v t)) se) s
-        (s, ^ev (ECompVal (if coerce_to_num v = 0 then num2mval int_size 0
-                           else num2mval int_size 1) (Signed Int))
+        (s, ^ev (ECompVal (if INT_VAL t v = SOME 0 then signed_int 0
+                           else signed_int 1) (Signed Int))
                 se)) /\
-(* \#line cholera-model.nw 5296 *)
+
 (!v t sub2 se s.
-   ~(coerce_to_num v = 0) /\ scalar_type t ==>
+   ~(INT_VAL t v = SOME 0)  ==>
    ^mng (mExpr (COr (ECompVal v t) sub2) se) s
-        (s, ^ev (ECompVal (num2mval int_size 1) (Signed Int)) se)) /\
+        (s, ^ev (ECompVal (signed_int 1) (Signed Int)) se)) /\
+
 (!v t sub2 se s.
-    (coerce_to_num v = 0) /\ is_null_se se /\ scalar_type t ==>
+    (INT_VAL t v = SOME 0) /\ is_null_se se ==>
     ^mng (mExpr (COr (ECompVal v t) sub2) se) s
          (s, ^ev (CAndOr_sqpt sub2) base_se)) /\
-(* \#line cholera-model.nw 5334 *)
-(!v t e2 t2 e3 t3 resexpr result_type se s sn.
 
-(* \#line cholera-model.nw 5325 *)
-is_null_se se /\ scalar_type t /\
-expr_type (expr_type_comps s) RValue (INL e2) (INL t2) /\
-expr_type (expr_type_comps s) RValue (INL e3) (INL t3) /\
-expr_type (expr_type_comps s) RValue
-          (INL (CCond (ECompVal v t) e2 e3))
-          (INL result_type)
-(* \#line cholera-model.nw 5335 *)
-                                         /\
-    (coerce_to_num v = 0) /\
-    ((t2 = Struct sn) /\ (resexpr = RValreq e3) \/
-     (!sn. ~(t2 = Struct sn)) /\ (resexpr = Cast result_type e3)) ==>
-    ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s (s, ^ev resexpr base_se))
+(!v t e2 t2 e3 t3 resexpr result_type se s sn.
+  is_null_se se /\ scalar_type t /\
+  expr_type (expr_type_comps s) RValue e2 t2 /\
+  expr_type (expr_type_comps s) RValue e3 t3 /\
+  expr_type (expr_type_comps s) RValue
+            (CCond (ECompVal v t) e2 e3)
+            result_type /\
+  (INT_VAL t v = SOME 0) /\
+  ((t2 = Class sn) /\ (resexpr = RValreq e3) \/
+   (!sn. ~(t2 = Class sn)) /\ (resexpr = Cast result_type e3)) ==>
+  ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s (s, ^ev resexpr base_se))
 
            /\
 
 (!v t e2 t2 e3 t3 resexpr result_type se s sn.
 
-(* \#line cholera-model.nw 5325 *)
-is_null_se se /\ scalar_type t /\
-expr_type (expr_type_comps s) RValue (INL e2) (INL t2) /\
-expr_type (expr_type_comps s) RValue (INL e3) (INL t3) /\
-expr_type (expr_type_comps s) RValue
-          (INL (CCond (ECompVal v t) e2 e3))
-          (INL result_type)
-(* \#line cholera-model.nw 5344 *)
-                                        /\
-   ~(coerce_to_num v = 0) /\
-   ((t2 = Struct sn) /\ (resexpr = RValreq e2) \/
-     (!sn. ~(t2 = Struct sn)) /\ (resexpr = Cast result_type e2)) ==>
-   ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s (s, ^ev resexpr base_se))
+   is_null_se se /\ scalar_type t /\
+   expr_type (expr_type_comps s) RValue e2 t2 /\
+   expr_type (expr_type_comps s) RValue e3 t3 /\
+   expr_type (expr_type_comps s) RValue
+             (CCond (ECompVal v t) e2 e3)
+             result_type /\
+   ~(INT_VAL t v = SOME 0) /\
+   ((t2 = Class sn) /\ (resexpr = RValreq e2) \/
+     (!sn. ~(t2 = Class sn)) /\ (resexpr = Cast result_type e2))
+           ==>
+   ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s (s, ^ev resexpr base_se)) /\
 
-          /\
-(* \#line cholera-model.nw 5378 *)
-(!mval t se s.
-    ~(t = Void) ==>
+(!mval t se s addr.
+    ~(t = Void) /\ (SOME addr = INT_VAL (Ptr t) mval) ==>
     ^mng (mExpr (Deref (ECompVal mval (Ptr t))) se) s
-         (s, ^ev (LVal (memval2addr mval) t) se)) /\
-(* \#line cholera-model.nw 5397 *)
-(!a t se s. ^mng (mExpr (Addr (LVal a t)) se) s
-                 (s, ^ev (ECompVal (num2mval ptr_size a) (Ptr t)) se)) /\
-(* \#line cholera-model.nw 5424 *)
+         (s, ^ev (LVal (Num addr) t) se)) /\
+
+(!a t se s.
+    ^mng (mExpr (Addr (LVal a t)) se) s
+          (s, ^ev (ECompVal (THE (REP_INT (Ptr t) (&a))) (Ptr t)) se)) /\
+
 (!se0 s0 s e se mb mb' f a RHS.
     ^mng (mExpr RHS se0) s0 (s, ^ev e se) /\
-    (mb' = BAG_delta (ref_map se0, ref_map se) mb) ==>
+    (mb' = BAG_delta (se0.ref_map, se.ref_map) mb) ==>
     ^mng (mExpr (Assign f a RHS mb) se0) s0
          (s, ^ev (Assign f a e mb') se)) /\
-(* \#line cholera-model.nw 5452 *)
+
 (!f n t e mb se0 s0.
      ^mng (mExpr (Assign (SOME f) (LVal n t) e mb) se0) s0
-          (s0, ExprVal (Assign NONE (LVal n t)
+          (s0, ^ev (Assign NONE (LVal n t)
                          (CApBinary f (LVal n t) e)
                          mb)
                        se0)) /\
-(* \#line cholera-model.nw 5513 *)
+
 (!s v0 t0 v lhs_t ok_refs se0 se' se a resv mb.
-     convert_val s.strmap (v0,t0) (v,lhs_t) /\
+     parameter_coerce (v0,t0) (v,lhs_t) /\
      (ok_refs = \x. x IN (se_affects (a, v)) => mb x | 0) /\
-     (se' = ref_map_fupd (\rm. BAG_DIFF rm ok_refs) se0) /\
+     (se' = se0 with ref_map updated_by (\rm. BAG_DIFF rm ok_refs)) /\
      (se = add_se (a, v) se') /\ (resv = ECompVal v lhs_t)
                           \/
-     (!v. ~convert_val s.strmap (v0, t0) (v, lhs_t)) /\
+     (!v. ~parameter_coerce (v0, t0) (v, lhs_t)) /\
      (resv = UndefinedExpr) /\ (se = se0) ==>
      ^mng (mExpr (Assign NONE (LVal a lhs_t) (ECompVal v0 t0) mb) se0)
           s (s, ^ev resv se)) /\
-(* \#line cholera-model.nw 5543 *)
+
 (!se0 se s t t' sz v nv nv1 a resv.
-   sizeof s.strmap (INL t) sz /\ (v = mem2val s a sz) /\
+   sizeof (sizeofmap s) t sz /\ (v = mem2val s a sz) /\
    range_set a sz SUBSET s.initmap /\
-   binop_meaning s CPlus v t (num2mval int_size 1) (Signed Int) nv1 t' /\
-   convert_val s.strmap (nv1,t') (nv,t) /\
+   binop_meaning s CPlus v t (signed_int 1) (Signed Int) nv1 t' /\
+   parameter_coerce (nv1,t') (nv,t) /\
    (se = add_se (a, nv) se0) /\ (resv = ECompVal v t)
               \/
-   (!nv. ~convert_val s.strmap (nv1, t') (nv, t)) /\
+   (!nv. ~parameter_coerce (nv1, t') (nv, t)) /\
    (se = se0) /\ (resv = UndefinedExpr) ==>
    ^mng (mExpr (PostInc (LVal a t)) se0) s (s, ^ev resv se)) /\
-(* \#line cholera-model.nw 5561 *)
+
 (!a t se0 sz s v.
-   sizeof s.strmap (INL t) sz /\
+   sizeof (sizeofmap s) t sz /\
    (v = mem2val s a sz) /\
    ((!nv1 t'.
-       ~binop_meaning s CPlus v t (num2mval int_size 1) (Signed Int) nv1 t') \/
+       ~binop_meaning s CPlus v t (signed_int 1) (Signed Int) nv1 t') \/
    ~(range_set a sz SUBSET s.initmap)) ==>
    ^mng (mExpr (PostInc (LVal a t)) se0) s (s, ^ev UndefinedExpr se0)) /\
-(* \#line cholera-model.nw 5590 *)
-(!s st fld ftype se offn a.
-     offset s.strmap st fld offn /\
-     lookup_field_info (s.strmap st) fld ftype ==>
-     ^mng (mExpr (SVar (LVal a (Struct st)) fld) se) s
+
+(!s st fld ftype se offn i a.
+     offset (sizeofmap s) (sizeofmap s ' st) i offn /\
+     st IN FDOM (sizeofmap s) /\
+     lookup_field_info (deNONE s.strmap ' st) fld (i,ftype) ==>
+     ^mng (mExpr (SVar (LVal a (Class st)) fld) se) s
           (s, ^ev (LVal (a + offn) ftype) se)) /\
 
-(!s st fld ftype fsz v fv se offn.
-   offset s.strmap st fld offn /\
-   lookup_field_info (s.strmap st) fld ftype /\
-   sizeof s.strmap (INL ftype) fsz /\
-   (fv:^memval = GENLIST (\n. EL (n + offn) v) fsz) ==>
-   ^mng (mExpr (SVar (ECompVal v (Struct st)) fld) se) s
+(!s st fld ftype fsz v fv se i offn.
+   offset (sizeofmap s) (sizeofmap s ' st) i offn /\
+   st IN FDOM (sizeofmap s) /\
+   lookup_field_info (deNONE s.strmap ' st) fld (i, ftype) /\
+   sizeof (sizeofmap s) ftype fsz /\
+   (fv = GENLIST (\n. EL (n + offn) v) fsz) ==>
+   ^mng (mExpr (SVar (ECompVal v (Class st)) fld) se) s
         (s, ^ev (ECompVal fv ftype) se)) /\
-(* \#line cholera-model.nw 5633 *)
+
 (!f params se s.
-    EVERY (\e. ?v t. e = ECompVal v t) (CONS f params) /\
+    EVERY (\e. ?v t. e = ECompVal v t) (f :: params) /\
     is_null_se se ==>
     ^mng (mExpr (FnApp f params) se) s
          (s, ^ev (FnApp_sqpt f params) base_se)) /\
-(* \#line cholera-model.nw 5647 *)
-(!fnval ftype params se s0 s1 s2 s fnid rt vs rv ev.
-    ^mng (mStmt (s1.fnmap fnid).body) s1 (s2, rv) /\
-    pass_parameters s0 fnid params s1 T /\
-    memval_fnref fnval fnid /\
+
+(!fnval ftype params se s0 s1 fnid rt vs body.
+    (fnid = s0.fndecode ' fnval) /\ fnval IN FDOM s0.fndecode /\
     (ftype = Function rt vs) /\
-    ((?v. (rv = RetVal v) /\ (ev = ECompVal v rt) /\
-          (s = s0 with <| locmap := s2.locmap ;
-                          initmap := s2.initmap INTER s0.allocmap |>))
-                    \/
-     (rv = Undefined) /\ (ev = UndefinedExpr) /\ (s = s0)) ==>
-    ^mng (mExpr (FnApp_sqpt (ECompVal fnval ftype) params) se) s0
-         (s, ^ev ev se)) /\
-(* \#line cholera-model.nw 5667 *)
-(!fnval ftype params se s0 s fnid.
-   pass_parameters s0 fnid params s F /\
-   memval_fnref fnval fnid ==>
-   ^mng (mExpr (FnApp_sqpt (ECompVal fnval ftype) params) se) s0
-        (s0, ^ev UndefinedExpr se)) /\
-(* \#line cholera-model.nw 5814 *)
-(!e se s. ^mng (mTCExpr e se) s (s, ^ev e se))
-     /\
-(!e0 se0 s0 s' e' se' s e se.
-   ^mng (mExpr e0 se0) s0 (s', ^ev e' se') /\
-   ^mng (mTCExpr e' se') s' (s, ^ev e se) ==>
-   ^mng (mTCExpr e0 se0) s0 (s, ^ev e se))
-(* \#line cholera-model.nw 4531 *)
-                                /\
+    pass_parameters s0 fnid params s1 /\
+    ((s0.fnmap ' fnid).body = SOME body)
+   ==>
+    ^mng (mExpr (FnApp_sqpt (ECompVal fnval (Ptr ftype)) params) se) s0
+         (s1 with stack updated_by (CONS (s0.strmap, s0.typemap, s0.varmap)),
+          EStmt body (\rv rt'. Cast rt (ECompVal rv rt')))) /\
 
-(* \#line cholera-model.nw 5891 *)
-(!s. ^mng (mStmt EmptyStmt) s (s, StmtVal)) /\
+(!fnval ftype params se s0 fnid.
+    (fnid = s0.fndecode ' fnval) /\ fnval IN FDOM s0.fndecode /\
+    (!s. ~pass_parameters s0 fnid params s)
+   ==>
+    ^mng (mExpr (FnApp_sqpt (ECompVal fnval (Ptr ftype)) params) se) s0
+         (s0, ^ev UndefinedExpr se)) /\
 
-(* \#line cholera-model.nw 5916 *)
-(!s0. ^mng (mStmtl []) s0 (s0, StmtVal)) /\
+(!s c. ^mng (mStmt EmptyStmt c) s (s, ^ev (c [] Void) base_se)) /\
 
-(!st1 sttail s1 s' s2 v.
-   ^mng (mStmt st1) s1 (s', StmtVal) /\
-   ^mng (mStmtl sttail) s' (s2, v) ==>
-   ^mng (mStmtl (st1 :: sttail)) s1 (s2,v)) /\
+(!exte0 exte s1 s2 c.
+   ^mng exte0 s1 (s2, exte) ==>
+   ^mng (mStmt (Ret exte0) c) s1 (s2, mStmt (Ret exte) c)) /\
 
-(!st1 s1 s' v sttail.
-   ^mng (mStmt st1) s1 (s', v) /\ ~(v = StmtVal) ==>
-   ^mng (mStmtl (st1 :: sttail)) s1 (s', v)) /\
+(!v t s se c smap tmap vmap stack'.
+   is_null_se se /\ (s.stack = (smap,tmap,vmap)::stack') ==>
+   ^mng (mStmt (Ret (NormE (ECompVal v t) se)) c) s
+        (s with <| stack := stack'; strmap := smap; typemap := tmap;
+                   varmap := vmap |>,
+         mExpr (c v t) base_se)) /\
 
-(!e s1 s2 e' se v t retval.
-   ^mng (mTCExpr (RValreq e) base_se) s1 (s2, ^ev e' se) /\
-   is_null_se se /\
-   ((e' = ECompVal v t) /\ (retval = RetVal v) \/
-    (e' = UndefinedExpr) /\ (retval = Undefined)) ==>
-   ^mng (mStmt (Ret e)) s1 (s2, retval)) /\
+(!s c. ^mng (mStmt EmptyRet c) s
+            (s, mStmt (Ret (NormE (ECompVal [] Void) base_se)) c)) /\
 
-(!s1. ^mng (mStmt EmptyRet) s1 (s1, RetVal [])) /\
-(!s1. ^mng (mStmt Break) s1 (s1, BreakVal)) /\
-(!s1. ^mng (mStmt Cont) s1 (s1, ContVal)) /\
-(* \#line cholera-model.nw 5957 *)
 (!st s s0 v tt.
      ^mng (mStmt st) s0 (s, v) /\ traplink tt v ==>
      ^mng (mStmt (Trap tt st)) s0 (s, StmtVal)) /\
@@ -709,6 +648,8 @@ val umeaning = new_definition(
 
 (* \#line cholera-model.nw 6309 *)
 local
+  infix >-
+  fun (f >- g) = g o f
   open BasicProvers
   val mng_induction = CONJUNCT2 meaning
   val ss = srw_ss()

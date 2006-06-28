@@ -10,6 +10,9 @@ open boolSimps
 open arithmeticTheory pred_setTheory integerTheory
 local open wordsTheory integer_wordTheory finite_mapTheory in end
 
+(* also need theory of bags *)
+local open bagTheory in end
+
 (* C++ ancestor theories  *)
 open typesTheory memoryTheory expressionsTheory
 
@@ -18,62 +21,65 @@ val _ = new_theory "statements";
 
 
 
-
-(* A declaration can be used to declare (but not define a function).
-   A VStrDec with an empty field list is the equivalent of
-     struct foo;
-   i.e., an incomplete declaration of a struct type
-*)
-val _ = Hol_datatype`
-   var_decl = VDec of CType => string
-            | VDecInit of CType => string => CExpr
-            | VStrDec of string => (string#CType) list
+val _ = type_abbrev("se", ``:num # byte list``)
+val _ = Hol_datatype `se_info = <| pending_ses : se->num ;
+                                   update_map  : num->bool ;
+                                   ref_map     : num->num |>`;
+val base_se_def = Define`
+  base_se = <| pending_ses := {| |}; update_map := {};
+               ref_map := {| |}
+            |>
 `;
-
-(* extract the initialisation expression from a declaration *)
-val decl_exprs_def = Define`
-  (decl_exprs (VDec t s) = []) /\
-  (decl_exprs (VDecInit t s e) = [e]) /\
-  (decl_exprs (VStrDec s fl) = [])
-`;
-val decllist_exprs_def = Define`
-  decllist_exprs decllist = FLAT (MAP decl_exprs decllist)
-`
-
 
 
 (* sorts of things that might be trapped - will probably be extended to allow
    expressions to be caught as well *)
 val _ = Hol_datatype `traptype = BreakTrap | ContTrap`;
 
+
+
 val _ = Hol_datatype`
-  CStmt = CLoop of CExpr => CStmt
-        | CIf of CExpr => CStmt => CStmt
-        | Standalone of CExpr
-        | EmptyStmt
-        | Block of var_decl list => CStmt list
-        | Ret of CExpr
-        | EmptyRet
-        | Break
-        | Cont
-        | Trap of traptype => CStmt
+  CStmt    = CLoop of ExtE => CStmt
+           | CIf of ExtE => CStmt => CStmt
+           | Standalone of ExtE
+           | EmptyStmt
+           | Block of var_decl list => CStmt list
+           | Ret of ExtE
+           | EmptyRet
+           | Break
+           | Cont
+           | Trap of traptype => CStmt ;
+
+  ExtE     = NormE of CExpr => se_info
+           | EStmt of CStmt => (byte list -> CPP_Type -> CExpr) ;
+
+  var_decl = VDec of CType => string
+           | VDecInit of CType => string => ExtE
+           | VStrDec of string => (string#CType) list
 `;
+(* A declaration can be used to declare (but not define a function).
+   A VStrDec with an empty field list is the equivalent of
+     struct foo;
+   i.e., an incomplete declaration of a struct type
+*)
+
+
 
 (* derived loop forms *)
 val forloop_def = Define`
   forloop e1 e2 e3 bdy =
-       Block [] [Standalone e1;
+       Block [] [Standalone (NormE e1 base_se);
                  Trap BreakTrap
                    (CLoop e2 (Block [] [Trap ContTrap bdy;
-                                        Standalone e3]))]
+                                        Standalone (NormE e3 base_se)]))]
 `
 val whileloop_def = Define`
-  whileloop g s = Trap BreakTrap (CLoop g (Trap ContTrap s))
+  whileloop g s = Trap BreakTrap (CLoop (NormE g base_se) (Trap ContTrap s))
 `;
 val doloop_def = Define`
   doloop bdy g =
        Trap BreakTrap (Block [] [Trap ContTrap bdy;
-                                 CLoop g (Trap ContTrap bdy)])
+                                 CLoop (NormE g base_se) (Trap ContTrap bdy)])
 `
 
 (* recursively check a predicate over a statement *)

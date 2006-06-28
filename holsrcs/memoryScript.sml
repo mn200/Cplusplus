@@ -300,8 +300,8 @@ val CHAR_BIT_BOUNDS = store_thm(
 
 val TWICE_SCHAR_MAX = store_thm(
   "TWICE_SCHAR_MAX",
-  ``2n * MSB(:byte_index) = TOP (:byte_index)``,
-  METIS_TAC [wordsTheory.TOP_IS_TWICE_MSB])
+  ``2n * INT_MIN(:byte_index) = dimword (:byte_index)``,
+  METIS_TAC [wordsTheory.dimword_IS_TWICE_INT_MIN])
 
 val SCHAR_MAX = store_thm(
   "SCHAR_MAX",
@@ -317,6 +317,12 @@ val SCHAR_MAX = store_thm(
       by SRW_TAC [][EXP, LEFT_SUB_DISTRIB] THEN
   METIS_TAC [MULT_DIV, DECIDE ``0n < 2``, MULT_COMM])
 
+
+(* ASSUMPTION: this assumes that though multiple byte representations may
+   map to the same integral value, the implementation always picks one of these
+   when it writes a value back into a byte representation.  This would
+   require, for example, that a negative zero (possible in one's complement) be
+   written back in its normal form. *)
 val int_representation = prove(
   ``?(rep_int : CPP_Type -> int -> byte list option)
      (int_value : CPP_Type -> byte list -> int option).
@@ -360,7 +366,7 @@ val int_representation = prove(
     REPEAT STRIP_TAC THEN
     `?n. i = &n` by (Q.SPEC_THEN `i` STRIP_ASSUME_TAC INT_NUM_CASES THEN
                      FULL_SIMP_TAC (srw_ss()) []) THEN
-    SRW_TAC [][wordsTheory.TOP_def],
+    SRW_TAC [][wordsTheory.dimword_def],
 
     SRW_TAC [][integer_wordTheory.w2i_def],
 
@@ -368,7 +374,7 @@ val int_representation = prove(
     Q.ISPEC_THEN `w` STRIP_ASSUME_TAC wordsTheory.ranged_word_nchotomy THEN
     FULL_SIMP_TAC (srw_ss()) [wordsTheory.word_msb_n2w_numeric] THEN
     ASSUME_TAC (INST_TYPE [alpha |-> ``:byte_index``]
-                          wordsTheory.TOP_IS_TWICE_MSB) THEN
+                          wordsTheory.dimword_IS_TWICE_INT_MIN) THEN
     `0 < n` by DECIDE_TAC THEN
     `INT_MAX (:byte_index) < &n`
        by SRW_TAC [ARITH_ss][integer_wordTheory.INT_MAX_def, INT_SUB] THEN
@@ -384,16 +390,16 @@ val int_representation = prove(
       SRW_TAC [][SCHAR_MAX] THEN
       SRW_TAC [ARITH_ss][word_sub_n2w_1, bitTheory.MOD_2EXP_LT] THEN
       SRW_TAC [ARITH_ss][GSYM INT_SUB] THEN
-      `2n ** (CHAR_BIT - 1) = MSB(:byte_index)`
-         by SRW_TAC [][wordsTheory.MSB_def] THEN
-      Q_TAC SUFF_TAC `&n < 2 * &(MSB(:byte_index))` THEN1 intLib.ARITH_TAC THEN
+      `2n ** (CHAR_BIT - 1) = INT_MIN(:byte_index)`
+         by SRW_TAC [][wordsTheory.INT_MIN_def] THEN
+      Q_TAC SUFF_TAC `&n < 2 * &(INT_MIN(:byte_index))` THEN1 intLib.ARITH_TAC THEN
       FULL_SIMP_TAC (srw_ss()) [],
 
       `SCHAR_MIN = ~SCHAR_MAX - 1`
          by METIS_TAC [char_onecomp_def, type_size_constants] THEN
       SRW_TAC [][SCHAR_MAX, INT_LE_SUB_LADD] THEN
-      `2n ** (CHAR_BIT - 1) = MSB(:byte_index)`
-        by SRW_TAC [][wordsTheory.MSB_def] THEN
+      `2n ** (CHAR_BIT - 1) = INT_MIN(:byte_index)`
+        by SRW_TAC [][wordsTheory.INT_MIN_def] THEN
       SRW_TAC [ARITH_ss][]
     ],
 
@@ -409,15 +415,15 @@ val int_representation = prove(
         ASM_SIMP_TAC (srw_ss() ++ ARITH_ss) [word_sub_n2w_1] THEN
         `SCHAR_MIN = ~SCHAR_MAX` by METIS_TAC [char_onecomp_def] THEN
         FULL_SIMP_TAC (srw_ss()) [SCHAR_MAX] THEN
-        `2n ** (CHAR_BIT - 1) = MSB(:byte_index)`
-           by SRW_TAC [][wordsTheory.MSB_def] THEN
+        `2n ** (CHAR_BIT - 1) = INT_MIN(:byte_index)`
+           by SRW_TAC [][wordsTheory.INT_MIN_def] THEN
         POP_ASSUM SUBST_ALL_TAC THEN
-        `&n + 1 <= &(MSB(:byte_index))` by intLib.ARITH_TAC THEN
-        `n + 1 <= MSB(:byte_index)`
+        `&n + 1 <= &(INT_MIN(:byte_index))` by intLib.ARITH_TAC THEN
+        `n + 1 <= INT_MIN(:byte_index)`
            by FULL_SIMP_TAC (srw_ss()) [INT_ADD] THEN
-        `n + MSB(:byte_index) < TOP(:byte_index)`
+        `n + INT_MIN(:byte_index) < dimword(:byte_index)`
            by (ASSUME_TAC (INST_TYPE [alpha |-> ``:byte_index``]
-                                     wordsTheory.TOP_IS_TWICE_MSB) THEN
+                                     wordsTheory.dimword_IS_TWICE_INT_MIN) THEN
                DECIDE_TAC) THEN
         SRW_TAC [][LESS_MOD] THEN DECIDE_TAC,
 
@@ -426,15 +432,15 @@ val int_representation = prove(
            by (Q.SPEC_THEN `i` STRIP_ASSUME_TAC INT_NUM_CASES THEN
                FULL_SIMP_TAC (srw_ss()) []) THEN
         FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [SCHAR_MAX, INT_SUB] THEN
-        `2n ** (CHAR_BIT - 1) = MSB(:byte_index)`
-           by SRW_TAC [][wordsTheory.MSB_def] THEN
+        `2n ** (CHAR_BIT - 1) = INT_MIN(:byte_index)`
+           by SRW_TAC [][wordsTheory.INT_MIN_def] THEN
         POP_ASSUM SUBST_ALL_TAC THEN
         ASSUME_TAC TWICE_SCHAR_MAX THEN
-        `n < TOP(:byte_index)`
+        `n < dimword(:byte_index)`
            by (ASSUME_TAC (INST_TYPE [alpha |-> ``:byte_index``]
-                                     wordsTheory.ZERO_LT_TOP) THEN
+                                     wordsTheory.ZERO_LT_dimword) THEN
                DECIDE_TAC) THEN
-        `0 < MSB(:byte_index)` by SRW_TAC [ARITH_ss][] THEN
+        `0n < INT_MIN(:byte_index)` by SRW_TAC [ARITH_ss][] THEN
         ASM_SIMP_TAC (srw_ss() ++ ARITH_ss)[LESS_MOD] THEN
         SRW_TAC [ARITH_ss][integer_wordTheory.w2i_n2w_pos]
       ],
@@ -446,7 +452,7 @@ val int_representation = prove(
          by METIS_TAC [type_size_constants, char_onecomp_def] THEN
       FULL_SIMP_TAC (srw_ss()) [integer_wordTheory.INT_MAX_def,
                                 integer_wordTheory.INT_MIN_def,
-                                SCHAR_MAX, wordsTheory.MSB_def]
+                                SCHAR_MAX, wordsTheory.INT_MIN_def]
     ],
 
 

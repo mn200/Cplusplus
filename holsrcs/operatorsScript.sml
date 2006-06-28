@@ -11,7 +11,8 @@ open arithmeticTheory pred_setTheory integerTheory
 local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 (* C++ ancestor theories  *)
-open typesTheory memoryTheory expressionsTheory staticsTheory statesTheory
+open utilsTheory typesTheory memoryTheory expressionsTheory staticsTheory
+     statesTheory
 
 val _ = new_theory "operators";
 
@@ -56,12 +57,6 @@ val arithop_def = Define`
             (INT_VAL t2 v2 = SOME i2) /\
             (SOME res = REP_INT rt (f i1 i2))
 `;
-
-val deNONE_def = Define`
-  deNONE f = FUN_FMAP (\k. THE (f ' k))
-                      { k | k IN FDOM f /\ ~(f ' k = NONE) }
-`;
-
 
 val binop_meaning_def = Define`
    (* relational operators *)
@@ -135,9 +130,7 @@ val unop_meaning_def = TotalDefn.Define
     (unop_meaning CNot m1 t1 res rt =
        scalar_type t1 /\ (rt = Signed Int) /\
        ?i. (INT_VAL t1 m1 = SOME i) /\
-           (SOME res = if i = 0 then REP_INT rt 1 else REP_INT rt 0)) /\
-
-    (unop_meaning CNullFunRef m1 t1 res rt = F)
+           (SOME res = if i = 0 then REP_INT rt 1 else REP_INT rt 0))
 `;
 
 (* SANITY *)

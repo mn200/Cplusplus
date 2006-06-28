@@ -11,7 +11,7 @@ open arithmeticTheory pred_setTheory integerTheory
 local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 (* C++ ancestor theories  *)
-open typesTheory memoryTheory expressionsTheory statementsTheory
+open utilsTheory typesTheory memoryTheory expressionsTheory statementsTheory
 
 val _ = new_theory "states";
 (* actually also the theory of declaration forms *)
@@ -36,11 +36,15 @@ val _ = type_abbrev ("str_info", ``:(string # CPP_Type) list option``)
 val _ = Hol_datatype
   `CState = <| allocmap : num -> bool ;
                fnmap    : string |-> fn_info ;
+               fnvals   : string |-> byte list ;
+               fndecode : byte list |-> string ;
                gstrmap  : string |-> str_info ;
                gtypemap : string |-> CPP_Type ;
                gvarmap  : string |-> num ;
                initmap  : num -> bool ;
                locmap   : num -> byte ;
+               stack    : ((string |-> str_info) # (string |-> CPP_Type) #
+                           (string |-> num)) list ;
                strmap   : string |-> str_info ;
                typemap  : string |-> CPP_Type ;
                varmap   : string |-> num |>`;
@@ -73,5 +77,10 @@ val install_global_maps_def = Define`
                    gstrmap := s.strmap;
                    gtypemap := s.typemap |>
 `;
+
+val expr_type_comps_def = Define`
+  expr_type_comps s = (deNONE s.strmap, s.typemap)
+`;
+
 
 val _ = export_theory();

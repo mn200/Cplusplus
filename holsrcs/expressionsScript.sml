@@ -21,8 +21,9 @@ val c_binops = Hol_datatype
                 CEq   | CTimes | CDiv   | CMod   | CNotEq`;
 
 (* the standard unary operators *)
-val c_unops = Hol_datatype
-    `c_unops = CUnPlus | CUnMinus | CComp | CNot | CNullFunRef`;
+val c_unops = Hol_datatype`
+  c_unops = CUnPlus | CUnMinus | CComp | CNot
+`;
 
 (* expressions *)
 val _ = type_abbrev ("CType", ``:CPP_Type``)

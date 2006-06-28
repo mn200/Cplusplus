@@ -101,9 +101,7 @@ val unary_op_type_def = Define`
       arithmetic_type t0 /\ (t = integral_promotions t0)) /\
     (unary_op_type CComp t0 t =
       integral_type t0 /\ (t = integral_promotions t0)) /\
-    (unary_op_type CNot t0 t = scalar_type t0 /\ (t = Signed Int)) /\
-    (unary_op_type CNullFunRef t0 t =
-       (?rt args_t. t0 = Function rt args_t) /\ (t = Signed Int))
+    (unary_op_type CNot t0 t = scalar_type t0 /\ (t = Signed Int))
 `
 
 (* t1 is the type of the lvalue, t2 is the type of the RHS.
@@ -139,20 +137,40 @@ val ops_dont_produce_arrays = store_thm(
              ua_conversions_safe]);
 
 val lookup_field_info_def = Define`
-  lookup_field_info s n t = MEM (n,t) s
+  lookup_field_info s n (idx,t) = idx < LENGTH s /\ (EL idx s = (n,t))
 `;
 val nodup_flds_def = Define`
   nodup_flds s = ALL_DISTINCT (MAP FST s)
 `
 
+val lookup_field_info_thm = store_thm(
+  "lookup_field_info_thm",
+  ``(lookup_field_info [] n (i,t) = F) /\
+    (lookup_field_info ((n,ty)::rest) n' (i,ty') =
+       (n = n') /\ (i = 0) /\ (ty' = ty) \/
+       0 < i /\ lookup_field_info rest n' (i - 1, ty'))``,
+  SRW_TAC [][lookup_field_info_def] THEN
+  Cases_on `i` THEN SRW_TAC [][] THEN1 METIS_TAC [] THEN
+  SRW_TAC [ARITH_ss][EQ_IMP_THM])
+
+val lookup_field_info_MEM = store_thm(
+  "lookup_field_info_MEM",
+  ``!s n i t. lookup_field_info s n (i,t) ==> MEM (n,t) s``,
+  Induct THEN SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD] THEN
+  SRW_TAC [][lookup_field_info_thm] THEN METIS_TAC []);
+
 val nodups_lfi_det = store_thm(
   "nodups_lfi_det",
-  ``!s n t.
-       nodup_flds s /\ lookup_field_info s n t ==>
-       !t'. lookup_field_info s n t' ==> (t' = t)``,
-  SRW_TAC [][nodup_flds_def, lookup_field_info_def] THEN Induct_on `s` THEN
-  SRW_TAC [][listTheory.MEM_MAP] THEN
-  FULL_SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD] THEN PROVE_TAC []);
+  ``!s n i t.
+       nodup_flds s /\ lookup_field_info s n (i,t) ==>
+       !i' t'. lookup_field_info s n (i',t') ==> (i = i') /\ (t' = t)``,
+  REWRITE_TAC [nodup_flds_def] THEN Induct_on `s` THEN
+  SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD, listTheory.MEM_MAP] THEN
+  SRW_TAC [][lookup_field_info_thm, listTheory.MEM_MAP] THEN
+  SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD, nodup_flds_def,
+                       lookup_field_info_def] THEN
+  METIS_TAC [lookup_field_info_MEM,
+             DECIDE ``0n < i /\ 0 < i' /\ (i - 1 = i' - 1) ==> (i = i')``]);
 
 val _ = Hol_datatype `expr_value_type = LValue | RValue`;
 
@@ -175,9 +193,9 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
       expr_type (smap,tmap) RValue (Cnullptr t) (Ptr t)) /\
 
   (!smap tmap n.
-      wf_type smap (tmap n) /\ ~(tmap n = Void)
+      wf_type smap (tmap ' n) /\ ~(tmap ' n = Void) /\ n IN FDOM tmap
          ==>
-      expr_type (smap,tmap) LValue (Var n) (tmap n)) /\
+      expr_type (smap,tmap) LValue (Var n) (tmap ' n)) /\
 
   (!smap tmap n t.
       wf_type smap t /\ ~(t = Void)
@@ -201,15 +219,16 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
 
   (!env v t. expr_type env v UndefinedExpr t) /\
 
+  (* BAD_ASSUMPTION: should check that types of arguments are assignment-
+     compatible with argument-types of function *)
   (!s e1 e2 rt args.
        expr_type s RValue e1  (Function rt args) /\
        expr_typel s e2 args
           ==>
        expr_type s RValue (FnApp e1 e2) rt) /\
 
-  (!s e1 e2 rt args.
-       expr_type s RValue e1  (Function rt args) /\
-       expr_typel s e2 args
+  (!s e1 e2 rt.
+       expr_type s RValue (FnApp e1 e2) rt
           ==>
        expr_type s RValue (FnApp_sqpt e1 e2) rt) /\
 
@@ -263,14 +282,14 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
   (!s e t. expr_type s LValue e t ==>
            expr_type s RValue (Addr e) (Ptr t)) /\
 
-  (!s tm e sn n t.
-       expr_type (s,tm) LValue e (Class sn) /\
-       lookup_field_info (s sn) n t ==>
+  (!s tm e sn n i t.
+       expr_type (s,tm) LValue e (Class sn) /\ sn IN FDOM s /\
+       lookup_field_info (s ' sn) n (i,t) ==>
        expr_type (s,tm) LValue (SVar e n) t) /\
 
-  (!s tm e sn n t.
-       expr_type (s, tm) RValue e (Class sn) /\
-       lookup_field_info (s sn) n t /\ ~array_type t ==>
+  (!s tm e sn n i t.
+       expr_type (s, tm) RValue e (Class sn) /\ sn IN FDOM s /\
+       lookup_field_info (s ' sn) n (i, t) /\ ~array_type t ==>
        expr_type (s, tm) RValue (SVar e n) t) /\
 
   (!s e1 e2 t0 t.
@@ -353,7 +372,7 @@ val lvalue_rvalue_array = store_thm(
 
 
 val wf_strmap_def = Define`
-  wf_strmap smap = !s. nodup_flds (smap s)
+  wf_strmap smap = !s. s IN FDOM smap ==> nodup_flds (smap ' s)
 `;
 
 val expr_type_det_lemma = prove(
