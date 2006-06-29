@@ -235,10 +235,11 @@ val signed_int_def = Define`
   signed_int i = THE (REP_INT (Signed Int) i)
 `
 
-(* this is needless recursive on the first argument (the type), but when
-   one added valuations for floats, the rhs would need to call a
-   float-valuation function (not INT_VAL, whose range is necessarily just
-   the integers *)
+(* this appears to be needlessly recursive on the first argument (the type),
+   but when one added valuations for floats, the rhs would need to
+   call a float-valuation function (not INT_VAL, whose range is
+   necessarily just the integers *)
+
 (* note that this predicate is two-valued: the possibility that a value
    isn't well-defined for the type is ignored.  This is because we assume
    that possibility is dealt with elsewher: when values are read out of
@@ -262,10 +263,27 @@ val final_value_def = Define`
   (final_value (mStmt s c) = F)
 `;
 
+val vdeclare_def = Define`
+  vdeclare s0 ty nm s =
+     (?a sz. object_type ty /\ malloc s0 ty a /\ sizeof (sizeofmap s) ty sz /\
+             (s = s0 with <| allocmap updated_by (UNION) (range_set a sz);
+                             varmap updated_by (\vm. vm |+ (nm,a));
+                             typemap updated_by (\tm. tm |+ (nm,ty)) |>)) \/
+     (function_type ty /\
+      (s = s0 with typemap updated_by (\tm. tm |+ (nm, ty))))
+`;
+
+val copy2globals_def = Define`
+  copy2globals s = (s with <| gstrmap := s.strmap;
+                              gtypemap := s.typemap;
+                              gvarmap := s.varmap |>)
+`;
+
+
 local
   val _ = print "About to define meaning relation\n";
   val mng  =
-    ``meaning:ExtE -> CState -> (CState # ExtE) -> bool``
+    mk_var("meaning", ``:ExtE -> CState -> (CState # ExtE) -> bool``)
   val ev = ``mExpr``
   val _ = set_trace "inddef strict" 1
 in
@@ -289,9 +307,9 @@ in
          (s, ^ev (LVal (s.varmap ' vname) (s.typemap ' vname)) se)) /\
 
 (!vname se s ty.
-    (ty = s.typemap ' vname) /\
-    function_type ty /\ vname IN FDOM s.typemap ==>
-    meaning (mExpr (Var vname) se) s
+    vname IN FDOM s.typemap /\ (ty = s.typemap ' vname) /\
+    function_type ty /\ vname IN FDOM s.fnvals ==>
+    ^mng (mExpr (Var vname) se) s
             (s, ^ev (ECompVal (s.fnvals ' vname) (Ptr ty)) se)) /\
 
 (!s v t v' t' se i.
@@ -496,7 +514,7 @@ in
     (fnid = s0.fndecode ' fnval) /\ fnval IN FDOM s0.fndecode /\
     (ftype = Function rt vs) /\
     pass_parameters s0 fnid params s1 /\
-    ((s0.fnmap ' fnid).body = SOME body)
+    ((s0.fnmap ' fnid).body = body)
    ==>
     ^mng (mExpr (FnApp_sqpt (ECompVal fnval (Ptr ftype)) params) se) s0
          (s1 with stack updated_by (CONS (s0.strmap, s0.typemap, s0.varmap)),
@@ -603,13 +621,10 @@ in
      ^mng (mStmt (Block T [] (exstmt::sts)) c) s
           (s, mStmt (Block T [] [exstmt]) c)) /\
 
-(!s ty name a vds sts c sz.
-   malloc s ty a /\ sizeof (sizeofmap s) ty sz ==>
-   ^mng (mStmt (Block T (VDec ty name :: vds) sts) c) s
-        (s with <| allocmap updated_by (UNION) (range_set a sz);
-                   varmap   updated_by (\vm. vm |+ (name,a));
-                   typemap  updated_by (\tm. tm |+ (name,ty)) |>,
-         mStmt (Block T vds sts) c)) /\
+(!s0 s ty name vds sts c.
+   vdeclare s0 ty name s ==>
+   ^mng (mStmt (Block T (VDec ty name :: vds) sts) c) s0
+        (s, mStmt (Block T vds sts) c)) /\
 
 (!ty name exte exte' s0 s vds sts c.
    ^mng exte s0 (s, exte') ==>
@@ -617,23 +632,68 @@ in
         (s, mStmt (Block T (VDecInit ty name exte'::vds) sts) c)) /\
 
 
-(!dty name v ty v' se vds sts a sz c s.
-   is_null_se se /\ malloc s dty a /\ sizeof (sizeofmap s) dty sz /\
+(!dty name v ty v' se vds sts c s0 s.
+   is_null_se se /\ vdeclare s0 dty name s /\
    parameter_coerce (v,ty) (v',dty) ==>
-   ^mng (mStmt (Block T (VDecInit ty name (NormE (ECompVal v ty) se) :: vds)
+   ^mng (mStmt (Block T (VDecInit dty name (NormE (ECompVal v ty) se) :: vds)
                         sts) c) s
-        (val2mem
-           (s with <| allocmap updated_by (UNION) (range_set a sz);
-                      varmap   updated_by (\vm. vm |+ (name, a));
-                      typemap  updated_by (\tm. tm |+ (name, ty)) |>)
-           a v',
-         mStmt (Block T vds sts) c)) /\
+        (val2mem s (s.varmap ' name) v', mStmt (Block T vds sts) c)) /\
 
 (!name flds s vds sts c.
     ^mng (mStmt (Block T (VStrDec name flds :: vds) sts) c) s
          (s with strmap updated_by (\sm. sm |+ (name,SOME flds)),
           mStmt (Block T vds sts) c)) `
 end;
+
+
+(* ----------------------------------------------------------------------
+    how to evaluate a sequence of external declarations
+   ---------------------------------------------------------------------- *)
+
+val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
+  (!s fval name rettype params body ftype edecls.
+       ~(fval IN FDOM s.fndecode) /\ ~(name IN FDOM s.fnmap) /\
+       ~(name IN FDOM s.typemap) /\
+       (LENGTH fval = ptr_size ftype) /\
+       (ftype = Function rettype (MAP SND params))
+    ==>
+       emeaning (FnDefn rettype name params body :: edecls) s
+          (s with
+            <| fnmap updated_by
+                       (\fm. fm |+ (name, <| body := body;
+                                             return_type := rettype;
+                                             parameters := params |>));
+               fnvals updated_by (\fm. fm |+ (name, fval));
+               fndecode updated_by (\fm. fm |+ (fval, name));
+               typemap updated_by (\tm. tm |+ (name, ftype)) |>,
+           edecls)) /\
+
+  (!s0 ty name s edecls.
+     vdeclare s0 ty name s ==>
+     emeaning (Decl (VDec ty name) :: edecls) s0 (copy2globals s, edecls)) /\
+
+  (!s0 ty name exte exte' edecls s.
+     meaning exte s0 (s, exte') ==>
+     emeaning (Decl (VDecInit ty name exte) :: edecls) s0
+              (s, Decl (VDecInit ty name exte') :: edecls)) /\
+
+  (!s0 s name v ty dty v' edecls se.
+     vdeclare s0 dty name s /\ parameter_coerce (v,ty) (v',dty) /\
+     is_null_se se ==>
+     emeaning (Decl (VDecInit dty name (NormE (ECompVal v ty) se)) :: edecls)
+              s0
+              (val2mem (copy2globals s) (s.varmap ' name) v',
+               edecls)) /\
+
+  (!s name flds edecls.
+     emeaning (Decl (VStrDec name flds) :: edecls) s
+              (copy2globals
+                  (s with <| strmap updated_by
+                                      (\sm. sm |+ (name,SOME flds)) |>),
+               edecls))
+`;
+
+
 
 val _ = export_theory();
 

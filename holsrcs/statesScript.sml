@@ -16,11 +16,12 @@ open utilsTheory typesTheory memoryTheory expressionsTheory statementsTheory
 val _ = new_theory "states";
 (* actually also the theory of declaration forms *)
 
-(* information about a function, once declared.  A NONE value for the body
-   indicates that the function has only been given a prototype  *)
+(* information about a function, once declared.  If a function has only
+   been given a prototype, there will be an entry for it in the state's
+   typemap, but nothing else.  *)
 val _ = Hol_datatype `fn_info = <| return_type : CPP_Type ;
                                    parameters  : (string # CPP_Type) list ;
-                                   body        : CStmt option |>`;
+                                   body        : CStmt |>`;
 
 (* Information about structures, once declared.
    Use the NONE value to indicate a struct has an incomplete declaration.
