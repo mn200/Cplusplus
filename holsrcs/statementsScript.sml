@@ -43,7 +43,9 @@ val _ = Hol_datatype`
            | CIf of ExtE => CStmt => CStmt
            | Standalone of ExtE
            | EmptyStmt
-           | Block of var_decl list => CStmt list
+           | Block of bool => var_decl list => CStmt list
+               (* boolean records whether or not block has been entered, so
+                  all blocks will initially have this false *)
            | Ret of ExtE
            | EmptyRet
            | Break
@@ -68,18 +70,20 @@ val _ = Hol_datatype`
 (* derived loop forms *)
 val forloop_def = Define`
   forloop e1 e2 e3 bdy =
-       Block [] [Standalone (NormE e1 base_se);
-                 Trap BreakTrap
-                   (CLoop e2 (Block [] [Trap ContTrap bdy;
-                                        Standalone (NormE e3 base_se)]))]
+       Block F []
+             [Standalone (NormE e1 base_se);
+              Trap BreakTrap
+                   (CLoop e2 (Block F [] [Trap ContTrap bdy;
+                                          Standalone (NormE e3 base_se)]))]
 `
 val whileloop_def = Define`
   whileloop g s = Trap BreakTrap (CLoop (NormE g base_se) (Trap ContTrap s))
 `;
 val doloop_def = Define`
   doloop bdy g =
-       Trap BreakTrap (Block [] [Trap ContTrap bdy;
-                                 CLoop (NormE g base_se) (Trap ContTrap bdy)])
+       Trap BreakTrap
+            (Block F [] [Trap ContTrap bdy;
+                         CLoop (NormE g base_se) (Trap ContTrap bdy)])
 `
 
 (* recursively check a predicate over a statement *)
@@ -90,8 +94,8 @@ val rec_stmt_P_def = Define `
     \P. P (CIf g t f) /\ rec_stmt_P t P /\ rec_stmt_P f P) /\
   (rec_stmt_P (Standalone e) = \P. P (Standalone e)) /\
   (rec_stmt_P EmptyStmt = \P. P EmptyStmt) /\
-  (rec_stmt_P (Block vds sts) =
-    \P. P (Block vds sts) /\ rec_stmtl_P sts P) /\
+  (rec_stmt_P (Block b vds sts) =
+    \P. P (Block b vds sts) /\ rec_stmtl_P sts P) /\
   (rec_stmt_P (Ret e) = \P. P (Ret e)) /\
   (rec_stmt_P EmptyRet = \P. P EmptyRet) /\
   (rec_stmt_P Break = \P. P Break) /\
