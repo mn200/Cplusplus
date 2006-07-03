@@ -1,0 +1,334 @@
+\documentclass[11pt]{article}
+
+\usepackage{charter}
+\usepackage{alltt}
+\usepackage{url}
+\usepackage{proof}
+
+\title{Notes on Deliverable 1 (July 2006)}
+\author{Michael Norrish\\{\small \texttt{Michael.Norrish@nicta.com.au}}}
+\date{}
+
+\newcommand{\cpp}{\mbox{C\hspace{-0.5pt}+\hspace{-1.5pt}+}}
+
+\begin{document}
+\maketitle
+
+\section{Form}
+
+This deliverable consists of a compressed \texttt{tar}-file, that when
+unpacked consists of a directory called \texttt{qinetiq-cpp}, which in
+turn contains three directories
+\begin{itemize}
+\item \texttt{holsrcs}, containing the HOL source files of the
+  mechanisation.  These files will build with the version of HOL4
+  present in the CVS repository at SourceForge, with timestamp
+  \texttt{2006-06-30 04:05Z}.  See Section~\ref{sec:getting-hol}
+  below for instructions on how this version of HOL can be retrieved,
+  and how the deliverable's HOL source files can then be built and
+  checked.
+\item \texttt{talks}, containing the \LaTeX{} source and a PDF for the
+  talk presented at the DARP meeting in Newcastle in April 2006.  The
+  source assumes that the \texttt{latex-beamer} and \texttt{PSTricks}
+  packages are available.
+\item \texttt{docs}, containing \LaTeX{} sources and a PDF version of
+  this document.
+\end{itemize}
+
+\subsection{Building HOL Source-Files}
+\label{sec:getting-hol}
+
+\paragraph{Getting HOL From SourceForge}
+
+To get a particular, dated, version of the HOL4 sources from the CVS
+repository, one must first issue the command
+
+{\small
+\begin{verbatim}
+   cvs -d:pserver:anonymous@hol.cvs.sourceforge.net:/cvsroot/hol login
+\end{verbatim}
+}
+
+When prompted for a password, just press \texttt{Enter} to send a null
+response.  The check-out of source code from SourceForge can now
+proceed.  The source code fits into 60MB.  Issue the command
+
+{\small
+\begin{alltt}
+   cvs \textit{repository-spec} co -D \textit{date} hol98
+\end{alltt}
+}
+
+\noindent where \textit{\ttfamily repository-spec} is the string
+
+{\small
+\begin{alltt}
+   -d:pserver:anonymous@hol.cvs.sourceforge.net:/cvsroot/hol
+\end{alltt}
+}
+
+\noindent (also used in the \texttt{login} command), and where
+\textit{\ttfamily date} is the desired date, best specified as an
+ISO~8601 string enclosed in double-quotes.  For example,
+\texttt{"2006-06-30 04:05Z"}.
+
+Once a copy of the sources have been downloaded, further commands can
+be used to update this copy to correspond to different dates.  As long
+as such commands are issued from within the \texttt{hol98} directory,
+the repository specification can be omitted.  The update command is
+
+{\small
+\begin{alltt}
+   cvs update -d -D \textit{date}
+\end{alltt}
+}
+
+\paragraph{Installing HOL} Once the sources have been downloaded, the
+installation instructions from the page at
+\url{http://hol.sourceforge.net} should be followed to build a copy of
+HOL.  An installation of the Moscow~ML compiler (v2.01) will also be
+required.
+
+\paragraph{Building Deliverable Sources}
+When HOL4 has been installed, the \texttt{Holmake} program (found in
+the \texttt{hol98/bin} directory) can be run in the \texttt{holsrcs}
+directory to create and check the logical theories.
+
+\section{Content}
+
+This deliverable delivers an updated HOL semantics for C, based on my
+PhD and the accompanying source code.  The most significant change is
+moving the dynamic semantics of statements (and declarations) to be in
+a ``small step style''.  This improvement is one I believed necessary
+even as I finished my thesis research.  There is some further
+discussion of this change in Section~\ref{sec:small-step-stmts}
+below.  There is a detailed manifest describing the files and their
+inter-relationships in the file \texttt{holsrcs/MANIFEST}.
+
+In addition, I have also updated the formalisation of memory, making
+use of theories for fixed-width words that were not available in 1998.
+This paragraph material occurs in the source file
+\texttt{memoryScript.sml}. There is now a type that directly
+corresponds to the standard's notion of \texttt{byte}.  At the same
+time, there are now additional functions encoding the relationship
+between sequences of bytes and values.  For integral types, there are
+(partial) functions \texttt{REP\_INT} from integer values into byte
+seqeunces, and \texttt{INT\_VAL} reversing this.  I have striven to
+keep these funcations under-specified, in accordance with what the
+standard requires.
+
+In fact, as they stand, these functions are not specified enough.  In
+particular, for the moment, I have only characterised the functions'
+behaviour over values of character type.  This
+``over-under-specification'' does not impede definition of semantics
+elsewhere, but does represent work that still needs doing.
+
+Finally, I have added a new treatment of external declarations.  This
+\texttt{emeaning} constant in the \texttt{dynamics} theory specifies
+how global variables are declared, and how functions are given their
+definitions.  This is a necessary prelude to any treatment of
+``translation units'' and their inter-linkage.
+
+\subsection{Statements in a Small-step Style}
+\label{sec:small-step-stmts}
+
+One might imagine that restating the statement part of the dynamic
+semantics in a small-step style should be easy.  The literature
+contains many examples of how to express constructs such as
+\texttt{while} and \texttt{if} in this style.  However, this it is not
+as straightforward as one might think because of the need to prevent
+function bodies from interleaving.
+
+Imagine a program such as that in Figure~\ref{fig:two-functions}, and
+how one might evaluate the return-expression in \texttt{main}.  If one
+simply expanded the bodies of the called functions into the expression
+as the functions were ready to be called, one would be permitting the
+simultaneous evaluation of the bodies of \texttt{f} and \texttt{g}.
+But the \cpp{} standard explicitly forbids this (\S1.8~fn8), and the C
+standard also hints that it is forbidden.
+\begin{figure}[htbp]
+\begin{verbatim}
+   int global;
+   int f(int x) { return global * 2 + x; }
+   int g(int y) { while (y > 0) { global += 2; y--; } }
+
+   int main(void) {
+     global = 10;
+     return f(6) + g(10);
+   }
+\end{verbatim}
+\caption{Where Functions Must Not Interleave}
+\label{fig:two-functions}
+\end{figure}
+
+One has to arrange the semantics so that expression evaluation can
+continue non-deterministically until a function call is encountered
+and the function call is made (after arguments have been evaluated).
+At this point, all further evolution of the program must occur within
+the function body, no matter how deeply nested the function call may
+have been within an enclosing expression.  (This problem did not occur
+when statement evaluation was big-step because the hypothesis in the
+expression rule for function call was the statement rule that called
+for the complete evaluation of the function body.)
+
+As before, there are superficially two reduction arrows in the
+semantics: $\rightarrow_e$ for expression evaluation and
+$\rightarrow_s$ for statement evaluation.  However, in reality there
+is just one arrow, which is a binary relation on \emph{extended
+  expressions} tupled with program states.  An extended expression is
+either
+\begin{itemize}
+\item a syntactic expression coupled with a side effect information
+  record (containing the three fields, \texttt{update\_map},
+  \texttt{ref\_map} and \texttt{pending\_ses}, ($R$, $\Upsilon$ and
+  $\Pi$ in the terminology of my thesis)); or
+\item a statement coupled with a continuation, which latter is a
+  function that takes a value and returns an expression.  This latter
+  is used to recreate the expression in which the function call
+  that generated the statement occurred.  Also, all expressions within
+  statements (such as those that appear as guards in loops and
+  \texttt{if}-statements), are actually extended expressions.
+\end{itemize}
+Most of the time reduction occurs between expressions and expressions,
+or between statements and statements, allowing one to imagine that one
+has $\rightarrow_e$ and $\rightarrow_s$ at play.
+
+However, there are four rules that mix the types of extended
+expression.  When a function call is made, we get a rule that is
+roughly of the form
+\[
+\infer{
+   \langle \textsf{Ex}(f(\mathit{args}), \mathit{se}), \sigma_0\rangle  \rightarrow
+   \langle \textsf{St}(body(f), (\lambda v.v)), \sigma\rangle
+}{\mathit{se} \mbox{ is empty of side effects} &
+  \mbox{$f$ and $args$ are fully evaluated}}
+\]
+and where $\sigma$ is the same as $\sigma_0$ but with bindings
+established between the values in $\mathit{args}$ and the formal
+parameters in the function $f$.  The continuation accompanying the
+expression at this point is simply the identity.  When the body
+returns a value, that value will simply be substituted for what was
+the function call, and expression evaluation can continue.  (The
+\textsf{Ex} tag indicates that we are looking at an expression, while
+\textsf{St} indicates that the value is a statement with its continuation.)
+
+The next rule extends a continuation.  In the thesis semantics, we
+have the rule
+\[
+\infer{\langle {\cal E}[e_0], \sigma_0\rangle \rightarrow_e
+  \langle {\cal E}[e],\sigma\rangle}{
+  \langle e_0,\sigma_0\rangle \rightarrow_e \langle e,\sigma\rangle}
+\]
+with $\cal E$ a context (a function from expressions to expressions).
+In the new semantics we have
+\[
+\infer{\langle \textsf{Ex}({\cal E}[e_0], \mathit{se}_0), \sigma_0\rangle \rightarrow
+  \langle \textsf{Ex}({\cal E}[e],\mathit{se}),\sigma\rangle}{
+  \langle \textsf{Ex}(e_0,\mathit{se}_0),\sigma_0\rangle \rightarrow_e
+  \langle \textsf{Ex}(e,\mathit{se}),\sigma\rangle}
+\]
+which is directly analogous.  But in addition, we also have
+\[
+\infer{\langle \textsf{Ex}({\cal E}[e_0],\mathit{se}_0),
+  \sigma_0\rangle \rightarrow
+  \langle \textsf{St}(s, {\cal E} \circ c), \sigma\rangle}{
+  \langle \textsf{Ex}(e_0, \mathit{se}_0),\sigma_0\rangle
+  \rightarrow
+  \langle \textsf{St}(s, c), \sigma\rangle}
+\]
+which can be read as saying that if a nested expression evaluates to a
+statement (i.e., a function call has begun), then the same function
+call must be held to have begun at the outer level, but that the
+continuation must insert the return value somewhat deeper into the
+expression's syntax tree.  This is reflected by the (function)
+composition of $\cal E$ with the continuation $c$ from the rule's
+hypothesis.
+
+These rules have specified what happens when an expression evaluation
+switches to a statement evaluation.  In the opposite direction, when a
+function call is about to return, the rule is
+\[
+\infer{%
+  \langle\textsf{St}(\texttt{return}
+  (\textsf{Ex}(\underline{(v,\tau)}, \mathit{se})), c), \sigma_0\rangle
+  \rightarrow
+  \langle \textsf{Ex}(c\underline{(v,\tau)}, \mathit{empty\_se}),
+  \sigma\rangle}{
+  \mbox{$\mathit{se}$ is empty of side effects}}
+\]
+where $\sigma$ is identical to $\sigma_0$ except that the various maps
+for local variables, types and \texttt{struct}s have been reverted to
+the state they held before the function was entered.
+
+Note how the argument to the return statement is itself an extended
+expression.  This means that the argument will be tagged with
+\textsf{Ex} initially, but may later evolve to be a statement and
+continuation (tagged with \textsf{St}) if the return-expression
+includes a function call.  This means that the rule for evaluation of
+the argument of return is
+\[
+\infer{\langle \textsf{St}(\texttt{return}(e_0),c), \sigma_0\rangle
+  \rightarrow
+  \langle \textsf{St}(\texttt{return}(e),c),\sigma\rangle}{
+  \langle e_0, \sigma_0\rangle \rightarrow \langle e,\sigma\rangle}
+\]
+where $e_0$ and $e$ may be statements or expressions.
+
+
+\section{Future}
+
+The next deliverable requires a basic treatment of inheritance and
+virtual, sub-class based polymorphism (dynamic dispatch).  This must
+subsequently be extended into a treatment of multiple inheritance.
+For this reason, I propose to adopt the modelling of inheritance by
+Wasserrab \emph{et al.}~\cite{wasserrab-nst-OOPSLA06}.  I believe this
+will provide a complete story.
+
+The other big features of \cpp{} are exceptions and templates.  I
+believe exceptions will be relatively straightforward.  The only way
+in which they extend the existing ways in which \texttt{break} and
+\texttt{continue} statements are trapped is by the way in which the
+exception's type can determine whether or not it is trapped.  The rule
+for trapping \texttt{break} is
+\[
+\infer{\langle \textsf{St}(\texttt{Trap}(\texttt{Brk},\texttt{break}),
+  c), \sigma\rangle\rightarrow
+\langle \textsf{St}(\texttt{EmptyStmt}, c), \sigma\rangle}{}
+\]
+If an exception of a particular type $\tau$ is to be trapped, and a
+piece of code executed on the trap occuring, then we may be able to
+model this with a rule of the form
+\[
+\infer{\langle\textsf{St}(\texttt{Trap}(\texttt{Exn}(\tau_1,\mathit{var},s),\texttt{exnval}\underline{(\mathit{val},\tau_2)}),
+  c), \sigma_0\rangle \rightarrow
+  \langle\textsf{St}(s,c),\sigma\rangle}{\tau_2 \leq \tau_1}
+\]
+where $\sigma$ is updated with the binding from variable
+$\mathit{var}$ to exception value $\mathit{val}$, and where the $\leq$
+relation in the hypothesis encodes the sub-class relation.  The
+syntax for expressions will also need to be extended so that exception
+values are also considered valid exceptions.
+
+
+Templates will be rather more difficult.  In particular, it is still
+not clear to me whether or not to try to reflect the fact that
+considerable template ``activity'' is usually held to occur at
+compile-time.  I suspect it will be better to model it as happening as
+part of the usual dynamic semantics.  This may then give the
+(misleading?) impression that what most implementations would treat as
+a compile-time error might occur at run-time.
+
+\subsection{Future Form}
+I am open to suggestions as to how future deliverables should be
+packaged and presented.
+
+\bibliographystyle{plain}
+\bibliography{deliverables}
+
+\end{document}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
