@@ -451,6 +451,11 @@ in
     ^mng (mExpr (Assign f a RHS mb) se0) s0
          (s, ^ev (Assign f a e mb') se)) /\
 
+(!se0 s0 s f a RHS mb st c.
+    ^mng (mExpr RHS se0) s0 (s, mStmt st c) ==>
+    ^mng (mExpr (Assign f a RHS mb) se0) s0
+         (s, mStmt st (\v t. Assign f a (c v t) mb))) /\
+
 (!f n t e mb se0 s0.
      ^mng (mExpr (Assign (SOME f) (LVal n t) e mb) se0) s0
           (s0, ^ev (Assign NONE (LVal n t)
