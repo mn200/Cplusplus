@@ -130,8 +130,8 @@ types, it is now possible to calculate how \texttt{struct} values must
 be padded in order to ensure that their member fields are aligned.
 Strictly speaking, this is over-definition: C implementations are free
 to introduce as much padding as they like into their \texttt{struct}
-values: my definition assumes they introduce the least consistent
-amount.
+values: my definition assumes they introduce the least amount that
+remains consistent with alignment requirements.
 
 Finally, I have added a new treatment of external declarations.  This
 \texttt{emeaning} constant in the \texttt{dynamics} theory specifies
