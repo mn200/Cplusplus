@@ -20,3 +20,55 @@ BAD_ASSUMPTION
 
 SANITY
    the following theorem is a sanity check of the semantics
+
+
+THEORIES
+--------
+
+There are 11 theories in this directory.
+
+utils:
+   Defines a utility function called deNONE for turning a finite map
+   from 'a to 'b option, into a finite map that maps from 'a to 'b.
+
+function_slices:
+   Defines functions for operating on "slices" of functions whose
+   domain is the natural numbers.
+
+types:
+   Establishes the type of C types, and the type-size
+   constants, such as INT_MAX etc.
+
+memory:
+   Establishes the type of byte, defines representation and valuation
+   operations between byte lists and logical values (such as
+   integers), defines the offset and sizeof relations.
+
+expressions:
+   Defines the type of C expressions, and a few predicates on these.
+
+statics:
+   Defines the typing relation for C expressions.
+
+statements:
+   Defines the type that encodes all of a program's side effect
+   information, the type of statements, the type of declarations and
+   the type of external declarations (for function definitions and
+   global variables).  Also defines the special "extended expression"
+   type.
+
+states:
+   Defines the type of program state, encoding not only the contents
+   of memory, but maps for variable typing, variable addresses.
+
+operators:
+   Defines the dynamic semantics of expression-operators such as
+   addition.
+
+side_effects:
+   Defines how side effects are stored in side effect information
+   records and applied to states.
+
+dynamics:
+   Provides the dynamic semantics for expressions, statements (the
+   extended expressions, in fact) and external declarations.
