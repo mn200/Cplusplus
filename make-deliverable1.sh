@@ -20,3 +20,5 @@ rm darp2006.{aux,dvi,log,nav,out,ps,snm,toc} .cvsignore
 
 cd ../..
 tar cvzf deliverable1.tgz qinetiq-cpp
+mv -i deliverable1.tgz ~/nicta/projects/cpp-project
+
