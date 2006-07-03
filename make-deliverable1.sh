@@ -15,7 +15,7 @@ cd talks
 latex darp2006
 latex darp2006
 dvips -Ppdf darp2006
-ps2pdf darp2006
+ps2pdf14 darp2006.ps
 rm darp2006.{aux,dvi,log,nav,out,ps,snm,toc} .cvsignore
 
 cd ../..
