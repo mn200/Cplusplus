@@ -1,6 +1,6 @@
 cd /tmp
 /bin/rm -rf qinetiq-cpp
-cvs -d ~/repository export -D "2006-07-03 02:00Z" qinetiq-cpp
+cvs -d ~/repository export -r deliverable-1 qinetiq-cpp
 cd qinetiq-cpp
 cd docs
 pdflatex deliverable1-notes
