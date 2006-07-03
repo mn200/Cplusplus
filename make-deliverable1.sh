@@ -15,7 +15,8 @@ cd talks
 latex darp2006
 latex darp2006
 dvips -Ppdf darp2006
-rm darp2006.{aux,dvi,log,nav,out,ps,snm,toc}
+ps2pdf darp2006
+rm darp2006.{aux,dvi,log,nav,out,ps,snm,toc} .cvsignore
 
 cd ../..
 tar cvzf deliverable1.tgz qinetiq-cpp
