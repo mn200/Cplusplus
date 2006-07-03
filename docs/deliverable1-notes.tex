@@ -123,6 +123,16 @@ behaviour over values of character type.  This
 ``over-under-specification'' does not impede definition of semantics
 elsewhere, but does represent work that still needs doing.
 
+In addition to this relatively cosmetic change, I have also added a
+treatment of alignment, which I omitted in the thesis model.  Given an
+under-specified constraint on the required alignments for the atomic
+types, it is now possible to calculate how \texttt{struct} values must
+be padded in order to ensure that their member fields are aligned.
+Strictly speaking, this is over-definition: C implementations are free
+to introduce as much padding as they like into their \texttt{struct}
+values: my definition assumes they introduce the least consistent
+amount.
+
 Finally, I have added a new treatment of external declarations.  This
 \texttt{emeaning} constant in the \texttt{dynamics} theory specifies
 how global variables are declared, and how functions are given their
