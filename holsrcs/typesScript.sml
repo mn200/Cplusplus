@@ -14,12 +14,12 @@ val _ = Hol_datatype `basic_integral_type = Char | Short | Int | Long`;
 
 val _ = Hol_datatype
   `CPP_Type =
-     Void | BChar (* "Basic char" *) | (*CCOM Bool | (* Wchar_t | *) *)
+     Void | BChar (* "Basic char" *) | Bool | (* Wchar_t | *)
      Unsigned of basic_integral_type |
      Signed of basic_integral_type |
      Ptr of CPP_Type |
-     (*CCOM MPtr of string => CPP_Type | (* member pointer *)
-     Ref of CPP_Type | *)
+     MPtr of string => CPP_Type | (* member pointer *)
+     Ref of CPP_Type |
      Array of CPP_Type => num |
      Class of string | Float | Double | LDouble |
      Function of CPP_Type => CPP_Type list`;
@@ -31,7 +31,6 @@ val ptrdiff_t = Rsyntax.new_specification {
     ``?t. t IN {Signed Char; Signed Short; Signed Int; Signed Long}``,
     SIMP_TAC (srw_ss()) [EXISTS_OR_THM]))};
 
-(*CCOM
 (* protection types for fields *)
 val _ = Hol_datatype`
   protection = Private | Public | Protected
@@ -40,9 +39,8 @@ val _ = Hol_datatype`
 (* the boolean field indicates whether or not the field is static,
    true for static, false for non-static *)
 val _ = Hol_datatype `
-  class_member = ClassFld of protection => CPP_Type
+  class_member = ClassFld of bool => protection => CPP_Type
 `;
-*)
 
 (* 3.9.2 p1 "implicit" *)
 val function_type_def = Define`
@@ -51,17 +49,15 @@ val function_type_def = Define`
 `;
 val _ = export_rewrites ["function_type_def"]
 
-(*CCOM
 (* 3.9.2 p1 "implicit" *)
 val ref_type_def = Define`
   (ref_type (Ref t0) = T) /\ (ref_type x = F)
 `;
 val _ = export_rewrites ["function_type_def"]
-*)
 
 (* 3.9 p9 *)
 val object_type_def = Define`
-  object_type t = ~function_type t /\ (*CCOM ~ref_type t /\ *) ~(t = Void)
+  object_type t = ~function_type t /\ ~ref_type t /\ ~(t = Void)
 `;
 
 (* 3.9.1 p7 *)
@@ -69,7 +65,7 @@ val integral_type_def = Define`
   (integral_type (Signed i) = T) /\
   (integral_type (Unsigned i) = T) /\
   (integral_type BChar = T) /\
-(*CCOM   (integral_type Bool = T) /\ *)
+  (integral_type Bool = T) /\
   (integral_type x = F)
 `;
 val _ = export_rewrites ["integral_type_def"]
@@ -95,18 +91,16 @@ val pointer_type_def = Define `
 `;
 val _ = export_rewrites ["pointer_type_def"]
 
-(*CCOM
 (* 3.9.2 p1 "implicit" *)
 val mpointer_type_def = Define`
   (mpointer_type (MPtr c t) = T) /\
   (mpointer_type x = F)
 `;
 val _ = export_rewrites ["mpointer_type_def"]
-*)
 
 (* 3.9 p10 *)
 val scalar_type_def = Define`
-  scalar_type t = pointer_type t (*CCOM \/ mpointer_type t *)\/
+  scalar_type t = pointer_type t \/ mpointer_type t \/
                   arithmetic_type t
 `;
 
@@ -220,7 +214,7 @@ fun crossprod l1 l2 =
   in
       flatten (map (fn f => f l2) (map elprod l1))
   end;
-val int_types = (*CCOM ``Bool`` :: *) ``BChar`` :: map mk_comb
+val int_types = ``Bool`` :: ``BChar`` :: map mk_comb
   (crossprod [--`Signed`--, --`Unsigned`--]
              [--`Char`--, --`Short`--, --`Int`--, --`Long`--])
 (* \#line cholera-model.nw 242 *)
@@ -235,8 +229,8 @@ val _ = new_constant("BCHAR_IS_SIGNED", ``:bool``)
 val type_min_def = Define `
   (type_min (Unsigned x) = 0) /\
   (type_min (Signed x) = sgn_min x) /\
-  (type_min BChar = if BCHAR_IS_SIGNED then sgn_min Char else 0) (*CCOM /\
-  (type_min Bool = 0) *)
+  (type_min BChar = if BCHAR_IS_SIGNED then sgn_min Char else 0) /\
+  (type_min Bool = 0)
 `;
 
 val type_min = save_thm(
@@ -262,7 +256,7 @@ val usgn_max_def = Define`
 val type_max_def = Define`
   (type_max (Unsigned x) = usgn_max x) /\
   (type_max (Signed x) = sgn_max x) /\
-  (*CCOM  (type_max Bool = 1) /\ *)
+  (type_max Bool = 1) /\
   (type_max BChar = if BCHAR_IS_SIGNED then sgn_max Char else usgn_max Char)
 `;
 
@@ -283,7 +277,7 @@ val type_range = Define`
 (* 4.5 *)
 val integral_promotions_def = Define`
   integral_promotions t =
-    if t IN {(*CCOM Bool; *) BChar; Unsigned Char; Signed Char; Unsigned Short;
+    if t IN {Bool; BChar; Unsigned Char; Signed Char; Unsigned Short;
              Signed Short}
     then
       if type_range t SUBSET type_range (Signed Int) then
@@ -310,33 +304,41 @@ val ua_conversions_def = Define`
       else Signed Int
 `;
 
+(* utility function: given a set of abstract class names, determine if a type
+   is an abstract class *)
+val is_abstractty_def = Define`
+  (is_abstractty abs_classes (Class sn) = sn IN abs_classes) /\
+  (is_abstractty abs_classes _ = F)
+`
 
 (* wf_type is a predicate checking type "well-formedness".  It doesn't check
    the validity of class/struct declarations, only whether or not something
    might be a valid declarator *)
 val wf_type_defn = Hol_defn "wf_type" `
   (* 8.3.2 p4 *)
-  (wf_type abs_classes (Ptr ty) = (*CCOM ~ref_type ty /\ *)
+  (wf_type abs_classes (Ptr ty) = ~ref_type ty /\
                                   wf_type abs_classes ty) /\
 
-  (*CCOM
   (* 8.3.3 p3 *)
   (wf_type abs_classes (MPtr c ty) = ~ref_type ty /\ ~(ty = Void) /\
-                                     wf_type abs_classes ty) /\ *)
-
+                                     wf_type abs_classes ty) /\
   (* 8.3.4 p1 *)
   (wf_type abs_classes (Array bt n) =
       ~(n = 0) /\ ~(bt = Void) /\
-      ~function_type bt /\ (*CCOM ~ref_type bt /\
-      ~abs_classes bt /\ *) wf_type abs_classes bt) /\
+      ~function_type bt /\ ~ref_type bt /\
+      ~is_abstractty abs_classes bt /\  wf_type abs_classes bt) /\
 
   (* 8.3.5 - note that variadic functions are not modelled
        para 6: return type not array or function
        para 3: arg type not array, function or void
+     10.4
+       para 3: arg and return type not abstract class
   *)
   (wf_type abs_classes (Function r a) =
         ~function_type r /\ ~array_type r /\ wf_type abs_classes r /\
+        ~is_abstractty abs_classes r /\
         EVERY (\ty. ~function_type ty /\ ~(ty = Void) /\ ~array_type ty /\
+                    ~is_abstractty abs_classes ty /\
                     wf_type abs_classes ty) a) /\
 
   (* all others are OK *)

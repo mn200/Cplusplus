@@ -37,6 +37,14 @@ val base_se_def = Define`
 val _ = Hol_datatype `traptype = BreakTrap | ContTrap`;
 
 
+(* Information about classes, once declared.
+
+*)
+val _ = Hol_datatype`
+  class_info = <| fields : (string # CPP_Type) list ;
+                  ancestors : string list |>
+`
+
 
 val _ = Hol_datatype`
   CStmt    = CLoop of ExtE => CStmt
@@ -57,7 +65,7 @@ val _ = Hol_datatype`
 
   var_decl = VDec of CType => string
            | VDecInit of CType => string => ExtE
-           | VStrDec of string => (string#CType) list
+           | VStrDec of string => class_info option
 `;
 (* A declaration can be used to declare (but not define a function).
    A VStrDec with an empty field list is the equivalent of

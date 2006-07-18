@@ -159,6 +159,12 @@ val lookup_field_info_MEM = store_thm(
   Induct THEN SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD] THEN
   SRW_TAC [][lookup_field_info_thm] THEN METIS_TAC []);
 
+(* SANITY *)
+(* if a list of pairs doesn't contain any duplicates amongst the list
+   of first components, then the relation that treats it as an association-list
+   and looks things up must be deterministic.  (In fact, the lookup here
+   returns both the associated second component and the index in the list
+   where the key-value pair are stored *)
 val nodups_lfi_det = store_thm(
   "nodups_lfi_det",
   ``!s n i t.
@@ -172,7 +178,14 @@ val nodups_lfi_det = store_thm(
   METIS_TAC [lookup_field_info_MEM,
              DECIDE ``0n < i /\ 0 < i' /\ (i - 1 = i' - 1) ==> (i = i')``]);
 
+
 val _ = Hol_datatype `expr_value_type = LValue | RValue`;
+
+val _ = Hol_datatype `
+  static_info = <| class_fields : string |-> (string # CPP_Type) list ;
+                   var_types    : string |-> CPP_Type ;
+                   abs_classes  : string set |>
+`
 
 val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
 
@@ -188,34 +201,35 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
 
   (!s c. expr_type s RValue (Cchar c) (Signed Int)) /\
 
-  (!smap tmap t.
-      wf_type smap t ==>
-      expr_type (smap,tmap) RValue (Cnullptr t) (Ptr t)) /\
+  (!si t.
+      wf_type si.abs_classes t ==>
+      expr_type si RValue (Cnullptr t) (Ptr t)) /\
 
-  (!smap tmap n.
-      wf_type smap (tmap ' n) /\ ~(tmap ' n = Void) /\ n IN FDOM tmap
+  (!si vmap n.
+      (vmap = si.var_types) /\
+      wf_type si.abs_classes (vmap ' n) /\ ~(vmap ' n = Void) /\ n IN FDOM vmap
          ==>
-      expr_type (smap,tmap) LValue (Var n) (tmap ' n)) /\
+      expr_type si LValue (Var n) (vmap ' n)) /\
 
-  (!smap tmap n t.
-      wf_type smap t /\ ~(t = Void)
+  (!si n t.
+      wf_type si.abs_classes t /\ ~(t = Void)
          ==>
-      expr_type (smap,tmap) LValue (LVal n t) t) /\
+      expr_type si LValue (LVal n t) t) /\
 
-  (!smap tmap v t.
-      wf_type smap t /\ ~array_type t
+  (!si v t.
+      wf_type si.abs_classes t /\ ~array_type t
          ==>
-      expr_type (smap,tmap) RValue (ECompVal v t) t) /\
+      expr_type si RValue (ECompVal v t) t) /\
 
   (!s e t.  expr_type s RValue e t
               ==>
             expr_type s RValue (RValreq e) t) /\
 
-  (!smap tmap e t t0.
-      wf_type smap t /\ (scalar_type t \/ (t = Void)) /\
-      expr_type (smap, tmap) RValue e t0
+  (!si e t t0.
+      wf_type si.abs_classes t /\ (scalar_type t \/ (t = Void)) /\
+      expr_type si RValue e t0
           ==>
-      expr_type (smap,tmap) RValue (Cast t e) t) /\
+      expr_type si RValue (Cast t e) t) /\
 
   (!env v t. expr_type env v UndefinedExpr t) /\
 
@@ -282,15 +296,15 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
   (!s e t. expr_type s LValue e t ==>
            expr_type s RValue (Addr e) (Ptr t)) /\
 
-  (!s tm e sn n i t.
-       expr_type (s,tm) LValue e (Class sn) /\ sn IN FDOM s /\
-       lookup_field_info (s ' sn) n (i,t) ==>
-       expr_type (s,tm) LValue (SVar e n) t) /\
+  (!si e sn n i t.
+       expr_type si LValue e (Class sn) /\ sn IN FDOM si.class_fields /\
+       lookup_field_info (si.class_fields ' sn) n (i,t) ==>
+       expr_type si LValue (SVar e n) t) /\
 
-  (!s tm e sn n i t.
-       expr_type (s, tm) RValue e (Class sn) /\ sn IN FDOM s /\
-       lookup_field_info (s ' sn) n (i, t) /\ ~array_type t ==>
-       expr_type (s, tm) RValue (SVar e n) t) /\
+  (!si e sn n i t.
+       expr_type si RValue e (Class sn) /\ sn IN FDOM si.class_fields /\
+       lookup_field_info (si.class_fields ' sn) n (i, t) /\ ~array_type t ==>
+       expr_type si RValue (SVar e n) t) /\
 
   (!s e1 e2 t0 t.
        expr_type s RValue e2 t /\
@@ -375,35 +389,36 @@ val wf_strmap_def = Define`
   wf_strmap smap = !s. s IN FDOM smap ==> nodup_flds (smap ' s)
 `;
 
+(* SANITY : only one type possible *)
 val expr_type_det_lemma = prove(
   ``(!s v e t.
        expr_type s v e t ==>
           has_no_undefineds e ==>
-          wf_strmap (FST s) ==>
+          wf_strmap s.class_fields ==>
           (!t'. expr_type s v e t' = (t' = t)) /\
           ((v = LValue) ==>
            (!bt n. (t = Array bt n) ==>
                    !t'. expr_type s RValue e t' = (t' = Ptr bt)) /\
            (~array_type t ==> !t'. expr_type s RValue e t' = (t' = t)))) /\
     (!s e t. expr_typel s e t ==>
-               wf_strmap (FST s) ==>
+               wf_strmap s.class_fields ==>
                ALL_EL has_no_undefineds e ==>
                (!t'. expr_typel s e t' = (t' = t)))``,
   HO_MATCH_MP_TAC expr_type_ind THEN
   SRW_TAC [ETA_ss][lvalue_typing] THEN
   ASM_SIMP_TAC (srw_ss()) [expr_type_rewrites] THEN
   FULL_SIMP_TAC (srw_ss()) [wf_type_def] THEN
-  METIS_TAC [array_type_def, wf_type_def, unary_op_type_det,
-             binary_op_type_det, cond_typing_conds_det, wf_strmap_def,
-             nodups_lfi_det, TypeBase.one_one_of ``:CPP_Type``,
-             lvalue_rvalue_nonarray])
+  TRY (METIS_TAC [array_type_def, wf_type_def, unary_op_type_det,
+                  binary_op_type_det, cond_typing_conds_det, wf_strmap_def,
+                  nodups_lfi_det, TypeBase.one_one_of ``:CPP_Type``,
+                  lvalue_rvalue_nonarray]))
 val expr_type_det0 = save_thm(
   "expr_type_det0",
   SIMP_RULE (srw_ss() ++ DNF_ss) [] expr_type_det_lemma);
 val expr_type_det = store_thm(
   "expr_type_det",
   ``!e v s t1 t2.
-      expr_type s v e t1 /\ expr_type s v e t2 /\ wf_strmap (FST s) /\
+      expr_type s v e t1 /\ expr_type s v e t2 /\ wf_strmap s.class_fields /\
       has_no_undefineds e ==>
       (t1 = t2)``,
   METIS_TAC [expr_type_det0])

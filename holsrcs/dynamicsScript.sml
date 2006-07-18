@@ -49,10 +49,6 @@ val valid_econtexts_11 = store_thm(
   ``!f. valid_econtext f ==> !e1 e2. (f e1 = f e2) = (e1 = e2)``,
   SRW_TAC [][valid_econtext_def] THEN SRW_TAC [][])
 
-val sizeofmap_def = Define`
-  sizeofmap s = MAP SND o_f deNONE s.strmap
-`;
-
 val lval2rval_def = Define`
   lval2rval (s0,e0,se0) (s,e,se) =
        (s0 = s) /\
@@ -179,7 +175,7 @@ val install_vars_def = Define`
         fn IN FDOM st1.fnmap /\
         rec_i_vars (st1 with <| varmap := st1.gvarmap ;
                                 typemap := st1.gtypemap ;
-                                strmap := st1.gstrmap |>)
+                                classmap := st1.gclassmap |>)
                    ((st1.fnmap ' fn).parameters)
                    st2
 `
@@ -274,7 +270,7 @@ val vdeclare_def = Define`
 `;
 
 val copy2globals_def = Define`
-  copy2globals s = (s with <| gstrmap := s.strmap;
+  copy2globals s = (s with <| gclassmap := s.classmap;
                               gtypemap := s.typemap;
                               gvarmap := s.varmap |>)
 `;
@@ -495,15 +491,15 @@ in
 
 (!s st fld ftype se offn i a.
      offset (sizeofmap s) (sizeofmap s ' st) i offn /\
-     st IN FDOM (sizeofmap s) /\
-     lookup_field_info (deNONE s.strmap ' st) fld (i,ftype) ==>
+     st IN FDOM (lfimap s) /\
+     lookup_field_info (lfimap s ' st) fld (i,ftype) ==>
      ^mng (mExpr (SVar (LVal a (Class st)) fld) se) s
           (s, ^ev (LVal (a + offn) ftype) se)) /\
 
 (!s st fld ftype fsz v fv se i offn.
    offset (sizeofmap s) (sizeofmap s ' st) i offn /\
-   st IN FDOM (sizeofmap s) /\
-   lookup_field_info (deNONE s.strmap ' st) fld (i, ftype) /\
+   st IN FDOM (lfimap s) /\
+   lookup_field_info (lfimap s ' st) fld (i, ftype) /\
    sizeof (sizeofmap s) ftype fsz /\
    (fv = GENLIST (\n. EL (n + offn) v) fsz) ==>
    ^mng (mExpr (SVar (ECompVal v (Class st)) fld) se) s
@@ -522,7 +518,7 @@ in
     ((s0.fnmap ' fnid).body = body)
    ==>
     ^mng (mExpr (FnApp_sqpt (ECompVal fnval (Ptr ftype)) params) se) s0
-         (s1 with stack updated_by (CONS (s0.strmap, s0.typemap, s0.varmap)),
+         (s1 with stack updated_by (CONS (s0.classmap, s0.typemap, s0.varmap)),
           EStmt body (\rv rt'. Cast rt (ECompVal rv rt')))) /\
 
 (!fnval ftype params se s0 fnid.
@@ -541,7 +537,7 @@ in
 (!v t s se c smap tmap vmap stack'.
    is_null_se se /\ (s.stack = (smap,tmap,vmap)::stack') ==>
    ^mng (mStmt (Ret (NormE (ECompVal v t) se)) c) s
-        (s with <| stack := stack'; strmap := smap; typemap := tmap;
+        (s with <| stack := stack'; classmap := smap; typemap := tmap;
                    varmap := vmap |>,
          mExpr (c v t) base_se)) /\
 
@@ -606,13 +602,13 @@ in
 
 (!vds sts s c.
      ^mng (mStmt (Block F vds sts) c) s
-          (s with stack updated_by (CONS (s.strmap,s.typemap,s.varmap)),
+          (s with stack updated_by (CONS (s.classmap,s.typemap,s.varmap)),
            mStmt (Block T vds sts) c)) /\
 
 (!st s c stm tym vrm stk'.
      (s.stack = (stm,tym,vrm) :: stk') /\ final_stmt st ==>
      ^mng (mStmt (Block T [] [st]) c) s
-          (s with <| stack := stk'; strmap := stm; typemap := tym;
+          (s with <| stack := stk'; classmap := stm; typemap := tym;
                      varmap := vrm |>,
            mStmt st c)) /\
 
@@ -644,9 +640,9 @@ in
                         sts) c) s
         (val2mem s (s.varmap ' name) v', mStmt (Block T vds sts) c)) /\
 
-(!name flds s vds sts c.
-    ^mng (mStmt (Block T (VStrDec name flds :: vds) sts) c) s
-         (s with strmap updated_by (\sm. sm |+ (name,SOME flds)),
+(!name info s vds sts c.
+    ^mng (mStmt (Block T (VStrDec name info :: vds) sts) c) s
+         (s with classmap updated_by (\sm. sm |+ (name,info)),
           mStmt (Block T vds sts) c)) `
 end;
 
@@ -690,11 +686,11 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
               (val2mem (copy2globals s) (s.varmap ' name) v',
                edecls)) /\
 
-  (!s name flds edecls.
-     emeaning (Decl (VStrDec name flds) :: edecls) s
+  (!s name info edecls.
+     emeaning (Decl (VStrDec name info) :: edecls) s
               (copy2globals
-                  (s with <| strmap updated_by
-                                      (\sm. sm |+ (name,SOME flds)) |>),
+                  (s with <| classmap updated_by
+                                      (\sm. sm |+ (name,info)) |>),
                edecls))
 `;
 
