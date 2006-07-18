@@ -37,15 +37,6 @@ val base_se_def = Define`
 val _ = Hol_datatype `traptype = BreakTrap | ContTrap`;
 
 
-(* Information about classes, once declared.
-
-*)
-val _ = Hol_datatype`
-  class_info = <| fields : (string # CPP_Type) list ;
-                  ancestors : string list |>
-`
-
-
 val _ = Hol_datatype`
   CStmt    = CLoop of ExtE => CStmt
            | CIf of ExtE => CStmt => CStmt
@@ -65,7 +56,16 @@ val _ = Hol_datatype`
 
   var_decl = VDec of CType => string
            | VDecInit of CType => string => ExtE
-           | VStrDec of string => class_info option
+           | VStrDec of string => class_info option ;
+
+  class_entry
+           = CFnDefn of CPP_Type => string => (string # CPP_Type) list =>
+                        CStmt
+           | FldDecl of string => CPP_Type ;
+
+  class_info   (* bool in fields is true for static members *)
+           = <| fields : (class_entry # bool # protection) list ;
+                ancestors : string list |>
 `;
 (* A declaration can be used to declare (but not define a function).
    A VStrDec with an empty field list is the equivalent of
@@ -142,6 +142,8 @@ val intstmt_free_def = Define`
 (* external declarations can appear at the top level of a translation unit *)
 val _ = Hol_datatype`
   ext_decl = FnDefn of CPP_Type => string => (string # CPP_Type) list => CStmt
+           | CMFnDefn of CPP_Type => string => string =>
+                         (string # CPP_Type) list => CStmt
            | Decl of var_decl
 `;
 
