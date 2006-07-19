@@ -148,7 +148,7 @@ val malloc_def = Define`
               align (sizeofmap s0) ty aln /\
               DISJOINT s0.allocmap (range_set a sz) /\
               ~(a = 0) /\ (a MOD aln = 0) /\
-              a + sz < 2 EXP (CHAR_BIT * ptr_size ty)
+              a + sz <= 2 EXP (CHAR_BIT * ptr_size ty)
 `
 
 (* rec_i_vars installs a list variables, updating varmap, typemap and allocmap
