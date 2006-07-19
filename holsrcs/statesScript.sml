@@ -54,6 +54,21 @@ val _ = Hol_datatype
                typemap  : string |-> CPP_Type ;
                varmap   : string |-> num |>`;
 
+val initial_state_def = Define`
+  initial_state = <| allocmap := {};
+                     fnmap := FEMPTY;
+                     fnvals := FEMPTY;
+                     fndecode := FEMPTY;
+                     gclassmap := FEMPTY;
+                     gtypemap := FEMPTY;
+                     gvarmap := FEMPTY;
+                     initmap := {};  (* note that there is no value provided for locmap *)
+                     stack := [];
+                     classmap := FEMPTY;
+                     typemap := FEMPTY;
+                     varmap := FEMPTY |>
+`
+
 (* function that updates memory with a value *)
 val val2mem_def = Define`
   val2mem s (loc:num) v =
