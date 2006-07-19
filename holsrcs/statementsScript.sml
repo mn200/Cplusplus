@@ -68,7 +68,7 @@ val _ = Hol_datatype`
                 ancestors : string list |>
 `;
 (* A declaration can be used to declare (but not define a function).
-   A VStrDec with an empty field list is the equivalent of
+   A VStrDec with a NONE class_info is the equivalent of
      struct foo;
    i.e., an incomplete declaration of a struct type
 *)
