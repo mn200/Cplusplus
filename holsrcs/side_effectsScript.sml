@@ -41,7 +41,7 @@ val null_ise_def = Define`
 val mark_ref_def = Define`
   mark_ref st sz se0 se =
        ?r. (r = range_set st sz) /\ DISJOINT r se0.update_map /\
-           (se = se0 with ref_map updated_by BAG_UNION (BAG_OF_SET r))
+           (se = se0 with ref_map updated_by (UNION) r)
 `
 
 (* SANITY *)
@@ -73,10 +73,12 @@ val select_se_def = Define`
               (se = se0 with pending_ses := nvl)
 `
 
+(* checks that the side effect is not attempting to update earlier updated
+   memory.  With adoption of Clive Feather model, does NOT check if there is
+   the update is of referred to memory *)
 val apply_ise_def = Define`
   apply_ise ise (se0:se_info) se =
       ?u. (u = se_affects ise) /\ DISJOINT se0.update_map u /\
-          DISJOINT (SET_OF_BAG se0.ref_map) u /\
           (se = update_map_fupd ($UNION u) se0)
 `;
 

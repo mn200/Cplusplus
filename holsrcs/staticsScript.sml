@@ -284,11 +284,11 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
          ==>
        expr_type s RValue  (CCond e1 e2 e3) restype) /\
 
-  (!s e1 lhs_t e2 rhs_t f b.
+  (!s e1 lhs_t e2 rhs_t f.
        expr_type s LValue e1 lhs_t /\
        expr_type s RValue e2 rhs_t /\
        ass_type_conds (f, lhs_t, rhs_t) ==>
-       expr_type s RValue (Assign f e1 e2 b) lhs_t) /\
+       expr_type s RValue (Assign f e1 e2) lhs_t) /\
 
   (!s e t. expr_type s RValue e (Ptr t) /\ ~(t = Void) ==>
            expr_type s LValue (Deref e) t) /\

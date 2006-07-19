@@ -23,7 +23,8 @@ val valid_econtext_def = Define`
   valid_econtext f =
       (?f' e1. f = CApBinary f' e1) \/
       (?f' e2. f = \e1. CApBinary f' e1 e2) \/
-      (?f' e2 b. f = \e1. Assign f' e1 e2 b) \/
+      (?f' e2. f = \e1. Assign f' e1 e2) \/
+      (?f' e1. f = \e2. Assign f' e1 e2) \/
       (?e2 f'. (f = (\e1. f' e1 e2)) /\
                f' IN {COr; CAnd; CommaSep}) \/
       (?e2 e3. (f = \e1. CCond e1 e2 e3)) \/
@@ -49,6 +50,8 @@ val valid_econtexts_11 = store_thm(
   ``!f. valid_econtext f ==> !e1 e2. (f e1 = f e2) = (e1 = e2)``,
   SRW_TAC [][valid_econtext_def] THEN SRW_TAC [][])
 
+(* mark_ref checks whether or not we're trying to read something that has been
+   updated *)
 val lval2rval_def = Define`
   lval2rval (s0,e0,se0) (s,e,se) =
        (s0 = s) /\
@@ -56,7 +59,7 @@ val lval2rval_def = Define`
              (~(array_type t) /\
               (?sz. sizeof (sizeofmap s0) t sz /\
                     (mark_ref n sz se0 se /\
-                     (range_set n sz) SUBSET s0.initmap /\
+                     range_set n sz SUBSET s0.initmap /\
                      (e = ECompVal (mem2val s0 n sz) t) \/
                      (~(range_set n sz SUBSET s0.initmap) \/
                       (!se'. ~(mark_ref n sz se0 se'))) /\
@@ -334,7 +337,7 @@ in
 
 
 (!f se s.
-    valid_econtext f \/ (?asfn lhs b. f = \e. Assign asfn lhs e b) ==>
+    valid_econtext f ==>
     ^mng (mExpr (f UndefinedExpr) se) s (s, ^ev UndefinedExpr se)) /\
 
 (!f e0 se0 s0 s e se.
@@ -441,33 +444,17 @@ in
     ^mng (mExpr (Addr (LVal a t)) se) s
           (s, ^ev (ECompVal (THE (REP_INT (Ptr t) (&a))) (Ptr t)) se)) /\
 
-(!se0 s0 s e se mb mb' f a RHS.
-    ^mng (mExpr RHS se0) s0 (s, ^ev e se) /\
-    (mb' = BAG_delta (se0.ref_map, se.ref_map) mb) ==>
-    ^mng (mExpr (Assign f a RHS mb) se0) s0
-         (s, ^ev (Assign f a e mb') se)) /\
+(!f n t e se0 s0.
+     ^mng (mExpr (Assign (SOME f) (LVal n t) e) se0) s0
+          (s0, ^ev (Assign NONE (LVal n t) (CApBinary f (LVal n t) e)) se0)) /\
 
-(!se0 s0 s f a RHS mb st c.
-    ^mng (mExpr RHS se0) s0 (s, mStmt st c) ==>
-    ^mng (mExpr (Assign f a RHS mb) se0) s0
-         (s, mStmt st (\v t. Assign f a (c v t) mb))) /\
-
-(!f n t e mb se0 s0.
-     ^mng (mExpr (Assign (SOME f) (LVal n t) e mb) se0) s0
-          (s0, ^ev (Assign NONE (LVal n t)
-                         (CApBinary f (LVal n t) e)
-                         mb)
-                       se0)) /\
-
-(!s v0 t0 v lhs_t ok_refs se0 se' se a resv mb.
+(!s v0 t0 v lhs_t se0 se a resv.
      parameter_coerce (v0,t0) (v,lhs_t) /\
-     (ok_refs = \x. x IN (se_affects (a, v)) => mb x | 0) /\
-     (se' = se0 with ref_map updated_by (\rm. BAG_DIFF rm ok_refs)) /\
-     (se = add_se (a, v) se') /\ (resv = ECompVal v lhs_t)
+     (se = add_se (a, v) se0) /\ (resv = ECompVal v lhs_t)
                           \/
      (!v. ~parameter_coerce (v0, t0) (v, lhs_t)) /\
      (resv = UndefinedExpr) /\ (se = se0) ==>
-     ^mng (mExpr (Assign NONE (LVal a lhs_t) (ECompVal v0 t0) mb) se0)
+     ^mng (mExpr (Assign NONE (LVal a lhs_t) (ECompVal v0 t0)) se0)
           s (s, ^ev resv se)) /\
 
 (!se0 se s t t' sz v nv nv1 a resv.

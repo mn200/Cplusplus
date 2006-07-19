@@ -39,7 +39,7 @@ val _ = Hol_datatype
          | CApUnary of c_unops => CExpr
          | Deref of CExpr
          | Addr of CExpr
-         | Assign of c_binops option => CExpr => CExpr => (num -> num)
+         | Assign of c_binops option => CExpr => CExpr
          | SVar of CExpr => string
          | FnApp of CExpr => CExpr list
          | CommaSep of CExpr => CExpr
@@ -73,8 +73,8 @@ val rec_expr_P_def = Define`
       \P. P (CApUnary f' e) /\ rec_expr_P e P) /\
     (rec_expr_P (Deref e) = \P. P (Deref e) /\ rec_expr_P e P) /\
     (rec_expr_P (Addr e) = \P. P (Addr e) /\ rec_expr_P e P) /\
-    (rec_expr_P (Assign fo e1 e2 b) =
-      \P. P (Assign fo e1 e2 b) /\ rec_expr_P e1 P /\ rec_expr_P e2 P) /\
+    (rec_expr_P (Assign fo e1 e2) =
+      \P. P (Assign fo e1 e2) /\ rec_expr_P e1 P /\ rec_expr_P e2 P) /\
     (rec_expr_P (SVar e fld) =
       \P. P (SVar e fld) /\ rec_expr_P e P) /\
     (rec_expr_P (FnApp e args) =
@@ -132,7 +132,7 @@ val has_no_undefineds = save_thm("has_no_undefineds", LIST_CONJ e_thms)
 val _ = export_rewrites ["has_no_undefineds"]
 
 val side_affecting_def = Define`
-  (side_affecting (Assign f e1 e2 b) = T) /\
+  (side_affecting (Assign f e1 e2) = T) /\
   (side_affecting (FnApp fdes args) = T) /\
   (side_affecting (FnApp_sqpt fdes args) = T) /\
   (side_affecting (PostInc e)    = T) /\

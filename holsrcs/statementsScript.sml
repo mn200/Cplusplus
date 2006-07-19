@@ -24,11 +24,9 @@ val _ = new_theory "statements";
 val _ = type_abbrev("se", ``:num # byte list``)
 val _ = Hol_datatype `se_info = <| pending_ses : se->num ;
                                    update_map  : num->bool ;
-                                   ref_map     : num->num |>`;
+                                   ref_map     : num->bool |>`;
 val base_se_def = Define`
-  base_se = <| pending_ses := {| |}; update_map := {};
-               ref_map := {| |}
-            |>
+  base_se = <| pending_ses := {| |}; update_map := {}; ref_map := {} |>
 `;
 
 
