@@ -53,7 +53,7 @@ val _ = export_rewrites ["function_type_def"]
 val ref_type_def = Define`
   (ref_type (Ref t0) = T) /\ (ref_type x = F)
 `;
-val _ = export_rewrites ["function_type_def"]
+val _ = export_rewrites ["ref_type_def"]
 
 (* 3.9 p9 *)
 val object_type_def = Define`
