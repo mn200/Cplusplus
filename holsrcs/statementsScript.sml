@@ -63,7 +63,7 @@ val _ = Hol_datatype`
 
   class_info   (* bool in fields is true for static members *)
            = <| fields : (class_entry # bool # protection) list ;
-                ancestors : string list |>
+                ancestors : string option |>
 `;
 (* A declaration can be used to declare (but not define a function).
    A VStrDec with a NONE class_info is the equivalent of
