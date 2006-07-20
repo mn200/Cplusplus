@@ -307,9 +307,9 @@ in
 
 (!vname se s ty.
     vname IN FDOM s.typemap /\ (ty = s.typemap ' vname) /\
-    function_type ty /\ vname IN FDOM s.fnvals ==>
+    function_type ty /\ GlobalFn vname IN FDOM s.fnvals ==>
     ^mng (mExpr (Var vname) se) s
-            (s, ^ev (ECompVal (s.fnvals ' vname) (Ptr ty)) se)) /\
+            (s, ^ev (ECompVal (s.fnvals ' (GlobalFn vname)) (Ptr ty)) se)) /\
 
 (!s v t v' t' se i.
     (INT_VAL t v = SOME i) /\ (SOME v' = REP_INT t' i) ==>
@@ -640,7 +640,7 @@ end;
 
 val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
   (!s fval name rettype params body ftype edecls.
-       ~(fval IN FDOM s.fndecode) /\ ~(name IN FDOM s.fnmap) /\
+       ~(fval IN FDOM s.fndecode) /\ ~(GlobalFn name IN FDOM s.fnmap) /\
        ~(name IN FDOM s.typemap) /\
        (LENGTH fval = ptr_size ftype) /\
        (ftype = Function rettype (MAP SND params))
@@ -648,11 +648,11 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
        emeaning (FnDefn rettype name params body :: edecls) s
           (s with
             <| fnmap updated_by
-                       (\fm. fm |+ (name, <| body := body;
-                                             return_type := rettype;
-                                             parameters := params |>));
-               fnvals updated_by (\fm. fm |+ (name, fval));
-               fndecode updated_by (\fm. fm |+ (fval, name));
+                 (\fm. fm |+ (GlobalFn name, <| body := body;
+                                                return_type := rettype;
+                                                parameters := params |>));
+               fnvals updated_by (\fm. fm |+ (GlobalFn name, fval));
+               fndecode updated_by (\fm. fm |+ (fval, GlobalFn name));
                typemap updated_by (\tm. tm |+ (name, ftype)) |>,
            edecls)) /\
 
