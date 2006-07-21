@@ -1,6 +1,6 @@
 cd /tmp
 /bin/rm -rf qinetiq-cpp
-cvs -d ~/repository export -r deliverable-1 qinetiq-cpp
+svn export file:///home/users/michaeln/nicta/projects/cpp-project/qcpp-repos/tags/deliverable-1 qinetiq-cpp
 cd qinetiq-cpp
 cd docs
 pdflatex deliverable1-notes
