@@ -1,0 +1,18 @@
+* If a class has an ancestor with virtual functions, then it won't
+  gain a vptr entry of its own, instead I guess it uses the vptr table
+  of its ancestor.  The extra entries for the derived class's
+  functions are presumably tacked on the end of the lookups for the
+  base class.
+
+* If a class has multiple ancestors, but only one has virtual
+  functions, it reorders them so that the one with virtual functions
+  comes first.
+
+* If a class performs virtual inheritance on a base class, then there
+  is a "vptr" pointer needed, even if there are no virtual functions
+  around, because the base class may be at different positions
+  relative to it in differing object layouts.  Then, because you might
+  derive a pointer to derived class when that derived class is itself
+  derived from, you can only tell dynamically where the ancestor is.
+
+  See mult-inheritance-layout.cpp and the mil program.
