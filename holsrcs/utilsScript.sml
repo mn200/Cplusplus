@@ -49,5 +49,15 @@ val deNONE_FUPDATE = store_thm(
   ])
 val _ = export_rewrites ["deNONE_FUPDATE"]
 
+val mapPartial_def = Define`
+  (mapPartial f [] = []) /\
+  (mapPartial f (h::t) = case f h of SOME x -> x :: mapPartial f t
+                                  || NONE -> mapPartial f t)
+`
+val _ = export_rewrites ["mapPartial_def"]
+
+
+
+
 val _ = export_theory()
 

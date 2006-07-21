@@ -109,13 +109,6 @@ val objfield_def = Define`
     if object_type ty /\ ~static then SOME(nm,ty) else NONE)
 `
 
-val mapPartial_def = Define`
-  (mapPartial f [] = []) /\
-  (mapPartial f (h::t) = case f h of SOME x -> x :: mapPartial f t
-                                  || NONE -> mapPartial f t)
-`
-
-
 (* looking up a field's information (type and index) requires a map from
    class name to (name#type) list.   This is the lookup function that only
    returns fields and not functions *)
