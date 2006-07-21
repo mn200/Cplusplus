@@ -31,7 +31,13 @@ void print_layout(unsigned char *p, unsigned sz)
     printf("%2d (%p): %02x\n", i, p + i, p[i]);
 }
 
-
+void D2print(class D2 &d)
+{
+  printf("Sizeof D2: %d\n", sizeof(d));
+  print_layout((unsigned char *)(&d), sizeof(d));
+  printf("d.y: %d\n", d.y);
+  printf("d.b: %d (at address %p)\n", d.b, &d.b);
+}
 
 int main(void)
 {
@@ -43,6 +49,7 @@ int main(void)
   e.z = 3;
   printf("*** An E\n");
   print_layout((unsigned char *)(&e), sizeof(e));
+  D2print(e);
   D1 d;
   d.x = 1;
   d.b = 7;
