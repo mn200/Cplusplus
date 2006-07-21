@@ -107,15 +107,15 @@ inter-relationships in the file \texttt{holsrcs/MANIFEST}.
 
 In addition, I have also updated the formalisation of memory, making
 use of theories for fixed-width words that were not available in 1998.
-This paragraph material occurs in the source file
-\texttt{memoryScript.sml}. There is now a type that directly
-corresponds to the standard's notion of \texttt{byte}.  At the same
-time, there are now additional functions encoding the relationship
-between sequences of bytes and values.  For integral types, there are
-(partial) functions \texttt{REP\_INT} from integer values into byte
-seqeunces, and \texttt{INT\_VAL} reversing this.  I have striven to
-keep these funcations under-specified, in accordance with what the
-standard requires.
+This material occurs in the source file \texttt{memoryScript.sml}.
+There is now a type that directly corresponds to the standard's notion
+of \texttt{byte}.  At the same time, there are now additional
+functions encoding the relationship between sequences of bytes and
+values.  For integral types, there are (partial) functions
+\texttt{REP\_INT} from integer values into byte seqeunces, and
+\texttt{INT\_VAL} reversing this.  I have striven to keep these
+functions under-specified, in accordance with what the standard
+requires.
 
 In fact, as they stand, these functions are not specified enough.  In
 particular, for the moment, I have only characterised the functions'
