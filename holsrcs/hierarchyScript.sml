@@ -131,6 +131,21 @@ val fieldty_via_def = Define`
 `
 
 
+(* nsdmembers (non-static data-members) *)
+val nsdmembers_def = Define`
+  nsdmembers s c =
+    case FLOOKUP (deNONE s.classmap) c of
+       NONE -> NONE
+    || SOME cinfo ->
+         SOME
+           (mapPartial
+              (\ci. case ci of
+                       (CFnDefn ret nm args bod, stat, prot) -> NONE
+                    || (FldDecl nm ty, stat, prot) -> if stat then NONE
+                                                      else SOME (nm,ty))
+              cinfo.fields)
+`
+
 
 
 
