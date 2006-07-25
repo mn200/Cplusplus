@@ -11,7 +11,7 @@ open arithmeticTheory pred_setTheory integerTheory
 local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 (* C++ ancestor theories  *)
-open typesTheory memoryTheory expressionsTheory staticsTheory
+open typesTheory memoryTheory expressionsTheory staticsTheory class_infoTheory
 local open side_effectsTheory statesTheory operatorsTheory in end
 
 val _ = new_theory "dynamics";

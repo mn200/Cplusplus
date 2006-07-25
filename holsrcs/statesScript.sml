@@ -103,38 +103,6 @@ val install_global_maps_def = Define`
                    gtypemap := s.typemap |>
 `;
 
-val objfield_def = Define`
-  (objfield (CFnDefn retty nm args body, static, prot) = NONE) /\
-  (objfield (FldDecl nm ty, static, prot) =
-    if object_type ty /\ ~static then SOME(nm,ty) else NONE)
-`
-
-(* looking up a field's information (type and index) requires a map from
-   class name to (name#type) list.   This is the lookup function that only
-   returns fields and not functions *)
-val lfimap_def = Define`
-  lfimap s = (\ci. mapPartial objfield ci.fields) o_f deNONE s.classmap
-`;
-
-
-
-(* BAD ASSUMPTION: no classes are abstract *)
-(* type-checking requires a variety of pieces of information, which we derive
-   from a state with this function *)
-val expr_type_comps_def = Define`
-  expr_type_comps s =
-    <| class_fields := lfimap s;
-       var_types := s.typemap ;
-       abs_classes := {} |>
-`;
-
-(* sizeof calculations expect to find a map from class name to a list
-   of types (the class's (non-static) fields.  This function calculates
-   that map from a classmap *)
-val sizeofmap_def = Define`
-  sizeofmap s = MAP SND o_f lfimap s
-`;
-
 
 
 
