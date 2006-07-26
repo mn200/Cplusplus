@@ -12,7 +12,7 @@ local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 (* C++ ancestor theories  *)
 open utilsTheory typesTheory memoryTheory expressionsTheory staticsTheory
-     statesTheory
+     statesTheory class_infoTheory
 
 val _ = new_theory "operators";
 
