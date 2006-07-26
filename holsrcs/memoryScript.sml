@@ -517,6 +517,21 @@ val bit_align = Define`
 
 val _ = overload_on ("set", ``list$LIST_TO_SET``)
 
+(* C++ NOTE: classes must have non-zero size, even if they contain
+   no fields.
+
+   By way of contrast, in C classes (i.e., structs) must have at least one
+   field.
+*)
+val empty_class_size_def = new_specification(
+  "empty_class_size_def", ["empty_class_size"],
+  prove(``?n:num. 0 < n``, Q.EXISTS_TAC `1` THEN SRW_TAC [][]));
+
+val empty_class_align_def = new_specification(
+  "empty_class_align_def", ["empty_class_align"],
+  prove(``?n:num. 0 < n /\ n <= empty_class_size``,
+        ASSUME_TAC empty_class_size_def THEN intLib.ARITH_TAC));
+
 (* alignment of class types being maximum alignment of member fields is
    plausible, but should probably count as an ASSUMPTION *)
 val (align_rules, align_ind, align_cases) = Hol_reln`
@@ -540,8 +555,11 @@ val (align_rules, align_ind, align_cases) = Hol_reln`
             ?a. align smap ty a /\ a <= max) /\
       (?ty. ty IN set (smap ' cnm) /\ align smap ty max)
          ==>
-      align smap (Class cnm) max)
+      align smap (Class cnm) max) /\
 
+   (!smap cnm.
+      cnm IN FDOM smap /\ (smap ' cnm = []) ==>
+      align smap (Class cnm) empty_class_align)
 `;
 
 (* SANITY : alignment relation is deterministic *)
@@ -568,12 +586,7 @@ val roundup_def = Define`
   roundup base n = if n MOD base = 0 then n else (n DIV base + 1) * base
 `;
 
-(* C++ NOTE: classes must have non-zero size, even if they contain
-   no fields.
 
-   By way of contrast, in C classes (i.e., structs) must have at least one
-   field.
-*)
 
 
 val (offsizeof_rules, offsizeof_ind, offsizeof_cases) = Hol_reln`
@@ -593,12 +606,16 @@ val (offsizeof_rules, offsizeof_ind, offsizeof_cases) = Hol_reln`
   (!s m n t. sizeof s t m ==> sizeof s (Array t n) (m * n)) /\
 
   (!s c tylist a lastoff lastsz.
-        c IN FDOM s /\ (s ' c = tylist) /\
+        c IN FDOM s /\ (s ' c = tylist) /\ 0 < LENGTH tylist /\
         align s (Class c) a /\
         offset s tylist (LENGTH tylist - 1) lastoff /\
         sizeof s (EL (LENGTH tylist - 1) tylist) lastsz
       ==>
         sizeof s (Class c) (roundup a (lastoff + lastsz))) /\
+
+  (!s c.
+        c IN FDOM s /\ (s ' c = []) ==>
+        sizeof s (Class c) empty_class_size) /\
 
   (!s tylist.  offset s tylist 0 0) /\
   (!s tylist n a offn sizen.
@@ -627,9 +644,11 @@ val det_lemma = prove(
     (* array *)
     STRIP_TAC THEN ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][] THEN
     METIS_TAC [],
-    (* class size *)
+    (* non-empty class size *)
     STRIP_TAC THEN ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][] THEN
-    METIS_TAC [align_det],
+    FULL_SIMP_TAC (srw_ss()) [] THEN METIS_TAC [align_det],
+    (* empty class size *)
+    STRIP_TAC THEN ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
     (* offset 0 *)
     ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
     (* offset SUC *)
