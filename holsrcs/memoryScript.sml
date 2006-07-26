@@ -658,10 +658,20 @@ val det_lemma = prove(
 val sizeof_det = save_thm("sizeof_det", CONJUNCT1 det_lemma)
 val offset_det = save_thm("offset_det", CONJUNCT2 det_lemma)
 
-(* SANITY: function types don't have a size *)
+(* SANITY: only object types have sizes *)
+val only_objects_have_sizes = store_thm(
+  "only_objects_have_sizes",
+  ``!s ty n. sizeof s ty n ==> object_type ty``,
+  ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][object_type_def] THEN
+  SRW_TAC [][]);
+
+(* SANITY: for example, functions don't have sizes *)
 val functions_have_no_size = store_thm(
   "functions_have_no_size",
   ``~sizeof s (Function retty argtys) n``,
-  ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][]);
+  STRIP_TAC THEN IMP_RES_TAC only_objects_have_sizes THEN
+  FULL_SIMP_TAC (srw_ss()) [object_type_def])
+
+
 
 val _ = export_theory();
