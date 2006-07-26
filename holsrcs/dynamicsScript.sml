@@ -56,7 +56,7 @@ val lval2rval_def = Define`
   lval2rval (s0,e0,se0) (s,e,se) =
        (s0 = s) /\
        ?n t. (e0 = LVal n t) /\
-             (~(array_type t) /\
+             (~array_type t /\
               (?sz. sizeof (sizeofmap s0) t sz /\
                     (mark_ref n sz se0 se /\
                      range_set n sz SUBSET s0.initmap /\
@@ -305,11 +305,14 @@ in
     ^mng (mExpr (Var vname) se) s
          (s, ^ev (LVal (s.varmap ' vname) (s.typemap ' vname)) se)) /\
 
+(* BAD_ASSUMPTION: need to add treatment of member functions that are
+     called without explicitly using structure dereference operation,
+     which can happen in the body of member functions *)
 (!vname se s ty.
     vname IN FDOM s.typemap /\ (ty = s.typemap ' vname) /\
     function_type ty /\ GlobalFn vname IN FDOM s.fnvals ==>
     ^mng (mExpr (Var vname) se) s
-            (s, ^ev (ECompVal (s.fnvals ' (GlobalFn vname)) (Ptr ty)) se)) /\
+         (s, ^ev (FVal (GlobalFn vname) ty NONE) se)) /\
 
 (!s v t v' t' se i.
     (INT_VAL t v = SOME i) /\ (SOME v' = REP_INT t' i) ==>
@@ -498,21 +501,20 @@ in
     ^mng (mExpr (FnApp f params) se) s
          (s, ^ev (FnApp_sqpt f params) base_se)) /\
 
-(!fnval ftype params se s0 s1 fnid rt vs body.
-    (fnid = s0.fndecode ' fnval) /\ fnval IN FDOM s0.fndecode /\
+(* the NONE as FVal's third argument means this is a global function *)
+(!ftype params se s0 s1 fnid rt vs body.
     (ftype = Function rt vs) /\
     pass_parameters s0 fnid params s1 /\
     ((s0.fnmap ' fnid).body = body)
    ==>
-    ^mng (mExpr (FnApp_sqpt (ECompVal fnval (Ptr ftype)) params) se) s0
+    ^mng (mExpr (FnApp_sqpt (FVal fnid ftype NONE) params) se) s0
          (s1 with stack updated_by (CONS (s0.classmap, s0.typemap, s0.varmap)),
           EStmt body (\rv rt'. Cast rt (ECompVal rv rt')))) /\
 
-(!fnval ftype params se s0 fnid.
-    (fnid = s0.fndecode ' fnval) /\ fnval IN FDOM s0.fndecode /\
+(!ftype params se s0 fnid.
     (!s. ~pass_parameters s0 fnid params s)
    ==>
-    ^mng (mExpr (FnApp_sqpt (ECompVal fnval (Ptr ftype)) params) se) s0
+    ^mng (mExpr (FnApp_sqpt (FVal fnid ftype NONE) params) se) s0
          (s0, ^ev UndefinedExpr se)) /\
 
 (!exte0 exte s1 s2 c.

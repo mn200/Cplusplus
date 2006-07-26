@@ -37,9 +37,6 @@ val _ = Hol_datatype `fn_info = <| return_type : CPP_Type ;
 
    NOTE, moreover that an empty C++ struct has non-zero size. (9 p3) *)
 
-val _ = Hol_datatype`
-  fnid = GlobalFn of string | MFn of string => string
-`;
 
 
 val _ = Hol_datatype
@@ -57,7 +54,9 @@ val _ = Hol_datatype
                            (string |-> num)) list ;
                classmap : string |-> class_info option;
                typemap  : string |-> CPP_Type ;
-               varmap   : string |-> num |>`;
+               varmap   : string |-> num ;
+               thisvalue: CExpr option
+             |>`;
 
 val initial_state_def = Define`
   initial_state = <| allocmap := {};
@@ -71,7 +70,8 @@ val initial_state_def = Define`
                      stack := [];
                      classmap := FEMPTY;
                      typemap := FEMPTY;
-                     varmap := FEMPTY |>
+                     varmap := FEMPTY ;
+                     thisvalue := NONE |>
 `
 
 (* function that updates memory with a value *)
