@@ -22,15 +22,14 @@ int len(struct lnode *lptr)
 [Decl (VDec (Signed Int) "global") ;
  Decl (VStrDec "lnode" (SOME <| fields := [(FldDecl "content" (Signed Int), F, Public);
                                            (FldDecl "next" (Ptr (Class "lnode")), F, Public)] ;
-                                ancestors := [] |>));
+                                ancestors := NONE |>));
  FnDefn (Signed Int) "len" [("lptr", Ptr (Class "lnode"))]
         (Block F [VDecInit (Signed Int) "i" (NormE (Cnum 1) base_se)]
                  [whileloop (Var "lptr")
                             (Block F [] [Standalone
                                            (mExpr
                                               (Assign NONE (Var "lptr")
-                                                      (SVar (Deref (Var "lptr")) "next")
-                                                      {||})
+                                                      (SVar (Deref (Var "lptr")) "next"))
                                               base_se);
                                          Standalone (mExpr (PostInc (Var "i")) base_se)]) ;
                   Ret (NormE (Var "i") base_se)])

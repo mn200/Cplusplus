@@ -7,6 +7,7 @@ in
 end
 
 local open dynamicsTheory statesTheory typesTheory simpLib BasicProvers
+           class_infoTheory
 in
 val e1_ss = srw_ss() ++ rewrites [vdeclare_def, copy2globals_def, initial_state_def,
                                   object_type_def, GSYM RIGHT_EXISTS_AND_THM,
