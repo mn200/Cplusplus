@@ -40,23 +40,24 @@ val _ = Hol_datatype `fn_info = <| return_type : CPP_Type ;
 
 
 val _ = Hol_datatype
-  `CState = <| allocmap : num -> bool ;
-               fnmap    : fnid |-> fn_info ;
-               fnvals   : fnid |-> byte list ;
-               fndecode : byte list |-> fnid ;
-               gclassmap: string |-> class_info option ;
-               gtypemap : string |-> CPP_Type ;
-               gvarmap  : string |-> num ;
-               initmap  : num -> bool ;
-               locmap   : num -> byte ;
-               stack    : ((string |-> class_info option) #
-                           (string |-> CPP_Type) #
-                           (string |-> num)) list ;
-               classmap : string |-> class_info option;
-               typemap  : string |-> CPP_Type ;
-               varmap   : string |-> num ;
-               thisvalue: CExpr option
+  `state = <| allocmap : num -> bool ;
+              fnmap    : fnid |-> fn_info ;
+              fnvals   : fnid |-> byte list ;
+              fndecode : byte list |-> fnid ;
+              gclassmap: string |-> class_info option ;
+              gtypemap : string |-> CPP_Type ;
+              gvarmap  : string |-> num ;
+              initmap  : num -> bool ;
+              locmap   : num -> byte ;
+              stack    : ((string |-> class_info option) #
+                          (string |-> CPP_Type) #
+                          (string |-> num)) list ;
+              classmap : string |-> class_info option;
+              typemap  : string |-> CPP_Type ;
+              varmap   : string |-> num ;
+              thisvalue: CExpr option
              |>`;
+val _ = type_abbrev("CState", ``:state``)
 
 val initial_state_def = Define`
   initial_state = <| allocmap := {};
@@ -105,6 +106,18 @@ val install_global_maps_def = Define`
 
 
 
+(* pointer encoding and decoding *)
+val _ = new_constant("ptr_encode", ``:state # CPP_Type -> num # string list ->
+                                      byte list option``)
+val _ = new_constant("ptr_decode", ``:state # CPP_Type -> byte list ->
+                                      (num # string list) option``)
+
+(* BAD_ASSUMPTION *)
+(* would be nice to have this as an Isabelle style locale assumption.  *)
+val ptr_inverse = new_axiom(
+  "ptr_inverse",
+  ``(ptr_encode (s,ty) (n,p) = SOME result) ==>
+    (ptr_decode (s,ty) result = SOME (n,p))``)
 
 
 
