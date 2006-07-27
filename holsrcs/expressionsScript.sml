@@ -60,20 +60,17 @@ val _ = Hol_datatype
                have been evaluated *)
          | FnApp_sqpt of CExpr => CExpr list
 
-            (* this is an object lvalue *)
-         | LVal of num => CType
+            (* this is an object lvalue, the string list is the sub-object
+               path a la Wasserab et al for values of class type.  Elsewhere
+               the list will be empty *)
+         | LVal of num => CType => string list
 
             (* this is a function l-value.  The expression argument represents
                the class object if the function is a member function *)
          | FVal of fnid => CPP_Type => CExpr option
          | RValreq of CExpr
-         | Val of byte list => CType => string list
+         | ECompVal of byte list => CType
          | UndefinedExpr `;
-
-val ECompVal_def = Define`
-  ECompVal v t = Val v t []
-`;
-val _ = export_rewrites ["ECompVal_def"]
 
 val rec_expr_P_def = Define`
     (rec_expr_P (Cnum i) P = P (Cnum i)) /\
@@ -108,11 +105,11 @@ val rec_expr_P_def = Define`
       P (CAndOr_sqpt e) /\ rec_expr_P e P) /\
     (rec_expr_P (FnApp_sqpt e args) P =
       P (FnApp_sqpt e args) /\ rec_expr_P e P /\ rec_exprl_P args P) /\
-    (rec_expr_P (LVal a t) P = P (LVal a t)) /\
+    (rec_expr_P (LVal a t p) P = P (LVal a t p)) /\
     (rec_expr_P (FVal fnid ty eopt) P =
        P (FVal fnid ty eopt) /\ rec_expr_opt eopt P) /\
     (rec_expr_P (RValreq e) P = P (RValreq e) /\ rec_expr_P e P) /\
-    (rec_expr_P (Val v t p) P = P (Val v t p)) /\
+    (rec_expr_P (ECompVal v t) P = P (ECompVal v t)) /\
     (rec_expr_P UndefinedExpr P = P UndefinedExpr) /\
     (rec_exprl_P [] P = T) /\
     (rec_exprl_P (CONS e es) P = rec_expr_P e P /\ rec_exprl_P es P) /\
