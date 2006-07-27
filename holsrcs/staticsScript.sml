@@ -1,5 +1,9 @@
 (* Typing of C(++) expressions *)
 
+(* BAD_ASSUMPTION: most of this is bogus and will remain so until it
+     deals with sub-typing etc.  When that happens, the expr_type_det lemma
+     will need to be replaced with unique most-derived type or some such. *)
+
 (* Michael Norrish *)
 
 (* pro-forma *)
@@ -211,10 +215,11 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
          ==>
       expr_type si LValue (Var n) (vmap ' n)) /\
 
-  (!si n t.
-      wf_type si.abs_classes t /\ ~(t = Void)
+  (!si n t t' p.
+      wf_type si.abs_classes t /\ ~(t = Void) /\
+      (t' = if p = [] then t else Class (LAST p))
          ==>
-      expr_type si LValue (LVal n t) t) /\
+      expr_type si LValue (LVal n t p) t') /\
 
   (!si v t.
       wf_type si.abs_classes t /\ ~array_type t
