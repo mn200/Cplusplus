@@ -433,24 +433,36 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
            /\
 
 (!v t e2 t2 e3 t3 resexpr result_type se s sn.
+     is_null_se se /\ scalar_type t /\
+     expr_type (expr_type_comps s) RValue e2 t2 /\
+     expr_type (expr_type_comps s) RValue e3 t3 /\
+     expr_type (expr_type_comps s) RValue
+               (CCond (ECompVal v t) e2 e3)
+               result_type /\
+     ~is_zero t v /\
+     ((t2 = Class sn) /\ (resexpr = RValreq e2) \/
+       (!sn. ~(t2 = Class sn)) /\ (resexpr = Cast result_type e2))
+   ==>
+     ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s
+          (s, ^ev resexpr base_se)) /\
 
-   is_null_se se /\ scalar_type t /\
-   expr_type (expr_type_comps s) RValue e2 t2 /\
-   expr_type (expr_type_comps s) RValue e3 t3 /\
-   expr_type (expr_type_comps s) RValue
-             (CCond (ECompVal v t) e2 e3)
-             result_type /\
-   ~is_zero t v /\
-   ((t2 = Class sn) /\ (resexpr = RValreq e2) \/
-     (!sn. ~(t2 = Class sn)) /\ (resexpr = Cast result_type e2))
-           ==>
-   ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s (s, ^ev resexpr base_se)) /\
-
+(* 5.3.1 p1 - pointer to an object type *)
 (!mval t se s addr pth.
-    object_type t /\ (SOME (addr,pth) = ptr_decode(s,t) mval) ==>
-    ^mng (mExpr (Deref (ECompVal mval (Ptr t))) se) s
-         (s, ^ev (LVal addr t pth) se)) /\
+     object_type t /\ (SOME (addr,pth) = ptr_decode(s,t) mval)
+   ==>
+     ^mng (mExpr (Deref (ECompVal mval (Ptr t))) se) s
+          (s, ^ev (LVal addr t pth) se)) /\
 
+(* 5.3.1 p1 - pointer to a function type *)
+(!v retty argtys se s.
+     v IN FDOM s.fndecode
+   ==>
+     ^mng (mExpr (Deref (ECompVal v (Ptr (Function retty argtys)))) se) s
+          (s, ^ev (FVal (s.fndecode ' v) (Function retty argtys) NONE) se)) /\
+
+(* 5.3.1 p2-5 - taking the address of an lvalue
+                TODO: taking the address of a qualified-id, thereby generating
+                a pointer to member *)
 (!a t pth se s result.
     (SOME result = ptr_encode (s,t) (a,pth)) ==>
     ^mng (mExpr (Addr (LVal a t pth)) se) s
