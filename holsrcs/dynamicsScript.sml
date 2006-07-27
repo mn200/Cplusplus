@@ -520,10 +520,23 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* TODO: update restriction on params to allow them to be l-values, and thus
    passed into reference parameters *)
 (!fnid fty eopt params se s.
-    EVERY (\e. ?v t. e = ECompVal v t) params /\
-    is_null_se se ==>
-    ^mng (mExpr (FnApp (FVal fnid fty eopt) params) se) s
-         (s, ^ev (FnApp_sqpt (FVal fnid fty eopt) params) base_se)) /\
+     EVERY (\e. ?v t. e = ECompVal v t) params /\
+     is_null_se se
+   ==>
+     ^mng (mExpr (FnApp (FVal fnid fty eopt) params) se) s
+          (s, ^ev (FnApp_sqpt (FVal fnid fty eopt) params) base_se)) /\
+
+(* 5.2.2 p1 - this rule handles the situation where the postfix-expression
+   is a pointer to a function value *)
+(!v retty argtys args se s.
+     v IN FDOM s.fndecode
+   ==>
+     ^mng (mExpr (FnApp (ECompVal v (Ptr (Function retty argtys))) args) se) s
+          (s, ^ev (FnApp (FVal (s.fndecode ' v)
+                               (Function retty argtys)
+                               NONE)
+                         args) se)) /\
+
 
 (* the NONE as FVal's third argument means this is a global function *)
 (!ftype params se s0 s1 fnid rt vs body.
