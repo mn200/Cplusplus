@@ -4,10 +4,6 @@ ANNOTATIONS
 Various uppercase keywords appear in comments in the source-files.
 These indicate various issues.
 
-CCOM
-   some HOL text pertaining only to C++ has been commented out so that
-   a set of theories for C can be put together.
-
 ASSUMPTION
    an assumption is made about the standard that may not be entirely
    warranted, but will almost certainly be true of all possible
@@ -17,6 +13,9 @@ ASSUMPTION
 BAD_ASSUMPTION
    an assumption that has been made for expediency's sake, and should
    be revisited
+
+TODO
+   something that needs re-visiting, perhaps in a future deliverable.
 
 SANITY
    the following theorem is a sanity check of the semantics
@@ -28,8 +27,11 @@ THEORIES
 There are 11 theories in this directory.
 
 utils:
-   Defines a utility function called deNONE for turning a finite map
-   from 'a to 'b option, into a finite map that maps from 'a to 'b.
+   Defines
+     * a utility function called deNONE for turning a finite map from
+       'a to 'b option, into a finite map that maps from 'a to 'b.
+     * mapPartial a function just like that of the same name in the ML
+       Basis Library.
 
 function_slices:
    Defines functions for operating on "slices" of functions whose
@@ -60,6 +62,11 @@ statements:
 states:
    Defines the type of program state, encoding not only the contents
    of memory, but maps for variable typing, variable addresses.
+
+class_info:
+   Defines various operators for deriving useful information from what
+   is stored about classes in a state.  Wasserab et al's concepts are
+   mechanised here.
 
 operators:
    Defines the dynamic semantics of expression-operators such as

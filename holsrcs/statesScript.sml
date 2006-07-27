@@ -107,17 +107,29 @@ val install_global_maps_def = Define`
 
 
 (* pointer encoding and decoding *)
-val _ = new_constant("ptr_encode", ``:state # CPP_Type -> num # string list ->
-                                      byte list option``)
-val _ = new_constant("ptr_decode", ``:state # CPP_Type -> byte list ->
-                                      (num # string list) option``)
+(* if the list of strings is not empty, it is the name of the enclosing
+   class type, while the rest of the (which must be non-empty) is the path
+   to the sub-object.  E.g., if the class is just appearing "as itself", then
+   the list will be two elements long, consisting of the class name twice *)
+val _ = new_constant(
+  "ptr_encode",
+  ``:state # CPP_Type -> num # string list -> byte list option``)
+
+val _ = new_constant(
+  "ptr_decode",
+  ``:state # CPP_Type -> byte list -> (num # string list) option``)
 
 (* BAD_ASSUMPTION *)
 (* would be nice to have this as an Isabelle style locale assumption.  *)
 val ptr_inverse = new_axiom(
   "ptr_inverse",
-  ``(ptr_encode (s,ty) (n,p) = SOME result) ==>
-    (ptr_decode (s,ty) result = SOME (n,p))``)
+  ``(ptr_encode (s,ty) info = SOME result) ==>
+    (ptr_decode (s,ty) result = SOME info)``)
+
+val default_path_def = Define`
+  (default_path (Class cn) = [cn;cn]) /\
+  (default_path otherwise = [])
+`;
 
 
 
