@@ -52,24 +52,28 @@ val valid_econtexts_11 = store_thm(
 
 (* mark_ref checks whether or not we're trying to read something that has been
    updated *)
+(* class objects don't turn into rvalues - this changes the way that
+   things happen when class/struct values are returned from objects, but
+   shouldn't make much difference otherwise. *)
 val lval2rval_def = Define`
   lval2rval (s0,e0,se0) (s,e,se) =
        (s0 = s) /\
-       ?n t. (e0 = LVal n t) /\
-             (~array_type t /\
+       ?n t p.
+          (e0 = LVal n t p) /\
+             (~array_type t /\ (!cn. ~(t = Class cn)) /\
               (?sz. sizeof (sizeofmap s0) t sz /\
                     (mark_ref n sz se0 se /\
                      range_set n sz SUBSET s0.initmap /\
                      (e = ECompVal (mem2val s0 n sz) t) \/
                      (~(range_set n sz SUBSET s0.initmap) \/
                       (!se'. ~(mark_ref n sz se0 se'))) /\
-                     (se = se0) /\ (e = UndefinedExpr))) \/
+                     (se = se0) /\ (e = UndefinedExpr)))
+          \/
               (?sz t' bytes.
                   (t = Array t' sz) /\ (se0 = se) /\
-                  (SOME bytes = REP_INT (Ptr t') (&n)) /\
+                  (SOME bytes = ptr_encode (s,t') (n, default_path t')) /\
                   (e = ECompVal bytes (Ptr t'))))
 `
-
 
 (* SANITY *)
 val lval2rval_states_equal = store_thm(
@@ -102,7 +106,7 @@ val lval2rval_det = store_thm(
 val lval2rval_is_lval = store_thm(
   "lval2rval_is_lval",
   ``!s0 e0 se0 X.
-      lval2rval (s0, e0, se0) X ==> ?n t. e0 = LVal n t``,
+      lval2rval (s0, e0, se0) X ==> ?n t p. e0 = LVal n t p``,
   SIMP_TAC (srw_ss() ++ DNF_ss) [lval2rval_def, pairTheory.FORALL_PROD])
 
 (* SANITY *)
@@ -121,6 +125,8 @@ val lval2rval_results = store_thm(
 
 (* an lv-context is a function defining where lvalue to rvalue reduction can
    occur *)
+(* TODO: disallow this reduction in function arguments so that reference values
+   can be passed *)
 val valid_lvcontext_def = Define`
   valid_lvcontext f =
         (?f' e1. f = CApBinary f' e1) \/
@@ -130,6 +136,7 @@ val valid_lvcontext_def = Define`
         (?e2 e3. (f = \e1. CCond e1 e2 e3)) \/
         (?f'. f = CApUnary f') \/
         (f IN  {Deref; CAndOr_sqpt; RValreq}) \/
+        (?e1 opt. (f = Assign opt e1)) \/
         (?args. f = \e. FnApp e args) \/
         (?f' pre post.
               (f = \e. FnApp f' (APPEND pre (e :: post)))) \/
@@ -279,14 +286,13 @@ val copy2globals_def = Define`
 `;
 
 
-local
-  val _ = print "About to define meaning relation\n";
-  val mng  =
+val _ = print "About to define meaning relation\n"
+val mng  =
     mk_var("meaning", ``:ExtE -> CState -> (CState # ExtE) -> bool``)
-  val ev = ``mExpr``
-  val _ = set_trace "inddef strict" 1
-in
-  val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
+val ev = ``mExpr``
+val _ = set_trace "inddef strict" 1
+
+val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (!n se s.
    ^mng (mExpr (Cnum n) se) s
@@ -303,7 +309,9 @@ in
 (!vname se s.
     object_type (s.typemap ' vname) /\ vname IN FDOM s.typemap ==>
     ^mng (mExpr (Var vname) se) s
-         (s, ^ev (LVal (s.varmap ' vname) (s.typemap ' vname)) se)) /\
+         (s, ^ev (LVal (s.varmap ' vname)
+                       (s.typemap ' vname)
+                       (default_path (s.typemap ' vname))) se)) /\
 
 (* BAD_ASSUMPTION: need to add treatment of member functions that are
      called without explicitly using structure dereference operation,
@@ -438,26 +446,33 @@ in
            ==>
    ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s (s, ^ev resexpr base_se)) /\
 
-(!mval t se s addr.
-    ~(t = Void) /\ (SOME addr = INT_VAL (Ptr t) mval) ==>
+(!mval t se s addr pth.
+    object_type t /\ (SOME (addr,pth) = ptr_decode(s,t) mval) ==>
     ^mng (mExpr (Deref (ECompVal mval (Ptr t))) se) s
-         (s, ^ev (LVal (Num addr) t) se)) /\
+         (s, ^ev (LVal addr t pth) se)) /\
 
-(!a t se s.
-    ^mng (mExpr (Addr (LVal a t)) se) s
-          (s, ^ev (ECompVal (THE (REP_INT (Ptr t) (&a))) (Ptr t)) se)) /\
+(!a t pth se s result.
+    (SOME result = ptr_encode (s,t) (a,pth)) ==>
+    ^mng (mExpr (Addr (LVal a t pth)) se) s
+          (s, ^ev (ECompVal result (Ptr t)) se)) /\
 
-(!f n t e se0 s0.
-     ^mng (mExpr (Assign (SOME f) (LVal n t) e) se0) s0
-          (s0, ^ev (Assign NONE (LVal n t) (CApBinary f (LVal n t) e)) se0)) /\
+(!f n t p e se0 s0.
+     ^mng (mExpr (Assign (SOME f) (LVal n t p) e) se0) s0
+          (s0, ^ev (Assign NONE
+                           (LVal n t p)
+                           (CApBinary f (LVal n t p) e)) se0)) /\
 
+(* TODO: make an assignment rule that can cope with assignments to
+   classes, perhaps by writing an auxiliary relation that does just this
+*)
 (!s v0 t0 v lhs_t se0 se a resv.
-     parameter_coerce (v0,t0) (v,lhs_t) /\
-     (se = add_se (a, v) se0) /\ (resv = ECompVal v lhs_t)
+    parameter_coerce (v0,t0) (v,lhs_t) /\
+    (se = add_se (a, v) se0) /\ (resv = ECompVal v lhs_t)
                           \/
-     (!v. ~parameter_coerce (v0, t0) (v, lhs_t)) /\
-     (resv = UndefinedExpr) /\ (se = se0) ==>
-     ^mng (mExpr (Assign NONE (LVal a lhs_t) (ECompVal v0 t0)) se0)
+    (!v. ~parameter_coerce (v0, t0) (v, lhs_t)) /\
+    (resv = UndefinedExpr) /\ (se = se0)
+   ==>
+     ^mng (mExpr (Assign NONE (LVal a lhs_t []) (ECompVal v0 t0)) se0)
           s (s, ^ev resv se)) /\
 
 (!se0 se s t t' sz v nv nv1 a resv.
@@ -469,7 +484,7 @@ in
               \/
    (!nv. ~parameter_coerce (nv1, t') (nv, t)) /\
    (se = se0) /\ (resv = UndefinedExpr) ==>
-   ^mng (mExpr (PostInc (LVal a t)) se0) s (s, ^ev resv se)) /\
+   ^mng (mExpr (PostInc (LVal a t [])) se0) s (s, ^ev resv se)) /\
 
 (!a t se0 sz s v.
    sizeof (sizeofmap s) t sz /\
@@ -477,29 +492,38 @@ in
    ((!nv1 t'.
        ~binop_meaning s CPlus v t (signed_int 1) (Signed Int) nv1 t') \/
    ~(range_set a sz SUBSET s.initmap)) ==>
-   ^mng (mExpr (PostInc (LVal a t)) se0) s (s, ^ev UndefinedExpr se0)) /\
+   ^mng (mExpr (PostInc (LVal a t [])) se0) s (s, ^ev UndefinedExpr se0)) /\
 
-(!s st fld ftype se offn i a.
+(* only non-static data-members will have offsets *)
+(!s st fld ftype se offn i a p.
      offset (sizeofmap s) (sizeofmap s ' st) i offn /\
      st IN FDOM (lfimap s) /\
-     lookup_field_info (lfimap s ' st) fld (i,ftype) ==>
-     ^mng (mExpr (SVar (LVal a (Class st)) fld) se) s
-          (s, ^ev (LVal (a + offn) ftype) se)) /\
+     lookup_field_info (lfimap s ' st) fld (i,ftype)
+   ==>
+     ^mng (mExpr (SVar (LVal a (Class st) p) fld) se) s
+          (s, ^ev (LVal (a + offn) ftype (default_path ftype)) se)) /\
 
-(!s st fld ftype fsz v fv se i offn.
-   offset (sizeofmap s) (sizeofmap s ' st) i offn /\
-   st IN FDOM (lfimap s) /\
-   lookup_field_info (lfimap s ' st) fld (i, ftype) /\
-   sizeof (sizeofmap s) ftype fsz /\
-   (fv = GENLIST (\n. EL (n + offn) v) fsz) ==>
-   ^mng (mExpr (SVar (ECompVal v (Class st)) fld) se) s
-        (s, ^ev (ECompVal fv ftype) se)) /\
+(* looking up a function member *)
+(* This is the equivalent of most of Wasserab's rule BS10.  Because we're
+   not yet doing multiple inheritance (TODO), we can be sure that p' is
+   enough information to determine where the call is made from
+*)
+(!a C p p' fld retty argtys se s.
+     s |- C has least fld -: Function retty argtys via p'
+       (* recall that C will be the last element of p (INVARIANT) *)
+   ==>
+     ^mng (mExpr (SVar (LVal a (Class C) p) fld) se) s
+          (s, ^ev (FVal (MFn C fld) (Function retty argtys)
+                        (SOME (LVal a (Class (LAST p')) (p ^^ p'))))
+                  se)) /\
 
-(!f params se s.
-    EVERY (\e. ?v t. e = ECompVal v t) (f :: params) /\
+(* TODO: update restriction on params to allow them to be l-values, and thus
+   passed into reference parameters *)
+(!fnid fty eopt params se s.
+    EVERY (\e. ?v t. e = ECompVal v t) params /\
     is_null_se se ==>
-    ^mng (mExpr (FnApp f params) se) s
-         (s, ^ev (FnApp_sqpt f params) base_se)) /\
+    ^mng (mExpr (FnApp (FVal fnid fty eopt) params) se) s
+         (s, ^ev (FnApp_sqpt (FVal fnid fty eopt) params) base_se)) /\
 
 (* the NONE as FVal's third argument means this is a global function *)
 (!ftype params se s0 s1 fnid rt vs body.
@@ -633,7 +657,6 @@ in
     ^mng (mStmt (Block T (VStrDec name info :: vds) sts) c) s
          (s with classmap updated_by (\sm. sm |+ (name,info)),
           mStmt (Block T vds sts) c)) `
-end;
 
 
 (* ----------------------------------------------------------------------

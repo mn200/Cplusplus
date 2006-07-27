@@ -28,6 +28,14 @@ val ancestor_def = Define`
                      ((THE(s.classmap ' c1)).ancestors = SOME c2)
 `;
 
+
+(* Appending paths.  (Wasserab et al., section 3.4) *)
+val path_app_def = Define`
+ path_app p1 p2 = if LAST p1 = HD p2 then p1 ++ TL p2 else p2
+`;
+val _ = set_fixity "^" (Infixl 500)
+val _ = overload_on("^", ``path_app``)
+
 val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
                    paren_style = OnlyIfNecessary,
                    pp_elements = [BreakSpace(1,0), TOK "|-", BreakSpace(1,2),

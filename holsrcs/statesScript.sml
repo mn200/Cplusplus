@@ -107,9 +107,10 @@ val install_global_maps_def = Define`
 
 
 (* pointer encoding and decoding *)
-(* if the list of strings is not empty, it is the name of the enclosing
-   class type, while the rest of the (which must be non-empty) is the path
-   to the sub-object.  E.g., if the class is just appearing "as itself", then
+(* if the list of strings is not empty, it is the path
+   to the sub-object, which will be of the type specified.
+
+   E.g., if the class is just appearing "as itself", then
    the list will be two elements long, consisting of the class name twice *)
 val _ = new_constant(
   "ptr_encode",
@@ -127,7 +128,7 @@ val ptr_inverse = new_axiom(
     (ptr_decode (s,ty) result = SOME info)``)
 
 val default_path_def = Define`
-  (default_path (Class cn) = [cn;cn]) /\
+  (default_path (Class cn) = [cn]) /\
   (default_path otherwise = [])
 `;
 
