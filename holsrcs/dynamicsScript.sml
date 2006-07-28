@@ -303,8 +303,16 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
          (s, ^ev (ECompVal (signed_int (&n)) (Signed Int)) se)) /\
 
 (!t se s.
-    ^mng (mExpr (Cnullptr t) se) s
-         (s, ^ev (ECompVal (THE (REP_INT (Ptr t) 0)) (Ptr t)) se)) /\
+     T
+   ==>
+     ^mng (mExpr (Cnullptr t) se) s
+          (s, ^ev (ECompVal (THE (ptr_encode (s,t) (0, default_path t)))
+                            (Ptr t)) se)) /\
+
+(!se s.
+     T
+   ==>
+     ^mng (mExpr This se) s (s, ^ev (THE s.thisvalue) se)) /\
 
 (!vname se s.
     object_type (s.typemap ' vname) /\ vname IN FDOM s.typemap ==>
@@ -452,6 +460,12 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mExpr (Deref (ECompVal mval (Ptr t))) se) s
           (s, ^ev (LVal addr t pth) se)) /\
+
+(!mval t se s.
+     object_type t /\ (ptr_decode(s,t) mval = NONE)
+   ==>
+     ^mng (mExpr (Deref (ECompVal mval (Ptr t))) se) s
+          (s, ^ev UndefinedExpr se)) /\
 
 (* 5.3.1 p1 - pointer to a function type *)
 (!v retty argtys se s.

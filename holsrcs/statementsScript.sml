@@ -117,6 +117,33 @@ val rec_stmtl_EVERY = store_thm(
   Induct THEN ASM_SIMP_TAC (srw_ss()) [rec_stmt_P_def]);
 val _ = export_rewrites ["rec_stmtl_EVERY"]
 
+val erec_stmt_def = Define`
+  (erec_stmt P (CLoop g bdy) = erec_exte P g /\ erec_stmt P bdy) /\
+  (erec_stmt P (CIf g t f) =
+      erec_exte P g /\ erec_stmt P t /\ erec_stmt P f) /\
+  (erec_stmt P (Standalone ee) = erec_exte P ee) /\
+  (erec_stmt P EmptyStmt = T) /\
+  (erec_stmt P (Block b vds sts) = erec_vdecs P vds /\ erec_stmtl P sts) /\
+  (erec_stmt P (Ret ee) = erec_exte P ee) /\
+  (erec_stmt P EmptyRet = T) /\
+  (erec_stmt P Break = T) /\
+  (erec_stmt P Cont = T) /\
+  (erec_stmt P (Trap tt s) = erec_stmt P s) /\
+
+  (erec_stmtl P [] = T) /\
+  (erec_stmtl P (s::ss) = erec_stmt P s /\ erec_stmtl P ss) /\
+
+  (erec_exte P (NormE e se) = P e) /\
+  (erec_exte P (EStmt s c) = erec_stmt P s) /\
+
+  (erec_vdecs P [] = T) /\
+  (erec_vdecs P (vd::vds) = erec_vdec P vd /\ erec_vdecs P vds) /\
+
+  (erec_vdec P (VDec ty nm) = T) /\
+  (erec_vdec P (VDecInit ty nm ee) = erec_exte P ee) /\
+  (erec_vdec P (VStrDec nm copt) = T)
+`
+
 (* categorising some forms of statement *)
 val is_retstmt_def = Define`
   is_retstmt s = (?e. s = Ret e) \/ (s = EmptyRet)
