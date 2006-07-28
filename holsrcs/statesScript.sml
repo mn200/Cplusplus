@@ -62,7 +62,7 @@ val _ = type_abbrev("CState", ``:state``)
 val initial_state_def = Define`
   initial_state = <| allocmap := {};
                      fnmap := FEMPTY;
-                     fnvals := FEMPTY;
+                     fnencode := FEMPTY;
                      fndecode := FEMPTY;
                      gclassmap := FEMPTY;
                      gtypemap := FEMPTY;
