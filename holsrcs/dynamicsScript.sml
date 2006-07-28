@@ -143,12 +143,40 @@ val valid_lvcontext_def = Define`
         (?t. f = Cast t)
 `
 
+val addr_nonloopy = prove(
+  ``!e. ~(Addr e = e)``,
+  Induct THEN SRW_TAC [][]);
+
 (* SANITY *)
+val valid_lvcontext_thm = store_thm(
+  "valid_lvcontext_thm",
+  ``valid_lvcontext f =
+      valid_econtext f /\
+      (!fopt e2. ~(f = \e1. Assign fopt e1 e2)) /\
+      (!fld. ~(f = \e. SVar e fld)) /\
+      ~(f = Addr) /\ ~(f = PostInc)``,
+  SRW_TAC [][valid_lvcontext_def, valid_econtext_def] THEN EQ_TAC THEN
+  SRW_TAC [][] THEN SRW_TAC [][FUN_EQ_THM] THEN
+  TRY (METIS_TAC []) THEN
+  Q.EXISTS_TAC `Addr e1` THEN SRW_TAC [][addr_nonloopy])
+
+(* SANITY (corollary) *)
 val lvcontexts_are_econtexts = store_thm(
   "lvcontexts_are_econtexts",
   --`!f. valid_lvcontext f ==> valid_econtext f`--,
-  SRW_TAC [][valid_lvcontext_def, valid_econtext_def, FUN_EQ_THM] THEN
-  SRW_TAC [][] THEN METIS_TAC [])
+  SRW_TAC [][valid_lvcontext_thm])
+
+(* an fv-context is a context where a function value can decay into a pointer
+   to function (object) value - everywhere except at the head of a function
+   application.  At least one of the possibilities implicit in this is
+   inconceivable (a function value can never be the first argument of a
+   field selection).
+*)
+val valid_fvcontext_def = Define`
+  valid_fvcontext f =
+      valid_econtext f /\
+      !args. ~(f = \f'. FnApp f' args)
+`
 
 (* malloc s0 ty a is true if a is a valid address for a value of type ty,
    and is currently unallocated *)
@@ -326,7 +354,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      which can happen in the body of member functions *)
 (!vname se s ty.
     vname IN FDOM s.typemap /\ (ty = s.typemap ' vname) /\
-    function_type ty /\ GlobalFn vname IN FDOM s.fnvals ==>
+    function_type ty /\ GlobalFn vname IN FDOM s.fnencode ==>
     ^mng (mExpr (Var vname) se) s
          (s, ^ev (FVal (GlobalFn vname) ty NONE) se)) /\
 
@@ -343,17 +371,25 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
     (INT_VAL t v = SOME i) /\ (REP_INT t' i = NONE) ==>
     ^mng (mExpr (Cast t' (ECompVal v t)) se) s (s, ^ev UndefinedExpr se)) /\
 
-
+(* RULE-ID: econtext-expr *)
 (!f e se0 s0 e' se s.
-    ^mng (mExpr e se0) s0 (s, ^ev e' se) /\
-    valid_econtext f ==>
-    ^mng (mExpr ((f:CExpr->CExpr) e) se0) s0 (s, ^ev (f e') se)) /\
+     ^mng (mExpr e se0) s0 (s, ^ev e' se) /\
+     valid_econtext f
+   ==>
+     ^mng (mExpr ((f:CExpr->CExpr) e) se0) s0 (s, ^ev (f e') se)) /\
 
 (!f e se0 s0 s stmt c.
     ^mng (mExpr e se0) s0 (s, mStmt stmt c) /\
     valid_econtext f ==>
     ^mng (mExpr (f e) se0) s0 (s, mStmt stmt (\v rt. f (c v rt)))) /\
 
+(* RULE-ID: fcontext *)
+(!f fnid ty se s bytes.
+     fnid IN FDOM s.fnencode /\ (s.fnencode ' fnid = bytes) /\
+     valid_fvcontext f
+   ==>
+     ^mng (mExpr (f (FVal fnid ty NONE)) se) s
+          (s, ^ev (f (ECompVal bytes (Ptr ty))) se)) /\
 
 (!f se s.
     valid_econtext f ==>
@@ -501,6 +537,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mExpr (Assign NONE (LVal a lhs_t []) (ECompVal v0 t0)) se0)
           s (s, ^ev resv se)) /\
 
+(* RULE-ID: postinc *)
 (!se0 se s t t' sz v nv nv1 a resv.
    sizeof (sizeofmap s) t sz /\ (v = mem2val s a sz) /\
    range_set a sz SUBSET s.initmap /\
@@ -512,6 +549,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    (se = se0) /\ (resv = UndefinedExpr) ==>
    ^mng (mExpr (PostInc (LVal a t [])) se0) s (s, ^ev resv se)) /\
 
+(* RULE-ID: postinc-fails-inc-or-initialised *)
 (!a t se0 sz s v.
    sizeof (sizeofmap s) t sz /\
    (v = mem2val s a sz) /\
@@ -520,6 +558,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ~(range_set a sz SUBSET s.initmap)) ==>
    ^mng (mExpr (PostInc (LVal a t [])) se0) s (s, ^ev UndefinedExpr se0)) /\
 
+(* RULE-ID: non-static-data-member-field-selection *)
 (* only non-static data-members will have offsets *)
 (!s st fld ftype se offn i a p.
      offset (sizeofmap s) (sizeofmap s ' st) i offn /\
@@ -529,6 +568,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mExpr (SVar (LVal a (Class st) p) fld) se) s
           (s, ^ev (LVal (a + offn) ftype (default_path ftype)) se)) /\
 
+(* RULE-ID: function-member-select *)
 (* looking up a function member *)
 (* This is the equivalent of most of Wasserab's rule BS10.  Because we're
    not yet doing multiple inheritance (TODO), we can be sure that p' is
@@ -715,7 +755,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
                  (\fm. fm |+ (GlobalFn name, <| body := body;
                                                 return_type := rettype;
                                                 parameters := params |>));
-               fnvals updated_by (\fm. fm |+ (GlobalFn name, fval));
+               fnencode updated_by (\fm. fm |+ (GlobalFn name, fval));
                fndecode updated_by (\fm. fm |+ (fval, GlobalFn name));
                typemap updated_by (\tm. tm |+ (name, ftype)) |>,
            edecls)) /\

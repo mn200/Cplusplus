@@ -42,7 +42,7 @@ val _ = Hol_datatype `fn_info = <| return_type : CPP_Type ;
 val _ = Hol_datatype
   `state = <| allocmap : num -> bool ;
               fnmap    : fnid |-> fn_info ;
-              fnvals   : fnid |-> byte list ;
+              fnencode : fnid |-> byte list ;
               fndecode : byte list |-> fnid ;
               gclassmap: string |-> class_info option ;
               gtypemap : string |-> CPP_Type ;
