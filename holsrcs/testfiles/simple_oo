@@ -1,0 +1,25 @@
+(*
+
+class B {
+public:
+  virtual int f() { return 2; }
+};
+
+class D : public D {
+public:
+  int f() { return 3; }
+};
+
+int f(class B *b)
+{
+  return b->f();
+}
+
+int main()
+{
+  class D d;
+  return f(&d);
+}
+
+*)
+

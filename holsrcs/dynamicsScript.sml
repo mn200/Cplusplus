@@ -592,6 +592,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mExpr (FnApp (FVal fnid fty eopt) params) se) s
           (s, ^ev (FnApp_sqpt (FVal fnid fty eopt) params) base_se)) /\
 
+(* RULE-ID: function-ptr-to-function-lval *)
 (* 5.2.2 p1 - this rule handles the situation where the postfix-expression
    is a pointer to a function value *)
 (!v retty argtys args se s.
@@ -603,22 +604,42 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                                NONE)
                          args) se)) /\
 
-
+(* RULE-ID: global-function-call *)
 (* the NONE as FVal's third argument means this is a global function *)
 (!ftype params se s0 s1 fnid rt vs body.
-    (ftype = Function rt vs) /\
-    pass_parameters s0 fnid params s1 /\
-    ((s0.fnmap ' fnid).body = body)
+     (ftype = Function rt vs) /\
+     pass_parameters s0 fnid params s1 /\
+     ((s0.fnmap ' fnid).body = body)
    ==>
-    ^mng (mExpr (FnApp_sqpt (FVal fnid ftype NONE) params) se) s0
-         (s1 with stack updated_by (CONS (s0.classmap, s0.typemap, s0.varmap)),
-          EStmt body (\rv rt'. Cast rt (ECompVal rv rt')))) /\
+     ^mng (mExpr (FnApp_sqpt (FVal fnid ftype NONE) params) se) s0
+          (s1 with
+            stack updated_by (CONS (s0.classmap, s0.typemap, s0.varmap)),
+           EStmt body (\rv rt'. Cast rt (ECompVal rv rt')))) /\
 
+(* RULE-ID: global-function-call-fails *)
 (!ftype params se s0 fnid.
     (!s. ~pass_parameters s0 fnid params s)
    ==>
     ^mng (mExpr (FnApp_sqpt (FVal fnid ftype NONE) params) se) s0
          (s0, ^ev UndefinedExpr se)) /\
+
+(* RULE-ID: member-function-call *)
+(*   by the time this call is made, we have already figured out which
+     function we will be jumping into
+*)
+(!fnid ftype a cname args rt se0 s0 s1 p body this.
+     pass_parameters s0 fnid args s1 /\
+     ((s0.fnmap ' fnid).body = body) /\
+     (SOME this = ptr_encode (s0, Class cname) (a,p))
+   ==>
+     ^mng (mExpr (FnApp_sqpt (FVal fnid ftype (SOME (LVal a (Class cname) p)))
+                             args) se0)
+          s0
+          (s1 with <| stack updated_by
+                         (CONS (s0.classmap,s0.typemap,s0.varmap));
+                      thisvalue := SOME (ECompVal this (Ptr (Class cname)))
+                   |>,
+           EStmt body (\rv rt'. Cast rt (ECompVal rv rt')))) /\
 
 (!exte0 exte s1 s2 c.
    ^mng exte0 s1 (s2, exte) ==>
@@ -737,48 +758,83 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
          (s with classmap updated_by (\sm. sm |+ (name,info)),
           mStmt (Block T vds sts) c)) `
 
+(* installing a function *)
+val installfn_def = Define`
+  installfn s0 retty fnid params body fval s =
+     ~(fval IN FDOM s0.fndecode) /\ ~(fnid IN FDOM s.fnmap) /\
+     (s = s0 with <| fnmap updated_by
+                       (\fm. fm |+ (fnid, <| body := body;
+                                             return_type := retty;
+                                             parameters := params |>));
+                     fnencode updated_by (\fm. fm |+ (fnid, fval));
+                     fndecode updated_by (\fm. fm |+ (fval, fnid)) |>)
+`
+
+
+
+
+(* installing a bunch of member functions *)
+
+(* imemfn is where the real work gets done *)
+val imemfn_def = Define`
+  (imemfn cnm s0 [] s = (s0 = s)) /\
+  (imemfn cnm s0 ((FldDecl nm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
+  (imemfn cnm s0 ((CFnDefn retty nm params body, b, p) :: rest) s =
+     ?fval s'. installfn s0 retty (MFn cnm nm) params body fval s' /\
+               sizeof (sizeofmap s0)
+                      (MPtr cnm (Function retty (MAP SND params)))
+                      (LENGTH fval) /\
+               imemfn cnm s' rest s)
+`
+
+val install_member_functions_def = Define`
+  install_member_functions cname s0 flds_opt s =
+    case flds_opt of
+       NONE -> (s = s0)
+    || SOME entries -> imemfn cname s0 entries s
+`
 
 (* ----------------------------------------------------------------------
     how to evaluate a sequence of external declarations
    ---------------------------------------------------------------------- *)
 
 val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
-  (!s fval name rettype params body ftype edecls.
-       ~(fval IN FDOM s.fndecode) /\ ~(GlobalFn name IN FDOM s.fnmap) /\
-       ~(name IN FDOM s.typemap) /\
-       (LENGTH fval = ptr_size ftype) /\
-       (ftype = Function rettype (MAP SND params))
-    ==>
-       emeaning (FnDefn rettype name params body :: edecls) s
-          (s with
-            <| fnmap updated_by
-                 (\fm. fm |+ (GlobalFn name, <| body := body;
-                                                return_type := rettype;
-                                                parameters := params |>));
-               fnencode updated_by (\fm. fm |+ (GlobalFn name, fval));
-               fndecode updated_by (\fm. fm |+ (fval, GlobalFn name));
-               typemap updated_by (\tm. tm |+ (name, ftype)) |>,
-           edecls)) /\
 
-  (!s0 ty name s edecls.
-     vdeclare s0 ty name s ==>
+(!s0 s fval name rettype params body ftype edecls.
+     installfn s0 rettype (GlobalFn name) params body fval s /\
+     ~(name IN FDOM s.typemap) /\
+     (LENGTH fval = ptr_size ftype) /\
+     (ftype = Function rettype (MAP SND params))
+   ==>
+     emeaning
+       (FnDefn rettype name params body :: edecls) s
+       (s with <| typemap updated_by (\tm. tm |+ (name, ftype)) |>,
+        edecls)) /\
+
+(!s0 ty name s edecls.
+     vdeclare s0 ty name s
+   ==>
      emeaning (Decl (VDec ty name) :: edecls) s0 (copy2globals s, edecls)) /\
 
-  (!s0 ty name exte exte' edecls s.
-     meaning exte s0 (s, exte') ==>
+(!s0 ty name exte exte' edecls s.
+     meaning exte s0 (s, exte')
+   ==>
      emeaning (Decl (VDecInit ty name exte) :: edecls) s0
               (s, Decl (VDecInit ty name exte') :: edecls)) /\
 
-  (!s0 s name v ty dty v' edecls se.
+(!s0 s name v ty dty v' edecls se.
      vdeclare s0 dty name s /\ parameter_coerce (v,ty) (v',dty) /\
-     is_null_se se ==>
+     is_null_se se
+   ==>
      emeaning (Decl (VDecInit dty name (NormE (ECompVal v ty) se)) :: edecls)
               s0
               (val2mem (copy2globals s) (s.varmap ' name) v',
                edecls)) /\
 
-  (!s name info edecls.
-     emeaning (Decl (VStrDec name info) :: edecls) s
+(!s0 s name info edecls.
+     install_member_functions name s0 (OPTION_MAP class_info_fields info) s
+   ==>
+     emeaning (Decl (VStrDec name info) :: edecls) s0
               (copy2globals
                   (s with <| classmap updated_by
                                       (\sm. sm |+ (name,info)) |>),
