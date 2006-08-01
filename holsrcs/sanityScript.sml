@@ -36,28 +36,23 @@ val apply_se_preserves_fnmaps = prove(
     Cases_on `ise` THEN
     FULL_SIMP_TAC (srw_ss()) [se_on_state_def])
 
-val rec_i_vars_preserves_fnmaps = prove(
-  ``!s0 vars s. rec_i_vars s0 vars s ==> (s0.fnmap = s.fnmap)``,
-  Induct_on `vars` THEN
-  ASM_SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD, rec_i_vars_def] THEN
-  REPEAT STRIP_TAC THEN RES_TAC THEN FULL_SIMP_TAC (srw_ss()) [])
-
-val rec_i_vals_preserves_fnmaps = prove(
-  ``!s0 prms vals s. rec_i_vals s0 prms vals s ==> (s0.fnmap = s.fnmap)``,
+val rec_i_params_preserves_fnmaps = prove(
+  ``!s0 vars s. rec_i_params s0 prms vars s ==> (s0.fnmap = s.fnmap)``,
   Induct_on `prms` THEN
-  ASM_SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD, rec_i_vals_def] THEN
+  ASM_SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD, rec_i_params_def] THEN
   REPEAT STRIP_TAC THEN RES_TAC THEN FULL_SIMP_TAC (srw_ss()) [])
 
 val pass_parameters_preserves_fnmaps = prove(
   ``pass_parameters s0 fnid params s ==> (s0.fnmap = s.fnmap)``,
-  SRW_TAC [][pass_parameters_def, install_vars_def, install_values_def] THEN
-  MAP_EVERY IMP_RES_TAC [rec_i_vals_preserves_fnmaps,
-                         rec_i_vars_preserves_fnmaps] THEN
+  SRW_TAC [][pass_parameters_def] THEN
+  IMP_RES_TAC rec_i_params_preserves_fnmaps THEN
   FULL_SIMP_TAC (srw_ss()) [])
 
 val vdeclare_preserves_fnmaps = prove(
-  ``vdeclare s0 ty name s ==> (s0.fnmap = s.fnmap)``,
-  SRW_TAC [][vdeclare_def] THEN SRW_TAC [][]);
+  ``vdeclare s0 ty name optval s ==> (s0.fnmap = s.fnmap)``,
+  SRW_TAC [][vdeclare_def] THEN SRW_TAC [][] THEN
+  Cases_on `optval` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  Cases_on `x` THEN FULL_SIMP_TAC (srw_ss()) []);
 
 
 (* final result *)

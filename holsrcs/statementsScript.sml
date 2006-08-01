@@ -35,6 +35,14 @@ val base_se_def = Define`
 val _ = Hol_datatype `traptype = BreakTrap | ContTrap`;
 
 
+(* sorts of continuations, depending on whether a function is to return a
+   reference or not. *)
+val _ = Hol_datatype `
+  conttype = RVC of (byte list -> CPP_Type -> CExpr)
+           | LVC of (num -> CPP_Type -> string list -> CExpr)
+`;
+
+
 val _ = Hol_datatype`
   CStmt    = CLoop of ExtE => CStmt
            | CIf of ExtE => CStmt => CStmt
@@ -50,13 +58,13 @@ val _ = Hol_datatype`
            | Trap of traptype => CStmt ;
 
   ExtE     = NormE of CExpr => se_info
-           | EStmt of CStmt => (byte list -> CPP_Type -> CExpr) ;
+           | EStmt of CStmt => conttype ;
 
   var_decl = VDec of CType => string
            | VDecInit of CType => string => ExtE
            | VStrDec of string => class_info option ;
 
-  class_entry
+  class_entry (* TODO: classes can contain nested classes *)
            = CFnDefn of CPP_Type => string => (string # CPP_Type) list =>
                         CStmt
            | FldDecl of string => CPP_Type ;

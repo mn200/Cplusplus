@@ -189,35 +189,6 @@ val malloc_def = Define`
               a + sz <= 2 EXP (CHAR_BIT * ptr_size ty)
 `
 
-(* rec_i_vars installs a list variables, updating varmap, typemap and allocmap
-*)
-val rec_i_vars_def = Define`
-  (rec_i_vars st1 [] st2 = (st1 = st2)) /\
-  (rec_i_vars st1 ((nm, ty) :: tail) st2 =
-      ?a n.
-         sizeof (sizeofmap st1) ty n /\
-         malloc st1 ty a /\
-         rec_i_vars
-            (st1 with
-                <| varmap updated_by (\v. v |+ (nm, a)) ;
-                   typemap updated_by (\t. t |+ (nm, ty));
-                   allocmap updated_by ((UNION) (range_set a n))
-                |>)
-            tail
-            st2)
-`
-
-(* install_vars installs the parameter information for a particular function *)
-val install_vars_def = Define`
-  install_vars st1 fn st2 =
-        fn IN FDOM st1.fnmap /\
-        rec_i_vars (st1 with <| varmap := st1.gvarmap ;
-                                typemap := st1.gtypemap ;
-                                classmap := st1.gclassmap |>)
-                   ((st1.fnmap ' fn).parameters)
-                   st2
-`
-
 val parameter_coerce_def = Define`
   parameter_coerce (v1,ty1) (v2,ty2) =
     (integral_type ty1 /\ integral_type ty2 \/
@@ -230,27 +201,36 @@ val parameter_coerce_def = Define`
 
 
 (* installs values into memory *)
-val rec_i_vals_def = Define`
-    (rec_i_vals st1 [] vallist st2 = (vallist = []) /\ (st1 = st2)) /\
-    (rec_i_vals s0 ((pname, ptype) :: ptl) vallist s =
-       ?vval vtype vtl.
+val rec_i_params_def = Define`
+    (rec_i_params s0 [] vallist s = (vallist = []) /\ (s0 = s)) /\
+    (rec_i_params s0 ((pname, ptype) :: ptl) vallist s =
+       (?a n vval vtype newval vtl rs.
+          ~ref_type ptype /\
           (vallist = ECompVal vval vtype :: vtl) /\
-          ?s1 newval rs.
-             parameter_coerce (vval, vtype) (newval, ptype) /\
-             (rs = range_set (s0.varmap ' pname) (LENGTH newval)) /\
-             (s1 = val2mem s0 (s0.varmap ' pname) newval
-                   with <| initmap updated_by ((UNION) rs) ;
-                           allocmap updated_by ((UNION) rs) |>) /\
-             rec_i_vals s1 ptl vtl s)
-`
-
-val install_values_def = Define`
-  install_values s0 fn pvl s1 = rec_i_vals s0 (s0.fnmap ' fn).parameters pvl s1
-`
+          parameter_coerce (vval, vtype) (newval, ptype) /\
+          sizeof (sizeofmap s0) ptype n /\ malloc s0 ptype a /\
+          (rs = range_set a n) /\
+          rec_i_params
+            (val2mem (s0 with
+                        <| varmap updated_by
+                              (\v. v |+ (pname, (a, default_path ptype))) ;
+                           typemap updated_by (\t. t |+ (pname, ptype));
+                           allocmap updated_by ((UNION) rs);
+                           initmap updated_by ((UNION) rs) |>)
+                     a
+                     newval)
+            ptl vtl s) \/
+       (?a ty p vtl.
+          (vallist = LVal a ty p :: vtl) /\ (ptype = Ref ty) /\
+          rec_i_params
+            (s0 with <| varmap updated_by (\v. v |+ (pname, (a, p)));
+                        typemap updated_by (\t. t |+ (pname, ty)) |>)
+            ptl vtl s))
+`;
 
 val pass_parameters_def = Define`
   pass_parameters s0 fnid pv s =
-      ?s1. install_vars s0 fnid s1 /\ install_values s1 fnid pv s
+      rec_i_params s0 ((s0.fnmap ' fnid).parameters) pv s
 `;
 
 val _ = overload_on ("mExpr", ``statements$NormE``)
@@ -298,13 +278,28 @@ val final_value_def = Define`
 `;
 
 val vdeclare_def = Define`
-  vdeclare s0 ty nm s =
-     (?a sz. object_type ty /\ malloc s0 ty a /\ sizeof (sizeofmap s) ty sz /\
-             (s = s0 with <| allocmap updated_by (UNION) (range_set a sz);
-                             varmap updated_by (\vm. vm |+ (nm,a));
-                             typemap updated_by (\tm. tm |+ (nm,ty)) |>)) \/
+  vdeclare s0 ty nm optval s =
+     (?a sz s' rs.
+         (rs = range_set a sz) /\
+         object_type ty /\ malloc s0 ty a /\ sizeof (sizeofmap s) ty sz /\
+         (s' = s0 with <| allocmap updated_by (UNION) rs;
+                           varmap updated_by
+                              (\vm. vm |+ (nm,(a,default_path ty)));
+                           typemap updated_by (\tm. tm |+ (nm,ty)) |>) /\
+         (case optval of
+             NONE -> (s = s')
+          || SOME (ECompVal v ty') ->
+                (s = val2mem (s' with initmap updated_by (UNION) rs) a v)
+          || SOME other -> F))
+        \/
      (function_type ty /\
       (s = s0 with typemap updated_by (\tm. tm |+ (nm, ty))))
+        \/
+     (?a t ty0 p.
+        (ty = Ref ty0) /\ (optval = SOME (LVal a t p)) /\
+        (s = s0 with <| varmap updated_by (\vm. vm |+ (nm, (a, p)));
+                        typemap updated_by (\tm. tm |+ (nm, ty)) |>))
+
 `;
 
 val copy2globals_def = Define`
@@ -313,75 +308,137 @@ val copy2globals_def = Define`
                               gvarmap := s.varmap |>)
 `;
 
+(* true if the nth argument of f is not a reference type *)
+val fn_expects_rval_def = Define`
+  fn_expects_rval s f n =
+    ?retty args.
+      (expr_type (expr_type_comps s) RValue f (Function retty args) \/
+       expr_type (expr_type_comps s) RValue f (Ptr (Function retty args))) /\
+      ~ref_type (EL n args)
+`;
+
+val return_cont_def = Define`
+  return_cont ty = if ref_type ty then LVC LVal
+                   else RVC ECompVal
+`
+
+val cont_comp_def = Define`
+  (cont_comp f (RVC rc) = RVC (\v rt. f (rc v rt))) /\
+  (cont_comp f (LVC lc) = LVC (\a t p. f (lc a t p)))
+`
+
+val RVR_def = Define`
+  (RVR (mExpr e se) = mExpr (RValreq e) se) /\
+  (RVR (mStmt s c) = mStmt s c)
+`
 
 val _ = print "About to define meaning relation\n"
 val mng  =
     mk_var("meaning", ``:ExtE -> CState -> (CState # ExtE) -> bool``)
-val ev = ``mExpr``
+val _ = temp_overload_on("ev", ``mExpr``)
 val _ = set_trace "inddef strict" 1
 
 val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
+(* RULE-ID: number-literal *)
 (!n se s.
-   ^mng (mExpr (Cnum n) se) s
-        (s, ^ev (ECompVal (signed_int (&n)) (Signed Int)) se)) /\
+     T
+   ==>
+     ^mng (mExpr (Cnum n) se) s
+          (s, ev (ECompVal (signed_int (&n)) (Signed Int)) se))
 
+   /\
+
+(* RULE-ID: char-literal *)
 (!n se s.
-    ^mng (mExpr (Cchar n) se) s
-         (s, ^ev (ECompVal (signed_int (&n)) (Signed Int)) se)) /\
+     T
+   ==>
+     ^mng (mExpr (Cchar n) se) s
+          (s, ev (ECompVal (signed_int (&n)) BChar) se))
 
+   /\
+
+(* RULE-ID: null-pointer *)
 (!t se s.
      T
    ==>
      ^mng (mExpr (Cnullptr t) se) s
-          (s, ^ev (ECompVal (THE (ptr_encode (s,t) (0, default_path t)))
-                            (Ptr t)) se)) /\
+          (s, ev (ECompVal (THE (ptr_encode (s,t) (0, default_path t)))
+                            (Ptr t)) se))
 
+   /\
+
+(* RULE-ID: this *)
 (!se s.
      T
    ==>
-     ^mng (mExpr This se) s (s, ^ev (THE s.thisvalue) se)) /\
+     ^mng (mExpr This se) s (s, ev (THE s.thisvalue) se))
 
-(!vname se s.
-    object_type (s.typemap ' vname) /\ vname IN FDOM s.typemap ==>
-    ^mng (mExpr (Var vname) se) s
-         (s, ^ev (LVal (s.varmap ' vname)
-                       (s.typemap ' vname)
-                       (default_path (s.typemap ' vname))) se)) /\
+   /\
+
+(* RULE-ID: var-to-lvalue *)
+(!vname se s a p.
+     object_type (s.typemap ' vname) /\ vname IN FDOM s.typemap /\
+     (s.varmap ' vname = (a,p))
+   ==>
+     ^mng (mExpr (Var vname) se) s
+          (s, ev (LVal a (s.typemap ' vname) p) se))
+
+   /\
 
 (* BAD_ASSUMPTION: need to add treatment of member functions that are
      called without explicitly using structure dereference operation,
      which can happen in the body of member functions *)
 (!vname se s ty.
-    vname IN FDOM s.typemap /\ (ty = s.typemap ' vname) /\
-    function_type ty /\ GlobalFn vname IN FDOM s.fnencode ==>
-    ^mng (mExpr (Var vname) se) s
-         (s, ^ev (FVal (GlobalFn vname) ty NONE) se)) /\
+     vname IN FDOM s.typemap /\ (ty = s.typemap ' vname) /\
+     function_type ty /\ GlobalFn vname IN FDOM s.fnencode
+   ==>
+     ^mng (mExpr (Var vname) se) s
+          (s, ev (FVal (GlobalFn vname) ty NONE) se))
 
+   /\
+
+(* RULE-ID: cast *)
 (!s v t v' t' se i.
-    (INT_VAL t v = SOME i) /\ (SOME v' = REP_INT t' i) ==>
-    ^mng (mExpr (Cast t' (ECompVal v t)) se) s
-         (s, ^ev (ECompVal v' t') se)) /\
+     (INT_VAL t v = SOME i) /\ (SOME v' = REP_INT t' i)
+   ==>
+     ^mng (mExpr (Cast t' (ECompVal v t)) se) s
+          (s, ev (ECompVal v' t') se))
 
+   /\
+
+(* RULE-ID: cast-fails-1 *)
 (!v t t' se s.
-    (INT_VAL t v = NONE) ==>
-    ^mng (mExpr (Cast t' (ECompVal v t)) se) s (s, ^ev UndefinedExpr se)) /\
+     (INT_VAL t v = NONE)
+   ==>
+     ^mng (mExpr (Cast t' (ECompVal v t)) se) s (s, ev UndefinedExpr se))
 
+   /\
+
+(* RULE-ID: cast-fails-2 *)
 (!v t t' se s i.
-    (INT_VAL t v = SOME i) /\ (REP_INT t' i = NONE) ==>
-    ^mng (mExpr (Cast t' (ECompVal v t)) se) s (s, ^ev UndefinedExpr se)) /\
+     (INT_VAL t v = SOME i) /\ (REP_INT t' i = NONE)
+   ==>
+     ^mng (mExpr (Cast t' (ECompVal v t)) se) s (s, ev UndefinedExpr se))
+
+   /\
 
 (* RULE-ID: econtext-expr *)
 (!f e se0 s0 e' se s.
-     ^mng (mExpr e se0) s0 (s, ^ev e' se) /\
+     ^mng (mExpr e se0) s0 (s, ev e' se) /\
      valid_econtext f
    ==>
-     ^mng (mExpr ((f:CExpr->CExpr) e) se0) s0 (s, ^ev (f e') se)) /\
+     ^mng (mExpr ((f:CExpr->CExpr) e) se0) s0 (s, ev (f e') se))
+
+   /\
 
 (!f e se0 s0 s stmt c.
-    ^mng (mExpr e se0) s0 (s, mStmt stmt c) /\
-    valid_econtext f ==>
-    ^mng (mExpr (f e) se0) s0 (s, mStmt stmt (\v rt. f (c v rt)))) /\
+     ^mng (mExpr e se0) s0 (s, mStmt stmt c) /\
+     valid_econtext f
+   ==>
+     ^mng (mExpr (f e) se0) s0 (s, mStmt stmt (cont_comp f c)))
+
+   /\
 
 (* RULE-ID: fcontext *)
 (!f fnid ty se s bytes.
@@ -389,78 +446,85 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      valid_fvcontext f
    ==>
      ^mng (mExpr (f (FVal fnid ty NONE)) se) s
-          (s, ^ev (f (ECompVal bytes (Ptr ty))) se)) /\
+          (s, ev (f (ECompVal bytes (Ptr ty))) se))
 
+   /\
+
+(* RULE-ID: econtext-propagates-failure *)
 (!f se s.
-    valid_econtext f ==>
-    ^mng (mExpr (f UndefinedExpr) se) s (s, ^ev UndefinedExpr se)) /\
+     valid_econtext f
+   ==>
+     ^mng (mExpr (f UndefinedExpr) se) s (s, ev UndefinedExpr se))
 
+   /\
+
+(* RULE-ID: lvcontext *)
 (!f e0 se0 s0 s e se.
-   valid_lvcontext f /\ lval2rval (s0,e0,se0) (s,e,se) ==>
-   ^mng (mExpr ((f:CExpr->CExpr) e0) se0) s0 (s, ^ev (f e) se)) /\
+     valid_lvcontext f /\ lval2rval (s0,e0,se0) (s,e,se)
+   ==>
+     ^mng (mExpr ((f:CExpr->CExpr) e0) se0) s0 (s, ev (f e) se))
+
+   /\
 
 (!e se0 s0 s se.
     apply_se (se0, s0) (se, s) ==>
-    ^mng (mExpr e se0) s0 (s, ^ev e se)) /\
+    ^mng (mExpr e se0) s0 (s, ev e se)) /\
 
 (!e se0 s0.
     (!se s. ~(apply_se (se0, s0) (se, s))) /\
     ~is_null_se se0 /\ ~(e = UndefinedExpr) ==>
-    ^mng (mExpr e se0) s0 (s0, ^ev UndefinedExpr se0)) /\
+    ^mng (mExpr e se0) s0 (s0, ev UndefinedExpr se0)) /\
 
 (!e1 e2 se s0.
     final_value (mExpr e1 se) ==>
     ^mng (mExpr (CommaSep e1 e2) se) s0
-         (s0, ^ev (RValreq e2) base_se)) /\
-
-(!v t se s. ^mng (mExpr (RValreq (ECompVal v t)) se) s
-                 (s, ^ev (ECompVal v t) se)) /\
+         (s0, ev (RValreq e2) base_se)) /\
 
 (!f v1 type1 v2 type2 se0 s.
    (!res restype. ~binop_meaning s f v1 type1 v2 type2 res restype) ==>
    ^mng (mExpr (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se0) s
-        (s, ^ev UndefinedExpr se0)) /\
+        (s, ev UndefinedExpr se0)) /\
 
 (!s f v1 type1 v2 type2 res restype se.
     binop_meaning s f v1 type1 v2 type2 res restype ==>
     ^mng (mExpr (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se) s
-         (s, ^ev (ECompVal res restype) se)) /\
+         (s, ev (ECompVal res restype) se)) /\
 
 (!s f ival t result rt se.
    unop_meaning f ival t result rt ==>
    ^mng (mExpr (CApUnary f (ECompVal ival t)) se) s
-        (s, ^ev (ECompVal result rt) se)) /\
+        (s, ev (ECompVal result rt) se)) /\
 
 (!s0 se0 f ival t.
      (!res rt. ~(unop_meaning f ival t res rt)) ==>
      ^mng (mExpr (CApUnary f (ECompVal ival t)) se0) s0
-          (s0, ^ev UndefinedExpr se0)) /\
+          (s0, ev UndefinedExpr se0)) /\
 
 (!v t se s sub2.
     is_zero t v ==>
     ^mng (mExpr (CAnd (ECompVal v t) sub2) se) s
-         (s, ^ev (ECompVal (signed_int 0) (Signed Int)) se)) /\
+         (s, ev (ECompVal (signed_int 0) (Signed Int)) se)) /\
 
 (!v t se s sub2.
     ~is_zero t v /\ is_null_se se ==>
     ^mng (mExpr (CAnd (ECompVal v t) sub2) se) s
-         (s, ^ev (CAndOr_sqpt sub2) base_se)) /\
+         (s, ev (CAndOr_sqpt sub2) base_se)) /\
 (!v t se s.
    scalar_type t ==>
    ^mng (mExpr (CAndOr_sqpt (ECompVal v t)) se) s
-        (s, ^ev (ECompVal (if INT_VAL t v = SOME 0 then signed_int 0
+        (s, ev (ECompVal (if INT_VAL t v = SOME 0 then signed_int 0
                            else signed_int 1) (Signed Int))
                 se)) /\
 
 (!v t sub2 se s.
    ~is_zero t v  ==>
    ^mng (mExpr (COr (ECompVal v t) sub2) se) s
-        (s, ^ev (ECompVal (signed_int 1) (Signed Int)) se)) /\
+        (s, ev (ECompVal (signed_int 1) (Signed Int)) se)) /\
 
 (!v t sub2 se s.
     is_zero t v /\ is_null_se se ==>
     ^mng (mExpr (COr (ECompVal v t) sub2) se) s
-         (s, ^ev (CAndOr_sqpt sub2) base_se)) /\
+         (s, ev (CAndOr_sqpt sub2) base_se)) /\
 
 (!v t e2 t2 e3 t3 resexpr result_type se s sn.
   is_null_se se /\ scalar_type t /\
@@ -470,9 +534,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
             (CCond (ECompVal v t) e2 e3)
             result_type /\
   is_zero t v  /\
-  ((t2 = Class sn) /\ (resexpr = RValreq e3) \/
+  ((t2 = Class sn) /\ (resexpr = e3) \/
    (!sn. ~(t2 = Class sn)) /\ (resexpr = Cast result_type e3)) ==>
-  ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s (s, ^ev resexpr base_se))
+  ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s (s, ev resexpr base_se))
 
            /\
 
@@ -484,31 +548,31 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                (CCond (ECompVal v t) e2 e3)
                result_type /\
      ~is_zero t v /\
-     ((t2 = Class sn) /\ (resexpr = RValreq e2) \/
+     ((t2 = Class sn) /\ (resexpr = e2) \/
        (!sn. ~(t2 = Class sn)) /\ (resexpr = Cast result_type e2))
    ==>
      ^mng (mExpr (CCond (ECompVal v t) e2 e3) se) s
-          (s, ^ev resexpr base_se)) /\
+          (s, ev resexpr base_se)) /\
 
 (* 5.3.1 p1 - pointer to an object type *)
 (!mval t se s addr pth.
      object_type t /\ (SOME (addr,pth) = ptr_decode(s,t) mval)
    ==>
      ^mng (mExpr (Deref (ECompVal mval (Ptr t))) se) s
-          (s, ^ev (LVal addr t pth) se)) /\
+          (s, ev (LVal addr t pth) se)) /\
 
 (!mval t se s.
      object_type t /\ (ptr_decode(s,t) mval = NONE)
    ==>
      ^mng (mExpr (Deref (ECompVal mval (Ptr t))) se) s
-          (s, ^ev UndefinedExpr se)) /\
+          (s, ev UndefinedExpr se)) /\
 
 (* 5.3.1 p1 - pointer to a function type *)
 (!v retty argtys se s.
      v IN FDOM s.fndecode
    ==>
      ^mng (mExpr (Deref (ECompVal v (Ptr (Function retty argtys)))) se) s
-          (s, ^ev (FVal (s.fndecode ' v) (Function retty argtys) NONE) se)) /\
+          (s, ev (FVal (s.fndecode ' v) (Function retty argtys) NONE) se)) /\
 
 (* 5.3.1 p2-5 - taking the address of an lvalue
                 TODO: taking the address of a qualified-id, thereby generating
@@ -516,11 +580,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!a t pth se s result.
     (SOME result = ptr_encode (s,t) (a,pth)) ==>
     ^mng (mExpr (Addr (LVal a t pth)) se) s
-          (s, ^ev (ECompVal result (Ptr t)) se)) /\
+          (s, ev (ECompVal result (Ptr t)) se)) /\
 
 (!f n t p e se0 s0.
      ^mng (mExpr (Assign (SOME f) (LVal n t p) e) se0) s0
-          (s0, ^ev (Assign NONE
+          (s0, ev (Assign NONE
                            (LVal n t p)
                            (CApBinary f (LVal n t p) e)) se0)) /\
 
@@ -535,28 +599,34 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
     (resv = UndefinedExpr) /\ (se = se0)
    ==>
      ^mng (mExpr (Assign NONE (LVal a lhs_t []) (ECompVal v0 t0)) se0)
-          s (s, ^ev resv se)) /\
+          s (s, ev resv se)) /\
 
 (* RULE-ID: postinc *)
 (!se0 se s t t' sz v nv nv1 a resv.
-   sizeof (sizeofmap s) t sz /\ (v = mem2val s a sz) /\
-   range_set a sz SUBSET s.initmap /\
-   binop_meaning s CPlus v t (signed_int 1) (Signed Int) nv1 t' /\
-   parameter_coerce (nv1,t') (nv,t) /\
-   (se = add_se (a, nv) se0) /\ (resv = ECompVal v t)
-              \/
-   (!nv. ~parameter_coerce (nv1, t') (nv, t)) /\
-   (se = se0) /\ (resv = UndefinedExpr) ==>
-   ^mng (mExpr (PostInc (LVal a t [])) se0) s (s, ^ev resv se)) /\
+     sizeof (sizeofmap s) t sz /\ (v = mem2val s a sz) /\
+     range_set a sz SUBSET s.initmap /\
+     binop_meaning s CPlus v t (signed_int 1) (Signed Int) nv1 t' /\
+     parameter_coerce (nv1,t') (nv,t) /\
+     (se = add_se (a, nv) se0) /\ (resv = ECompVal v t)
+                \/
+     (!nv. ~parameter_coerce (nv1, t') (nv, t)) /\
+     (se = se0) /\ (resv = UndefinedExpr)
+   ==>
+     ^mng (mExpr (PostInc (LVal a t [])) se0) s (s, ev resv se))
+
+   /\
 
 (* RULE-ID: postinc-fails-inc-or-initialised *)
 (!a t se0 sz s v.
-   sizeof (sizeofmap s) t sz /\
-   (v = mem2val s a sz) /\
-   ((!nv1 t'.
-       ~binop_meaning s CPlus v t (signed_int 1) (Signed Int) nv1 t') \/
-   ~(range_set a sz SUBSET s.initmap)) ==>
-   ^mng (mExpr (PostInc (LVal a t [])) se0) s (s, ^ev UndefinedExpr se0)) /\
+     sizeof (sizeofmap s) t sz /\
+     (v = mem2val s a sz) /\
+     ((!nv1 t'.
+         ~binop_meaning s CPlus v t (signed_int 1) (Signed Int) nv1 t') \/
+     ~(range_set a sz SUBSET s.initmap))
+   ==>
+     ^mng (mExpr (PostInc (LVal a t [])) se0) s (s, ev UndefinedExpr se0))
+
+   /\
 
 (* RULE-ID: non-static-data-member-field-selection *)
 (* only non-static data-members will have offsets *)
@@ -566,7 +636,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      lookup_field_info (lfimap s ' st) fld (i,ftype)
    ==>
      ^mng (mExpr (SVar (LVal a (Class st) p) fld) se) s
-          (s, ^ev (LVal (a + offn) ftype (default_path ftype)) se)) /\
+          (s, ev (LVal (a + offn) ftype (default_path ftype)) se))
+
+   /\
 
 (* RULE-ID: function-member-select *)
 (* looking up a function member *)
@@ -579,9 +651,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
        (* recall that C will be the last element of p (INVARIANT) *)
    ==>
      ^mng (mExpr (SVar (LVal a (Class C) p) fld) se) s
-          (s, ^ev (FVal (MFn C fld) (Function retty argtys)
+          (s, ev (FVal (MFn C fld) (Function retty argtys)
                         (SOME (LVal a (Class (LAST p')) (p ^^ p'))))
-                  se)) /\
+                  se))
+
+   /\
 
 (* TODO: update restriction on params to allow them to be l-values, and thus
    passed into reference parameters *)
@@ -590,7 +664,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      is_null_se se
    ==>
      ^mng (mExpr (FnApp (FVal fnid fty eopt) params) se) s
-          (s, ^ev (FnApp_sqpt (FVal fnid fty eopt) params) base_se)) /\
+          (s, ev (FnApp_sqpt (FVal fnid fty eopt) params) base_se))
+
+   /\
 
 (* RULE-ID: function-ptr-to-function-lval *)
 (* 5.2.2 p1 - this rule handles the situation where the postfix-expression
@@ -599,10 +675,12 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      v IN FDOM s.fndecode
    ==>
      ^mng (mExpr (FnApp (ECompVal v (Ptr (Function retty argtys))) args) se) s
-          (s, ^ev (FnApp (FVal (s.fndecode ' v)
+          (s, ev (FnApp (FVal (s.fndecode ' v)
                                (Function retty argtys)
                                NONE)
-                         args) se)) /\
+                         args) se))
+
+   /\
 
 (* RULE-ID: global-function-call *)
 (* the NONE as FVal's third argument means this is a global function *)
@@ -614,14 +692,19 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mExpr (FnApp_sqpt (FVal fnid ftype NONE) params) se) s0
           (s1 with
             stack updated_by (CONS (s0.classmap, s0.typemap, s0.varmap)),
-           EStmt body (\rv rt'. Cast rt (ECompVal rv rt')))) /\
+           EStmt body (return_cont rt)))
 
-(* RULE-ID: global-function-call-fails *)
-(!ftype params se s0 fnid.
+   /\
+
+(* RULE-ID: function-call-fails *)
+(* works for both global and member function calls *)
+(!ftype params se s0 fnid copt.
     (!s. ~pass_parameters s0 fnid params s)
    ==>
-    ^mng (mExpr (FnApp_sqpt (FVal fnid ftype NONE) params) se) s0
-         (s0, ^ev UndefinedExpr se)) /\
+    ^mng (mExpr (FnApp_sqpt (FVal fnid ftype copt) params) se) s0
+         (s0, ev UndefinedExpr se))
+
+   /\
 
 (* RULE-ID: member-function-call *)
 (*   by the time this call is made, we have already figured out which
@@ -639,27 +722,74 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                          (CONS (s0.classmap,s0.typemap,s0.varmap));
                       thisvalue := SOME (ECompVal this (Ptr (Class cname)))
                    |>,
-           EStmt body (\rv rt'. Cast rt (ECompVal rv rt')))) /\
+           EStmt body (return_cont rt)))
 
+   /\
+
+(* RULE-ID: function-application-lval2rval *)
+(!f pfx e0 e sfx se0 se s0 s.
+     lval2rval (s0,e0,se0) (s,e,se) /\
+     fn_expects_rval s0 f (LENGTH pfx)
+   ==>
+     ^mng (mExpr (FnApp f (pfx ++ (e0 :: sfx))) se0) s0
+          (s, mExpr (FnApp f (pfx ++ (e :: sfx))) se))
+
+   /\
+
+(* RULE-ID: return-eval-under *)
 (!exte0 exte s1 s2 c.
-   ^mng exte0 s1 (s2, exte) ==>
-   ^mng (mStmt (Ret exte0) c) s1 (s2, mStmt (Ret exte) c)) /\
+     ^mng exte0 s1 (s2, exte)
+   ==>
+     ^mng (mStmt (Ret exte0) c) s1 (s2, mStmt (Ret exte) c))
 
+   /\
+
+(* RULE-ID: return-lval2rval *)
+(!e0 se0 s0 e se s c.
+     lval2rval (s0,e,se0) (s,e,se)
+   ==>
+     ^mng (mStmt (Ret (NormE e0 se0)) (RVC c)) s0
+          (s, mStmt (Ret (NormE e se)) (RVC c)))
+
+   /\
+
+(* RULE-ID: return-rvalue *)
 (* all recursive stmt rules require RHS of reduction to still be
    an mStmt, preventing this rule from firing at depth *)
 (!v t s se c smap tmap vmap stack'.
-   is_null_se se /\ (s.stack = (smap,tmap,vmap)::stack') ==>
-   ^mng (mStmt (Ret (NormE (ECompVal v t) se)) c) s
-        (s with <| stack := stack'; classmap := smap; typemap := tmap;
-                   varmap := vmap |>,
-         mExpr (c v t) base_se)) /\
+     is_null_se se /\ (s.stack = (smap,tmap,vmap)::stack')
+   ==>
+     ^mng (mStmt (Ret (NormE (ECompVal v t) se)) (RVC c)) s
+          (s with <| stack := stack'; classmap := smap; typemap := tmap;
+                     varmap := vmap |>,
+           mExpr (c v t) base_se))
 
-(!s c. ^mng (mStmt EmptyRet c) s
-            (s, mStmt (Ret (NormE (ECompVal [] Void) base_se)) c)) /\
+   /\
+
+(* RULE-ID: return-lvalue *)
+(!a t p se c s cmap tmap vmap stack'.
+     is_null_se se /\ (s.stack = (cmap,tmap,vmap)::stack')
+   ==>
+     ^mng (mStmt (Ret (NormE (LVal a t p) se)) (LVC c)) s
+          (s with <| stack := stack'; classmap := cmap; typemap := tmap;
+                     varmap := vmap |>,
+           mExpr (c a t p) base_se))
+
+   /\
+
+(!s c.
+     T
+   ==>
+     ^mng (mStmt EmptyRet c) s
+          (s, mStmt (Ret (NormE (ECompVal [] Void) base_se)) c))
+
+   /\
+
 
 (* statements evaluate as normal under Traps *)
 (!tt st st' c s0 s.
-     ^mng (mStmt st c) s0 (s, mStmt st' c)  ==>
+     ^mng (mStmt st c) s0 (s, mStmt st' c)
+   ==>
      ^mng (mStmt (Trap tt st) c) s0 (s, mStmt (Trap tt st') c)) /\
 
 (* final cases for Traps.  This will need generalisation for exceptions  *)
@@ -679,56 +809,77 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mStmt (Trap tt EmptyStmt) c) s0 (s0, mStmt EmptyStmt c)) /\
 
 (!c tt v t se s0.
-     is_null_se se ==>
+     is_null_se se
+   ==>
      ^mng (mStmt (Trap tt (Ret (NormE (ECompVal v t) se))) c) s0
           (s0, mStmt (Ret (NormE (ECompVal v t) se)) c)) /\
 
 (!exte c s1 s2 exte'.
-     ^mng exte s1 (s2, exte') ==>
+     ^mng (RVR exte) s1 (s2, RVR exte')
+   ==>
      ^mng (mStmt (Standalone exte) c) s1 (s2, mStmt (Standalone exte') c)) /\
 
 (!v t se c s.
-     is_null_se se ==>
+     is_null_se se
+   ==>
      ^mng (mStmt (Standalone (NormE (ECompVal v t) se)) c) s
           (s, mStmt EmptyStmt c)) /\
 
 (!guard guard' c t e s0 s.
-    ^mng guard s0 (s, guard') ==>
-    ^mng (mStmt (CIf guard t e) c) s0 (s, mStmt (CIf guard' t e) c)) /\
+     ^mng (RVR guard) s0 (s, RVR guard')
+   ==>
+     ^mng (mStmt (CIf guard t e) c) s0 (s, mStmt (CIf guard' t e) c)) /\
 
 (!v t se thenstmt elsestmt c s.
-    scalar_type t /\ is_null_se se /\ ~is_zero t v ==>
-    ^mng (mStmt (CIf (NormE (ECompVal v t) se) thenstmt elsestmt) c) s
-         (s, mStmt thenstmt c)) /\
+     scalar_type t /\ is_null_se se /\ ~is_zero t v
+   ==>
+     ^mng (mStmt (CIf (NormE (ECompVal v t) se) thenstmt elsestmt) c) s
+          (s, mStmt thenstmt c)) /\
 
 (!v t se thenstmt elsestmt c s.
-    scalar_type t /\ is_null_se se /\ is_zero t v ==>
-    ^mng (mStmt (CIf (NormE (ECompVal v t) se) thenstmt elsestmt) c) s
-         (s, mStmt elsestmt c)) /\
+     scalar_type t /\ is_null_se se /\ is_zero t v
+   ==>
+     ^mng (mStmt (CIf (NormE (ECompVal v t) se) thenstmt elsestmt) c) s
+          (s, mStmt elsestmt c)) /\
 
 (* somewhat ugly that a bunch of blocks will accumulate around every
    iteration of the loop... *)
 (!guard bdy c s.
+     T
+   ==>
      ^mng (mStmt (CLoop guard bdy) c) s
           (s, mStmt (CIf guard (Block F [] [bdy; CLoop guard bdy])
-                               EmptyStmt) c)) /\
+                               EmptyStmt) c))
 
+   /\
+
+(* RULE-ID: block-entry *)
 (!vds sts s c.
+     T
+   ==>
      ^mng (mStmt (Block F vds sts) c) s
           (s with stack updated_by (CONS (s.classmap,s.typemap,s.varmap)),
-           mStmt (Block T vds sts) c)) /\
+           mStmt (Block T vds sts) c))
+
+   /\
 
 (!st s c stm tym vrm stk'.
-     (s.stack = (stm,tym,vrm) :: stk') /\ final_stmt st ==>
+     (s.stack = (stm,tym,vrm) :: stk') /\ final_stmt st
+   ==>
      ^mng (mStmt (Block T [] [st]) c) s
           (s with <| stack := stk'; classmap := stm; typemap := tym;
                      varmap := vrm |>,
-           mStmt st c)) /\
+           mStmt st c))
+
+   /\
 
 (!sts s c.
-     ~(sts = []) ==>
+     ~(sts = [])
+   ==>
      ^mng (mStmt (Block T [] (EmptyStmt::sts)) c) s
-          (s, mStmt (Block T [] sts) c)) /\
+          (s, mStmt (Block T [] sts) c))
+
+   /\
 
 (!sts exstmt s c.
      final_stmt exstmt /\ ~(exstmt = EmptyStmt) /\ ~(sts = []) ==>
@@ -736,23 +887,53 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
           (s, mStmt (Block T [] [exstmt]) c)) /\
 
 (!s0 s ty name vds sts c.
-   vdeclare s0 ty name s ==>
+   vdeclare s0 ty name NONE s ==>
    ^mng (mStmt (Block T (VDec ty name :: vds) sts) c) s0
         (s, mStmt (Block T vds sts) c)) /\
 
+(* RULE-ID: vdecinit-evaluate *)
 (!ty name exte exte' s0 s vds sts c.
-   ^mng exte s0 (s, exte') ==>
-   ^mng (mStmt (Block T (VDecInit ty name exte::vds) sts) c) s0
-        (s, mStmt (Block T (VDecInit ty name exte'::vds) sts) c)) /\
+     ^mng exte s0 (s, exte')
+   ==>
+     ^mng (mStmt (Block T (VDecInit ty name exte::vds) sts) c) s0
+          (s, mStmt (Block T (VDecInit ty name exte'::vds) sts) c))
 
+   /\
 
+(* RULE-ID: vdecinit-lval2rval *)
+(!s0 e0 se0 s e se ty name vds sts c.
+     lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty
+   ==>
+     ^mng (mStmt (Block T (VDecInit ty name (mExpr e0 se0) :: vds) sts) c) s0
+          (s, mStmt (Block T (VDecInit ty name (mExpr e se) :: vds) sts) c))
+
+   /\
+
+(* RULE-ID: vdecinit-finish-nonref *)
 (!dty name v ty v' se vds sts c s0 s.
-   is_null_se se /\ vdeclare s0 dty name s /\
-   parameter_coerce (v,ty) (v',dty) ==>
-   ^mng (mStmt (Block T (VDecInit dty name (NormE (ECompVal v ty) se) :: vds)
-                        sts) c) s
-        (val2mem s (s.varmap ' name) v', mStmt (Block T vds sts) c)) /\
+     is_null_se se /\ vdeclare s0 dty name (SOME (ECompVal v' dty)) s /\
+     parameter_coerce (v,ty) (v',dty)
+   ==>
+     ^mng (mStmt (Block T (VDecInit dty name (NormE (ECompVal v ty) se) :: vds)
+                          sts) c)
+          s0
+          (s, mStmt (Block T vds sts) c))
 
+   /\
+
+(* RULE-ID: vdecinit-finish-ref *)
+(!se s0 ty name a t p s vds sts c.
+     is_null_se se /\ vdeclare s0 ty name (SOME (LVal a t p)) s
+   ==>
+     ^mng (mStmt (Block T (VDecInit ty name (NormE (LVal a t p) se) :: vds)
+                        sts) c)
+          s0
+          (s, mStmt (Block T vds sts) c))
+
+   /\
+
+(* RULE-ID: vstrdec *)
+(* TODO: handle local classes *)
 (!name info s vds sts c.
     ^mng (mStmt (Block T (VStrDec name info :: vds) sts) c) s
          (s with classmap updated_by (\sm. sm |+ (name,info)),
@@ -812,7 +993,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
         edecls)) /\
 
 (!s0 ty name s edecls.
-     vdeclare s0 ty name s
+     vdeclare s0 ty name NONE s
    ==>
      emeaning (Decl (VDec ty name) :: edecls) s0 (copy2globals s, edecls)) /\
 
@@ -820,16 +1001,38 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
      meaning exte s0 (s, exte')
    ==>
      emeaning (Decl (VDecInit ty name exte) :: edecls) s0
-              (s, Decl (VDecInit ty name exte') :: edecls)) /\
+              (s, Decl (VDecInit ty name exte') :: edecls))
+
+   /\
+
+(!ty name e0 se0 edecls s0 s e se.
+     lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty
+   ==>
+     emeaning (Decl (VDecInit ty name (mExpr e0 se0)) :: edecls) s0
+              (s, Decl (VDecInit ty name (mExpr e se)) :: edecls))
+
+   /\
 
 (!s0 s name v ty dty v' edecls se.
-     vdeclare s0 dty name s /\ parameter_coerce (v,ty) (v',dty) /\
-     is_null_se se
+     vdeclare s0 dty name (SOME (ECompVal v' dty)) s /\
+     parameter_coerce (v,ty) (v',dty) /\
+     is_null_se se /\ ~ref_type dty
    ==>
      emeaning (Decl (VDecInit dty name (NormE (ECompVal v ty) se)) :: edecls)
               s0
-              (val2mem (copy2globals s) (s.varmap ' name) v',
-               edecls)) /\
+              (copy2globals s, edecls))
+
+   /\
+
+(!s0 ty name a t p s se edecls.
+     vdeclare s0 ty name (SOME (LVal a t p)) s /\ is_null_se se /\
+     ref_type ty
+   ==>
+     emeaning (Decl (VDecInit ty name (NormE (LVal a t p) se)) :: edecls)
+              s0
+              (copy2globals s, edecls))
+
+   /\
 
 (!s0 s name info edecls.
      install_member_functions name s0 (OPTION_MAP class_info_fields info) s

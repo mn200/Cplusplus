@@ -79,3 +79,6 @@ side_effects:
 dynamics:
    Provides the dynamic semantics for expressions, statements (the
    extended expressions, in fact) and external declarations.
+
+sanity:
+   Some larger-scale sanity theorems and their proofs.

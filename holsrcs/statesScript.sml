@@ -46,15 +46,15 @@ val _ = Hol_datatype
               fndecode : byte list |-> fnid ;
               gclassmap: string |-> class_info option ;
               gtypemap : string |-> CPP_Type ;
-              gvarmap  : string |-> num ;
+              gvarmap  : string |-> (num # string list) ;
               initmap  : num -> bool ;
               locmap   : num -> byte ;
               stack    : ((string |-> class_info option) #
                           (string |-> CPP_Type) #
-                          (string |-> num)) list ;
+                          (string |-> (num # string list))) list ;
               classmap : string |-> class_info option;
               typemap  : string |-> CPP_Type ;
-              varmap   : string |-> num ;
+              varmap   : string |-> (num # string list) ;
               thisvalue: CExpr option
              |>`;
 val _ = type_abbrev("CState", ``:state``)
