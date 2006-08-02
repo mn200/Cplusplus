@@ -673,14 +673,16 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: non-static-data-member-field-selection *)
-(* only non-static data-members will have offsets - WRONG *)
-(!s st fld ftype se offn i a p.
-     offset (sizeofmap s) (sizeofmap s ' st) i offn /\
-     st IN FDOM (lfimap s) /\
-     lookup_field_info (lfimap s ' st) fld (i,ftype)
+(!s C fld ftype Cflds se offn i a p p'.
+     s |- C has least fld -: ftype via p' /\
+     (Cflds = THE (nsdmembers s (LAST p'))) /\
+     object_type ftype /\
+     lookup_field_info Cflds fld (i,ftype) /\
+     offset (sizeofmap s) (MAP SND Cflds) i offn
    ==>
-     ^mng (mExpr (SVar (LVal a (Class st) p) fld) se) s
-          (s, ev (LVal (a + offn) ftype (default_path ftype)) se))
+     ^mng (mExpr (SVar (LVal a (Class C) p) fld) se) s
+          (s, ev (LVal (a + THE (subobj_offset s C p') + offn) ftype
+                       (default_path ftype)) se))
 
    /\
 

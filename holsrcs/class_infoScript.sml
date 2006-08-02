@@ -133,7 +133,7 @@ val FieldDecls_def = Define`
      { (Cs, ty) | (C,Cs) IN subobjs s /\
                   LAST Cs IN FDOM (deNONE s.classmap) /\
                   ?cinfo fld. (deNONE s.classmap ' (LAST Cs) = cinfo) /\
-                              MEM fld cinfo.fields /\
+                              MEM fld cinfo.fields /\ ~FST (SND fld) /\
                               (fieldname (FST fld) = fnm) /\
                               (fieldtype (FST fld) = ty) }
 `;
@@ -186,93 +186,50 @@ val class_layout_SING = store_thm(
   SRW_TAC [][class_layout_def, containerTheory.SET_TO_LIST_THM, CHOICE_SING])
 val _ = export_rewrites ["class_layout_SING"]
 
-(* This can be passed to the sizeof relation in order to calculate the size
-   and offset information for classes.  *)
-(* BAD_ASSUMPTION:
-     this doesn't allow for the inclusion of vptr entries in classes
-*)
-val class_elems_def = Define`
-  class_elems s =
-    FUN_FMAP (\c. FLAT (MAP (\cpath. THE (nsdmembers s (LAST cpath)))
-                            (class_layout { so | (c,so) IN subobjs s })))
-             (FDOM s.classmap)
+
+val class_szmap_def = Define`
+   class_szmap s =
+      FUN_FMAP (\c. if HD (EXPLODE c) = #" " then
+                      MAP SND (THE (nsdmembers s (IMPLODE (TL (EXPLODE c)))))
+                    else let subs = class_layout { so | (c,so) IN subobjs s }
+                         in
+                           MAP (\p. Class (STRCAT " " (LAST p))) subs)
+               { c | ?v. c IN FDOM s.classmap /\ (s.classmap ' c = SOME v) }
 `
 
-(* SANITY *)
-val class_elems_example1 = store_thm(
-  "class_elems_example1",
-  ``class_elems
-       <| classmap :=
-             FEMPTY |+
-               ("c",
-                SOME <| fields := [(FldDecl "foo" (Unsigned Int), F, Public);
-                                   (FldDecl "bar" Bool, T, Public);
-                                   (FldDecl "d" (Class "d"), F, Private);
-                                   (FldDecl "baz" BChar, F, Public)];
-                        ancestors := NONE |>) |+
-               ("d",
-                SOME <| fields := [(FldDecl "q" (Signed Int), F, Public)];
-                        ancestors := NONE |>) |> ' "c" =
-       [("foo", Unsigned Int); ("d", Class "d"); ("baz", BChar)]``,
-  SRW_TAC [][finite_mapTheory.FLOOKUP_UPDATE, nsdmembers_def,
-             ancestor_def, class_elems_def, calc_subobjs,
-             Once calc_rsubobjs, finite_mapTheory.FUN_FMAP_DEF,
-             finite_mapTheory.FAPPLY_FUPDATE_THM]);
+val genoffset_def = Define`
+  (genoffset [] acc szf alnf e = NONE) /\
+  (genoffset (h::t) (acc:num) szf alnf e =
+    let acc' = roundup (alnf h) acc
+    in
+      if h = e then SOME acc'
+      else genoffset t (acc' + szf h) szf alnf e)
+`
 
-(* SANITY *)
-val class_elems_example2 = store_thm(
-  "class_elems_example2",
-  ``class_elems
-       <| classmap :=
-             FEMPTY |+
-               ("c",
-                SOME <| fields := [(CFnDefn Bool "f" [] (Block F [][]), F,
-                                    Public);
-                                   (FldDecl "bar" Bool, T, Public)];
-                        ancestors := SOME "d" |>) |+
-               ("d",
-                SOME <| fields := [(FldDecl "q" (Signed Int), F, Public)];
-                        ancestors := NONE |>) |> ' "c" =
-       [("q", Signed Int)]``,
-  SRW_TAC [][finite_mapTheory.FLOOKUP_UPDATE,
-             ancestor_def, class_elems_def, calc_subobjs,
-             Once calc_rsubobjs, finite_mapTheory.FUN_FMAP_DEF,
-             finite_mapTheory.FAPPLY_FUPDATE_THM] THEN
-  ONCE_REWRITE_TAC [calc_rsubobjs] THEN
-  SRW_TAC [][ancestor_def, GSPEC_OR, INSERT_UNION_EQ] THEN
-  Q.SUBGOAL_THEN `!x y. ~(x = y) ==> ((class_layout {x;y} = [x;y]) \/
-                                      (class_layout {x;y} = [y;x]))`
-    (Q.SPECL_THEN [`["c"]`, `["c"; "d"]`] MP_TAC)
-  THENL [
-    SRW_TAC [][class_layout_def] THEN
-    SRW_TAC [][containerTheory.SET_TO_LIST_THM] THEN
-    SRW_TAC [CONJ_ss][REST_DEF, DELETE_INSERT] THEN
-    SRW_TAC [][containerTheory.SET_TO_LIST_THM, CHOICE_SING] THEN
-    Q.ISPEC_THEN `{x:string list;y}` MP_TAC CHOICE_DEF THEN SRW_TAC [][],
-    ALL_TAC
-  ] THEN
-  SRW_TAC [][] THEN
-  SRW_TAC [][nsdmembers_def, finite_mapTheory.FLOOKUP_UPDATE]);
-
-
-(* ---------------------------------------------------------------------- *)
-
-(* looking up a field's information (type and index) requires a map from
-   class name to (name#type) list.   This is the lookup function that only
-   returns fields and not functions *)
-(* BAD_ASSUMPTION: this doesn't handle masking of names properly *)
-val lfimap_def = Define`
-  lfimap s = class_elems s
-`;
-
-
+val subobj_offset_def = Define`
+  subobj_offset s C p =
+    let tyfm = class_szmap s
+    in
+      genoffset
+        (class_layout { so | (C,so) IN subobjs s})
+        0
+        (\pth. if nsdmembers s (LAST pth) = SOME [] then 0
+               else
+                 @sz. sizeof tyfm (Class (LAST pth)) sz)
+        (\pth. if nsdmembers s (LAST pth) = SOME [] then 0
+               else @a. align tyfm (Class (LAST pth)) a)
+        p
+`
 
 (* BAD ASSUMPTION: no classes are abstract *)
 (* type-checking requires a variety of pieces of information, which we derive
    from a state with this function *)
 val expr_type_comps_def = Define`
   expr_type_comps s =
-    <| class_fields := lfimap s;
+    <| class_fields :=
+          FUN_FMAP (\c. THE (nsdmembers s c))
+                   { c | ?v. c IN FDOM s.classmap /\
+                             (s.classmap ' c = SOME v) };
        var_types := s.typemap ;
        abs_classes := {} |>
 `;
@@ -281,9 +238,43 @@ val expr_type_comps_def = Define`
    of types (the class's (non-static) fields.  This function calculates
    that map from a classmap *)
 val sizeofmap_def = Define`
-  sizeofmap s = MAP SND o_f lfimap s
+  sizeofmap s = class_szmap s
 `;
 
+val MEM_splits = prove(
+  ``!l. MEM e l ==> ?pfx sfx. (l = pfx ++ (e :: sfx))``,
+  Induct THEN SRW_TAC [][] THENL [
+    MAP_EVERY Q.EXISTS_TAC [`[]`, `l`] THEN SRW_TAC [][],
+    RES_TAC THEN MAP_EVERY Q.EXISTS_TAC [`h::pfx`, `sfx`] THEN
+    SRW_TAC [][]
+  ]);
 
+val mapPartial_APPEND = store_thm(
+  "mapPartial_APPEND",
+  ``!l1 l2. mapPartial f (l1 ++ l2) = mapPartial f l1 ++ mapPartial f l2``,
+  Induct THEN SRW_TAC [][] THEN Cases_on `f h` THEN SRW_TAC [][]);
+
+(* SANITY *)
+val hasfld_imp_lfi = store_thm(
+  "hasfld_imp_lfi",
+  ``s |- C has least fld -: ftype via p' /\ object_type ftype ==>
+    ?i. lookup_field_info (THE (nsdmembers s (LAST p'))) fld (i,ftype)``,
+  SRW_TAC [][fieldty_via_def, FieldDecls_def, nsdmembers_def,
+             finite_mapTheory.FLOOKUP_DEF] THEN
+  Q.SPEC_THEN `deNONE s.classmap ' (LAST p')`
+              STRIP_ASSUME_TAC
+              statementsTheory.class_info_literal_nchotomy THEN
+  FULL_SIMP_TAC (srw_ss()) [] THEN
+  Cases_on `fld'` THEN Cases_on `r` THEN
+  FULL_SIMP_TAC (srw_ss()) [] THEN
+  Cases_on `q` THEN
+  FULL_SIMP_TAC (srw_ss()) [fieldtype_def, typesTheory.object_type_def] THEN
+  IMP_RES_TAC MEM_splits THEN
+  SRW_TAC [][mapPartial_APPEND, fieldname_def] THEN
+  Q.HO_MATCH_ABBREV_TAC
+    `?i. lookup_field_info (L1 ++ (X,Y) :: L2) X (i,Y)` THEN
+  SRW_TAC [][staticsTheory.lookup_field_info_def] THEN
+  Q.EXISTS_TAC `LENGTH L1` THEN
+  SRW_TAC [ARITH_ss][rich_listTheory.EL_APPEND2])
 
 val _ = export_theory();
