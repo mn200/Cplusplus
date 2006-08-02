@@ -1,0 +1,113 @@
+\newcommand{\cpp}{\mbox{C\hspace{-0.5pt}+\hspace{-1.5pt}+}}
+\newcommand{\ruleid}[1]{\textsl{[#1]}}
+
+\newcommand\ckey[1]{\texttt{#1}}
+
+\newcommand\statebrack[1]{\langle #1 \rangle}
+\newcommand\exprarrow{\rightarrow_e}
+\newcommand\tcexarrow{\exprarrow^*}
+\newcommand\expreval[2]{\statebrack{#1} \exprarrow \statebrack{#2}}
+\newcommand\tcexeval[2]{\statebrack{#1} \tcexarrow \statebrack{#2}}
+\newcommand\stmtarrow{\rightarrow_s}
+\newcommand\stmteval[2]{\statebrack{#1} \stmtarrow \statebrack{#2}}
+\newcommand\vardarrow{\rightarrow_v}
+\newcommand\vardeval[2]{\statebrack{#1}\vardarrow \statebrack{#2}}
+\newcommand\hoaretriple[3]{\{#1\}\;#2\;\{#3\}}
+\newcommand\hoarequad[4]{\{#1\}\;#2\;\{#3\}\{#4\}}
+
+\newcommand\inferwhere[1]{#1\par\nopagebreak\vskip 1mm\nopagebreak%
+                          \noindent\ignorespaces}
+
+\newcommand\okval{\ckey{okVal}}
+\newcommand\tyobj[1]{\operatorname{\textbf{obj}}[#1]}
+
+\newcommand\addse{\ckey{add\_se}}
+\newcommand\applyse{\ckey{apply\_se}}
+\newcommand\clearse{\ckey{clear\_se}}
+\newcommand\declvar{\ckey{decl\_var}}
+\newcommand\initdeclvar{\ckey{init\_decl\_var}}
+\newcommand\installparams{\ckey{inst\_parms}}
+\newcommand\markref{\ckey{mark\_ref}}
+\newcommand\memtrans{\ckey{mem\_trans}}
+\newcommand\removerefs{\ckey{remove\_refs}}
+\newcommand\structdeclare{\ckey{struct\_decl}}
+
+\newcommand\cid{{\sf id}}
+\newcommand\cgenop{\odot}
+\newcommand\Cand{\ckey{\&\&}}
+\newcommand\Cor{\ckey{||}}
+\newcommand\ccond[3]{#1 \;\ckey{?}\; #2 \;\ckey{:}\; #3}
+\newcommand\cassign[2]{#1\mathbin{\ckey{=}}#2}
+\newcommand\ccast[2]{\ckey{(}#1\ckey{)}#2}
+\newcommand\copassign[3]{#1\mathbin{#2\ckey{=}}#3}
+\newcommand\andorsqpt{\widehat{\ckey{\&|}}}
+\newcommand\cptr{\ptrtype}
+\newcommand\se[2]{\clubsuit(#1,#2)}
+\newcommand\rhsop{\diamondsuit}
+\newcommand\ass[4]{%
+  #2 \mathbin{\raisebox{-1.5mm}{$\stackrel{#4}{#1\ckey{=}}$}} #3}
+\newcommand\cif[3]{%
+\mbox{\ckey{if} \ckey{(}$#1$\ckey{)} $#2$ \ckey{else} $#3$}}
+\newcommand\cloop{\mbox{$O$}}
+\newcommand\trap{\mbox{$T$}}
+
+\newcommand\declstmts{\mbox{\sl decls}\;\mbox{\sl stmts}}
+\newcommand\cblock[1]{\mbox{\bf \{} #1\mbox{\bf \}}}
+\newcommand\cwhile[2]{\mbox{\ckey{while} \ckey{(}$#1$\ckey{)} $#2$}}
+\newcommand\cfor[4]{\mbox{\ckey{for ($#1$; $#2$; $#3$) $#4$}}}
+\newcommand\cdowhile[2]{\mbox{\ckey{do $#1$ while ($#2$);}}}
+\newcommand\tradwhile[2]{\mbox{\bf while}\;#1\;\mbox{\bf do}\;#2}
+\newcommand\tradif[3]{\mbox{\bf if}\;#1\;\mbox{\bf then}\;#2\;%
+                      \mbox{\bf else}\;#3}
+
+\newcommand\ptrtype[1]{#1\ckey{*}}
+\newcommand\arraytype[2]{#1\ckey{[}#2\ckey{]}}
+\newcommand\sgndtype[1]{\ckey{signed}\;#1}
+\newcommand\usgndtype[1]{\ckey{unsigned}\;#1}
+\newcommand\void{\ckey{void}}
+\newcommand\longdouble{\ckey{long~double}}
+\newcommand\structtype[1]{\ckey{struct}\;#1}
+\newcommand\struct{\ckey{struct}}
+
+\newcommand\cnum{\ckey{Num}\,}
+\newcommand\cfunref{\ckey{Funref}\,}
+\newcommand\cnull{0}
+\newcommand\cvar{\ckey{Var}\,}
+\newcommand\caddr[1]{\ckey{\&}#1}
+\newcommand\cderef{\ckey{*}\,}
+\newcommand\cbreak{\ckey{break}}
+
+\newcommand\cholundef{{\cal U}}
+\newcommand\cvalue[2]{\underline{(#1,#2)}}
+\newcommand\clvalue{\ckey{LV}}
+\newcommand\cfvalue{\ckey{FV}}
+\newcommand\crvreq{\ckey{RVR}}
+
+
+\newcommand\retval{\ckey{RetVal}}
+\newcommand\stmtval{\ckey{StmtVal}}
+\newcommand\breakval{\ckey{BreakVal}}
+\newcommand\contval{\ckey{ContVal}}
+
+\newcommand\vardval{\ckey{VarDeclVal}}
+
+
+\newcommand\wftype[2]{#1\vdash \text{\emph{wf}}(#2)}
+\newcommand\etyping[3]{#1\vdash #2 : #3}
+
+\newcommand\ctilde{\ckey{\~{}}}
+
+\newcommand\lvtorv{\leadsto}
+\newcommand{\funtype}[2]{#1 \rightarrow #2}
+\newcommand{\SOME}[1]{\lfloor #1 \rfloor}
+
+\newcommand{\last}{\textsf{last}}
+\newcommand{\hd}{\textsf{hd}}
+
+\newenvironment{proof}{\sl\setlength\parindent{0mm}\addtolength\parskip{2mm}}%
+{}
+
+% Local Variables:
+% mode: latex
+% TeX-master: t
+% End:
