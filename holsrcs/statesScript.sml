@@ -51,7 +51,8 @@ val _ = Hol_datatype
               locmap   : num -> byte ;
               stack    : ((string |-> class_info option) #
                           (string |-> CPP_Type) #
-                          (string |-> (num # string list))) list ;
+                          (string |-> (num # string list)) #
+                          CExpr option) list ;
               classmap : string |-> class_info option;
               typemap  : string |-> CPP_Type ;
               varmap   : string |-> (num # string list) ;
