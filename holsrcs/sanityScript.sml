@@ -54,14 +54,15 @@ val vdeclare_preserves_fnmaps = prove(
   Cases_on `optval` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
   Cases_on `x` THEN FULL_SIMP_TAC (srw_ss()) []);
 
-
 (* final result *)
 val fninfo_invariant = store_thm(
   "fninfo_invariant",
   ``!ee0 s0 see. meaning ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)``,
   HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
-  METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps,
-             pass_parameters_preserves_fnmaps, vdeclare_preserves_fnmaps]);
+  TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps,
+                  vdeclare_preserves_fnmaps]) THEN
+  IMP_RES_TAC pass_parameters_preserves_fnmaps THEN
+  FULL_SIMP_TAC (srw_ss()) []);
 
 (* ----------------------------------------------------------------------
     class_lvalue_safe

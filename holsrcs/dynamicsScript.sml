@@ -736,7 +736,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* the NONE as FVal's third argument means this is a global function *)
 (!ftype params se s0 s1 fnid rt vs body.
      (ftype = Function rt vs) /\
-     pass_parameters s0 fnid params s1 /\
+     pass_parameters
+       (s0 with <| classmap := s0.gclassmap ;
+                   typemap := s0.gtypemap ;
+                   varmap := s0.varmap |>)
+       fnid params s1 /\
      ((s0.fnmap ' fnid).body = body)
    ==>
      ^mng (mExpr (FnApp_sqpt (FVal fnid ftype NONE) params) se) s0
@@ -762,7 +766,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      function we will be jumping into
 *)
 (!fnid ftype a cname args rt se0 s0 s1 p body this.
-     pass_parameters s0 fnid args s1 /\
+     pass_parameters
+       (s0 with <| classmap := s0.gclassmap ;
+                   typemap := s0.gtypemap ;
+                   varmap := s0.varmap |>)
+       fnid args s1 /\
      ((s0.fnmap ' fnid).body = body) /\
      (SOME this = ptr_encode (s0, Class cname) (a,p))
    ==>
