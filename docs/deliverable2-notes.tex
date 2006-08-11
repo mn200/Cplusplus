@@ -4,6 +4,7 @@
 \usepackage{alltt}
 \usepackage{url}
 \usepackage{proof}
+\usepackage{amsfonts}
 
 \include{cpp-macros}
 
@@ -235,19 +236,25 @@ when field selection occurs, the \texttt{f} chosen will be
 
 The rule encoding all this is \ruleid{function-member-select}:
 \[
-\infer{\begin{array}{l}
-    \statebrack{(\clvalue\;a\;(\texttt{Class}\;C)\;p)\;\mathbf{.}\;
-      \mathit{fld},s} \exprarrow \\
-    \quad\statebrack{\cfvalue\;(\texttt{MFn}\;(\last(p'))\;\mathit{fld})\;
-  (\funtype{\mathit{argtys}}{\mathit{ret}})\;
-  \SOME{(\clvalue\;a\;(\texttt{Class}\;(\last(p')))\;p')},s}\end{array}}{
-s \vdash \hd(p) \textrm{ has least } \mathit{fld} :
+\infer{
+  \begin{array}{l}
+    \statebrack{\textsf{Ex}((\clvalue(a,\texttt{Class}\;C,p))\;\mathbf{.}\;
+      \mathit{fld},\mathit{se}),\sigma} \rightarrow \\
+    \qquad\left\langle\textsf{Ex}\left(\cfvalue\left(
+        \begin{array}{l}
+          \texttt{MFn}\;(\last(p'))\;\mathit{fld},\\
+          (\funtype{\mathit{argtys}}{\mathit{ret}}),\\
+          \SOME{(\clvalue\;a\;(\texttt{Class}\;(\last(p')))\;p')}
+        \end{array}\right),
+      \mathit{se}\right),\sigma\right\rangle
+  \end{array}}{
+  \sigma \vdash \hd(p) \textrm{ has least } \mathit{fld} :
   \funtype{\mathit{argtys}}{\mathit{ret}} \textrm{ via } p'}
 \]
 
 In the figure, the expression of interest is \texttt{b->f()}, which is
 syntactic sugar for \texttt{((*b).f)()}.  (Note how the member
-selection is syntatically subordinate to the function application.)
+selection is syntactically subordinate to the function application.)
 The \ruleid{function-member-select} rule governs the evaluation of
 \texttt{(*b).f} once the left-hand-side (\texttt{*b}) has evaluated to
 an l-value.\footnote{Even when the model allows for class r-values,
@@ -311,10 +318,10 @@ class type be laid out in the order in which they appear (as long as
 they have the same access-specifiers, but I'm not modelling those just
 yet).  But there is no specification of how base sub-objects are laid
 out.  (Recall, moreover, that in the presence of a virtual base-class,
-an object that is not most-derived, may be split over distinct parts
-of memory.)
+an object that is not most-derived may be split over distinct parts of
+memory.)
 
-With just single inheritance to model, I use an underspecified
+With just single inheritance to model, I use an under-specified
 function \texttt{class\_layout} which takes a set of sub-object paths,
 and returns them in a list.  This then drives the calculation of field
 offsets and class sizes.
@@ -327,7 +334,7 @@ particular, vtables will be catered for just as in the standard, by
 maintaining that it is only in POD (``plain old data'') types where
 one can rely on the address of the first field being the same as the
 address of the containing \texttt{struct}.  The calculation of sizes
-will also be underspecified to allow for the presence of extra,
+will also be under-specified to allow for the presence of extra,
 user-invisible data at the start of a class.  (This latter hasn't been
 done yet.)
 
@@ -341,13 +348,239 @@ path), and the lists of bytes that make up pointers.
 \subsection{Reference Types}
 \label{sec:reftypes}
 
+Reference types pose problems in the contexts where they are
+distinctive:
+\begin{itemize}
+\item passed as parameters to functions;
+\item returned from functions;
+\item when they are initialised.
+\end{itemize}
 
+Otherwise, it is obvious how the existing semantics should treat
+references: they are l-values.  References are only created from
+l-values, and in the reverse direction, values will turn into r-values
+as required.  They will do the right things when of \texttt{class}
+types because they will have the Wasserrab style paths attached.  In
+other words, a reference to a base class may actually be an l-value
+referring to a derived class.
+
+The remaining sub-sections explain what happens in the three
+interesting situations.
+
+\paragraph{Omissions}
+\begin{itemize}
+\item The semantics does not handle references to functions.
+  Supporting these will require more rules in the dynamic semantics,
+  but these rules will be directly analogous to the rules presented
+  below: wherever an \clvalue{} constructor (which is for l-values of
+  object type) appears, there will need to also be a rule for
+  \cfvalue{}, which is for function values.
+\item The semantics does not handle initialisation of references
+  belonging to classes because these have to happen in the
+  \emph{mem-initialisors} of a class's constructor function(s), and
+  constructor functions are not yet modelled.
+\item The semantics doesn't handle initialisation of \ckey{const}
+  references from r-values because it does not yet handle
+  \ckey{const}.
+\end{itemize}
+
+
+\subsubsection{References as Parameters}
+
+When a formal parameter is of reference type, the actual parameter
+needs to stay an l-value rather than reduce to an r-value.  When the
+called function's environment is being established in its local stack
+frame, the binding for the formal name can be directly to the actual
+l-value's address and type.  In other words, nothing is allocated in
+memory to represent the reference.  This is not very likely in an
+actual environment, which will probably have an address in memory
+somewhere.  (The only way to detect this (and this would require
+undefined behaviour) would be know where local variables were
+allocated, and to scan this area byte-by-byte, presumably starting at
+the address of some other, non-reference, local parameter.)
+
+This requires a change to the existing semantics, to remove function
+arguments from the $\cal L$ (l-value) context.  In order to allow some
+function arguments to decay into r-values, a new rule
+\ruleid{function-application-lval2rval} is introduced:
+\[
+\infer{
+  \statebrack{\textsf{Ex}(f(\mathit{pfx} \frown e_0 ::
+    \mathit{sfx}),
+    \mathit{se}_0),s_0}
+  \rightarrow
+  \statebrack{\textsf{Ex}(f(\mathit{pfx}\frown e ::
+    \mathit{sfx}),\mathit{se}),
+    s}}{%
+  \statebrack{\mathit{se}_0,e_0,s_0}\lvtorv\statebrack{\mathit{se},e,s} &
+  f\mbox{ expects an r-value at position }|\mathit{pfx}|}
+\]
+The variables $\mathit{pfx}$ and $\mathit{sfx}$ are lists of
+expressions corresponding to the other actual parameters being passed
+to the function $f$.  The $\frown$ operator is list concatenation, and
+$::$ is ``cons'', taking an element and putting onto the front of
+another list ($::$ binds tighter than $\frown$).
+
+The rule that determines that a function application's sequence point
+has been reached (\ruleid{function-call-sqpt}) must also change.
+Previously, this rule checked that the function and all of the
+arguments had been fully evaluated, and being ``fully evaluated''
+meant ``had been evaluated to a value (consisting of a list of
+bytes)''.  The new rule checks that every parameter is either a
+byte-list value (when the function doesn't expect a reference type),
+or an l-value.
+
+\subsubsection{References Returned from Functions}
+
+This requires a number of changes to the semantics.  First, there
+shouldn't be an \crvreq{} tag wrapped around the expressions that are
+arguments to \texttt{return} statements.  Secondly, the continuation
+that accompanies all statement evaluations (as of Deliverable-1),
+needs to be adjusted so that it is one of two possibilities, a
+continuation accepting a value, or a continuation accepting an
+l-value.  The decision as to which sort of continuation it will be is
+set up when a function call is made, because the desired return type
+of the function is known at this point.
+
+The new type of continuations is an algebraic type with two
+constructors:
+\begin{verbatim}
+   conttype =
+       RVC of (byte list -> CPP_Type -> CExpr)
+     | LVC of (num -> CPP_Type -> string list -> CExpr)
+\end{verbatim}
+The rules for \texttt{return} are able to examine the type of
+continuation directly.  So that \ruleid{return-lval2rval} is
+\[
+\infer{\statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(e_0,\mathit{se}_0)\ckey{;},\;\ckey{RVC}(c)),s_0}\stmtarrow
+  \statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(e,\mathit{se})\ckey{;},\;\ckey{RVC}(c)),s}}{
+  \statebrack{\mathit{se}_0,e_0,s_0}\lvtorv\statebrack{\mathit{se},e,s}}
+\]
+Every statement is accompanied by a continuation, the second argument
+of the \textsf{St} tag. Also note that the first argument of a
+\ckey{return} might itself be another statement.  If the original
+expression contained a function call, the body of the called function,
+a statement, would eventually become the top of the expression.  In
+this rule, the use of the inner \textsf{Ex} tag precludes this
+possibility.
+
+There are two rules allowing a \ckey{return} statement to pass its
+expression-value to the continuation.  The rule for returning normal
+values is \ruleid{return-rvalue}:
+\[
+\infer{%
+  \begin{array}[t]{l}
+    \statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(\cvalue{m}{\tau},\mathit{se})\ckey{;},\;\ckey{RVC}(c)),
+      \;\sigma}%
+    \;\;\rightarrow\\
+    \qquad\left\langle\!\!\begin{array}{l}
+      \textsf{Ex}(c\;m\;\tau,\mathit{empty\_se}),\\
+      \sigma[\textsf{stack} := \mathit{stack}', \textsf{this} :=
+      \mathit{this}, \Gamma := g, \Sigma := s, A
+      := a]\end{array}\right\rangle
+  \end{array}}{
+  \mathit{se}\mbox{ is empty of side effects} & \textsf{stack}_\sigma = (s,g,a,\mathit{this})
+  :: \mathit{stack}'}
+\]
+The \textsf{stack} and \textsf{this} fields of the state are not in
+the original thesis semantics.  The \textsf{stack} field records the
+stack of environment information.  The environment information
+includes maps for variable typing ($\Gamma$), address information for
+variables ($A$), class information ($\Sigma$) and the current
+(l-)value for \ckey{this}, if there is one.   Use of the
+\textsf{stack} is a necessary part of moving to a small-step semantics
+for statements.
+
+The rule for returning a reference \ruleid{return-lvalue} is similar:
+\[
+\infer{%
+  \begin{array}[t]{l}
+    \statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(\clvalue(\mathit{ad},\tau,p),
+      \mathit{se})\ckey{;},\;\ckey{LVC}(c)),
+      \;\sigma}%
+    \;\;\rightarrow\\
+    \qquad\left\langle\!\!\begin{array}{l}
+      \textsf{Ex}(c\;\mathit{ad}\;\tau\;p,\mathit{empty\_se}),\\
+      \sigma[\textsf{stack} := \mathit{stack}', \textsf{this} :=
+      \mathit{this}, \Gamma := g, \Sigma := s, A
+      := a]\end{array}\right\rangle
+  \end{array}}{
+  \mathit{se}\mbox{ is empty of side effects} & \textsf{stack}_\sigma = (s,g,a,\mathit{this})
+  :: \mathit{stack}'}
+\]
+
+\subsubsection{Declaring References}
+
+When a reference is declared, it must also be initialised, and the
+initialising expression must be an l-value.  But normal
+initialisations need to be able to turn l-values into r-values so
+there is an ``lvalue-to-rvalue'' rule for variable declarations that
+are accompanied by initialisations.  This rule is
+\ruleid{block-vdecinit-lval2rval}:
+\[
+\infer{\begin{array}{l}
+    \statebrack{\textsf{St}(\mathbf{\{}
+  (\textsf{VDecInit}\;\tau\;\mathit{name}\;(\textsf{Ex}(e_0,\mathit{se}_0))
+  :: \mathit{vds})\;\mathit{sts} \mathbf{\}}, c),\sigma_0}
+\rightarrow\\[2mm]
+\qquad\statebrack{\textsf{St}(\mathbf{\{}
+  (\textsf{VDecInit}\;\tau\;\mathit{name}\;(\textsf{Ex}(e,\mathit{se}))
+  :: \mathit{vds})\;\mathit{sts} \mathbf{\}}, c)),\sigma}\end{array}}{
+\tau \mbox{ not a reference type} &
+\statebrack{\mathit{se}_0,e_0,\sigma_0}\lvtorv
+  \statebrack{\mathit{se},e,\sigma}}
+\]
+where $\textsf{VDecInit}\;\tau\;\mathit{name}\;e$ is a value in the
+abstract syntax type corresponding to the declaration of variable
+$\mathit{name}$ with type $\tau$, to be initialised with expression
+$e$.  The braces in the syntax above indicate that this happens in the
+context of a statement-block.  (There are corresponding rules for
+variable declarations and initialisations at the top-level of a
+translation unit.)
+
+A variable declaration of reference type is ready to ``fire'' when its
+initialising expression has reduced to an l-value, and when there are
+no remaining side effects in the side effect record.  At this point,
+the variable address map in the state is updated to point at the
+l-value's address, and the type map is also updated to make the type
+of the name the same as the type of the l-value.
 
 
 \subsection{Validation}
 \label{sec:validation}
 
+Deliverable-2 includes a directory \texttt{holsrcs/testfiles}.  In
+this directory there is some preliminary work towards the creation of
+a symbolic evaluator, for demonstrating that programs in the model can
+behave as one might expect.  This work builds on the ideas
+in~\cite{netsem:popl2006}, allowing symbolic exploration of a semantic
+definition that features non-deterministic branching.  For the moment,
+the code only handles a sequence of external declarations not
+requiring any expression evaluation.
+
+In order to make using this tool even easier, I will need to develop
+some sort of parser for C++ source code as having to write out
+abstract syntax trees by hand is a major annoyance.  It's possible
+that the front-end of \texttt{g++} might be usable in this regard.
+
 \section{Future}
+
+The next deliverable will include a treatment of multiple inheritance,
+\texttt{const} types and object lifetimes.  Multiple inheritance
+should be straight-forward, given the Wasserrab's model.  The
+treatment of \texttt{const} should also be fairly easy.  Object
+lifetimes will require a treatment of class constructors and
+destructors at the very least, and could well be moderately
+complicated, particularly if the standard's level of
+under-specification is to be modelled.
+
+If destructors are to be called before a certain deadline is reached,
+this might best be modelled in a way similar to the treatment of side
+effects.  Object destructions can be accumulated in some sort of state
+field (a set, say), and non-deterministically pulled from this as
+evaluation progresses.  When a deadline is reached, there will be a
+side-condition on the relevant rule requiring that the state field be
+empty.
 
 \bibliographystyle{plain}
 \bibliography{deliverables}
