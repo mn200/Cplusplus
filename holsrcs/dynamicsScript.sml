@@ -705,10 +705,12 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* TODO: update restriction on params to allow them to be l-values, and thus
-   passed into reference parameters *)
-(!fnid fty eopt params se s.
-     EVERY (\e. ?v t. e = ECompVal v t) params /\
+(* RULE-ID: function-call-sqpt *)
+(!fnid fty retty argtys eopt params se s.
+     (fty = Function retty argtys) /\
+     EVERYi (\i e. if ref_type (EL i argtys) then ?a t p. e = LVal a t p
+                   else ?v t. e = ECompVal v t)
+            params /\
      is_null_se se
    ==>
      ^mng (mExpr (FnApp (FVal fnid fty eopt) params) se) s

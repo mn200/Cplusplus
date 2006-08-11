@@ -12,6 +12,10 @@ local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 val _ = new_theory "utils"
 
+(* ----------------------------------------------------------------------
+    deNONE : ('a |-> 'b option) -> ('a |-> 'b)
+   ---------------------------------------------------------------------- *)
+
 val deNONE_def = Define`
   deNONE f = THE o_f DRESTRICT f {k | ~(f ' k = NONE)}
 `;
@@ -49,6 +53,10 @@ val deNONE_FUPDATE = store_thm(
   ])
 val _ = export_rewrites ["deNONE_FUPDATE"]
 
+(* ----------------------------------------------------------------------
+    mapPartial : ('a -> 'b option) -> 'a list -> 'b list
+   ---------------------------------------------------------------------- *)
+
 val mapPartial_def = Define`
   (mapPartial f [] = []) /\
   (mapPartial f (h::t) = case f h of SOME x -> x :: mapPartial f t
@@ -56,6 +64,24 @@ val mapPartial_def = Define`
 `
 val _ = export_rewrites ["mapPartial_def"]
 
+(* ----------------------------------------------------------------------
+    EVERYi : (num -> 'a -> bool) -> 'a list -> bool
+
+    checks that every element of a list satisfies a predicate, but where
+    the predicate also gets access to the element's position in the list
+
+    For example,
+
+     - EVAL ``EVERYi (\i n. n = i * i) [0;1;4;9;x]``;
+     > val it = |- EVERYi (\i n. n = i * i) [0; 1; 4; 9; x] = (x = 16) : thm
+
+   ---------------------------------------------------------------------- *)
+
+val EVERYi_def = Define`
+  (EVERYi P [] = T) /\
+  (EVERYi P (h::t) = P 0 h /\ EVERYi (P o SUC) t)
+`;
+val _ = export_rewrites ["EVERYi_def"]
 
 
 
