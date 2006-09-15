@@ -2,7 +2,7 @@ tgt=deliverable2
 localdir=~/nicta/projects/cpp-project/deliverables
 cd /tmp
 /bin/rm -rf qinetiq-cpp
-svn export file:///home/users/michaeln/nicta/projects/cpp-project/qcpp-repos/tags/deliverable-2 qinetiq-cpp
+svn export file:///home/users/michaeln/nicta/projects/cpp-project/qcpp-repos/deliverables/deliverable-2 qinetiq-cpp
 cd qinetiq-cpp
 cd docs
 pdflatex $tgt-notes

@@ -1,6 +1,6 @@
 cd /tmp
 /bin/rm -rf qinetiq-cpp
-svn export file:///home/users/michaeln/nicta/projects/cpp-project/qcpp-repos/tags/deliverable-1 qinetiq-cpp
+svn export file:///home/users/michaeln/nicta/projects/cpp-project/qcpp-repos/deliverables/deliverable-1 qinetiq-cpp
 cd qinetiq-cpp
 cd docs
 pdflatex deliverable1-notes
@@ -19,6 +19,7 @@ ps2pdf14 darp2006.ps
 rm darp2006.{aux,dvi,log,nav,out,ps,snm,toc} .cvsignore
 
 cd ../..
+mv -i qinetiq-cpp/docs/deliverable1-notes.pdf ~/nicta/projects/cpp-project/deliverables
 tar cvzf deliverable1.tgz qinetiq-cpp
-mv -i deliverable1.tgz ~/nicta/projects/cpp-project
+mv -i deliverable1.tgz ~/nicta/projects/cpp-project/deliverables
 
