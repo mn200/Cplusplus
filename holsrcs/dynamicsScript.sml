@@ -125,8 +125,6 @@ val lval2rval_results = store_thm(
 
 (* an lv-context is a function defining where lvalue to rvalue reduction can
    occur *)
-(* TODO: disallow this reduction in function arguments so that reference values
-   can be passed *)
 val valid_lvcontext_def = Define`
   valid_lvcontext f =
         (?f' e1. f = CApBinary f' e1) \/
@@ -138,8 +136,6 @@ val valid_lvcontext_def = Define`
         (f IN  {Deref; CAndOr_sqpt; RValreq}) \/
         (?e1 opt. (f = Assign opt e1)) \/
         (?args. f = \e. FnApp e args) \/
-        (?f' pre post.
-              (f = \e. FnApp f' (APPEND pre (e :: post)))) \/
         (?t. f = Cast t)
 `
 
