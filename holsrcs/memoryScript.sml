@@ -236,7 +236,7 @@ val int_sizeof_def = Define`
 (* show that rep_int and int_value functions of the desired behaviours
    exist *)
 
-(* currently this is NOT COMPLETE - not all properties are listed *)
+(* TODO: currently this is NOT COMPLETE - not all properties are listed *)
 val char_onecomp_def = Define`
   char_onecomp = (SCHAR_MIN = ~SCHAR_MAX)
 `;
