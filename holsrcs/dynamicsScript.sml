@@ -150,11 +150,15 @@ val valid_lvcontext_thm = store_thm(
       valid_econtext f /\
       (!fopt e2. ~(f = \e1. Assign fopt e1 e2)) /\
       (!fld. ~(f = \e. SVar e fld)) /\
-      ~(f = Addr) /\ ~(f = PostInc)``,
+      ~(f = Addr) /\
+      ~(f = PostInc) /\
+      (!pre post fnpos. ~(f = \e. FnApp fnpos (pre ++ (e :: post)))) ``,
   SRW_TAC [][valid_lvcontext_def, valid_econtext_def] THEN EQ_TAC THEN
   SRW_TAC [][] THEN SRW_TAC [][FUN_EQ_THM] THEN
-  TRY (METIS_TAC []) THEN
-  Q.EXISTS_TAC `Addr e1` THEN SRW_TAC [][addr_nonloopy])
+  TRY (METIS_TAC []) THENL [
+    Q.EXISTS_TAC `Addr e1`,
+    Q.EXISTS_TAC `Addr fnpos`
+  ] THEN SRW_TAC [][addr_nonloopy])
 
 (* SANITY (corollary) *)
 val lvcontexts_are_econtexts = store_thm(
@@ -605,29 +609,59 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      object_type t /\ (ptr_decode(s,t) mval = NONE)
    ==>
      ^mng (mExpr (Deref (ECompVal mval (Ptr t))) se) s
-          (s, ev UndefinedExpr se)) /\
+          (s, ev UndefinedExpr se))
+
+   /\
 
 (* 5.3.1 p1 - pointer to a function type *)
 (!v retty argtys se s.
      v IN FDOM s.fndecode
    ==>
      ^mng (mExpr (Deref (ECompVal v (Ptr (Function retty argtys)))) se) s
-          (s, ev (FVal (s.fndecode ' v) (Function retty argtys) NONE) se)) /\
+          (s, ev (FVal (s.fndecode ' v) (Function retty argtys) NONE) se))
+
+   /\
 
 (* 5.3.1 p2-5 - taking the address of an lvalue
                 TODO: taking the address of a qualified-id, thereby generating
                 a pointer to member *)
 (!a t pth se s result.
-    (SOME result = ptr_encode (s,t) (a,pth)) ==>
-    ^mng (mExpr (Addr (LVal a t pth)) se) s
-          (s, ev (ECompVal result (Ptr t)) se)) /\
+     (SOME result = ptr_encode (s,t) (a,pth))
+   ==>
+     ^mng (mExpr (Addr (LVal a t pth)) se) s
+           (s, ev (ECompVal result (Ptr t)) se))
 
+   /\
+
+(* RULE-ID: mem-addr-static-nonfn *)
+(* 5.3.1 p2 if the address is taken of a qualified-ident that is actually a
+   static member, then a normal address is generated *)
+(!cname fldname se s addr ty cinfo prot pth ptrval.
+     cname IN FDOM s.classmap /\ (s.classmap ' cname = SOME cinfo) /\
+     MEM (FldDecl fldname ty, T, prot) cinfo.fields /\
+     (cname, fldname) IN FDOM s.statics /\
+     (s.statics ' (cname, fldname) = (addr, pth)) /\
+     (SOME ptrval = ptr_encode (s,ty) (addr,pth))
+   ==>
+     ^mng (mExpr (MemAddr cname fldname) se) s
+          (s, ev (ECompVal ptrval (Ptr ty)) se))
+
+   /\
+
+(* RULE-ID: assign-op-assign *)
+(* This rule turns an operator-assignment into a normal assignment, which is
+   possible once the LHS has been evaluated into an l-value *)
 (!f n t p e se0 s0.
+     T
+   ==>
      ^mng (mExpr (Assign (SOME f) (LVal n t p) e) se0) s0
           (s0, ev (Assign NONE
-                           (LVal n t p)
-                           (CApBinary f (LVal n t p) e)) se0)) /\
+                          (LVal n t p)
+                          (CApBinary f (LVal n t p) e)) se0))
 
+   /\
+
+(* RULE-ID: assign-completes *)
 (* TODO: make an assignment rule that can cope with assignments to
    classes, perhaps by writing an auxiliary relation that does just this
 *)
@@ -639,7 +673,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
     (resv = UndefinedExpr) /\ (se = se0)
    ==>
      ^mng (mExpr (Assign NONE (LVal a lhs_t []) (ECompVal v0 t0)) se0)
-          s (s, ev resv se)) /\
+          s (s, ev resv se))
+
+   /\
 
 (* RULE-ID: postinc *)
 (!se0 se s t t' sz v nv nv1 a resv.

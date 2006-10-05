@@ -44,6 +44,7 @@ val _ = Hol_datatype
          | CApUnary of c_unops => CExpr
          | Deref of CExpr
          | Addr of CExpr
+         | MemAddr of string => string
          | Assign of c_binops option => CExpr => CExpr
          | SVar of CExpr => string
          | FnApp of CExpr => CExpr list
@@ -91,6 +92,7 @@ val rec_expr_P_def = Define`
       P (CApUnary f' e) /\ rec_expr_P e P) /\
     (rec_expr_P (Deref e) P = P (Deref e) /\ rec_expr_P e P) /\
     (rec_expr_P (Addr e) P = P (Addr e) /\ rec_expr_P e P) /\
+    (rec_expr_P (MemAddr cname fldname) P = P (MemAddr cname fldname)) /\
     (rec_expr_P (Assign fo e1 e2) P =
       P (Assign fo e1 e2) /\ rec_expr_P e1 P /\ rec_expr_P e2 P) /\
     (rec_expr_P (SVar e fld) P =

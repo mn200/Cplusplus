@@ -41,22 +41,66 @@ val _ = Hol_datatype `fn_info = <| return_type : CPP_Type ;
 
 val _ = Hol_datatype
   `state = <| allocmap : num -> bool ;
+                         (* the set of allocated addresses *)
+
               fnmap    : fnid |-> fn_info ;
+                         (* map from function 'names' to type information about
+                            the given functions *)
+
               fnencode : fnid |-> byte list ;
+                         (* map encoding function 'name' as a byte sequence
+                            so that its address can be stored in memory *)
+
               fndecode : byte list |-> fnid ;
+                         (* map inverting fnencode *)
+
               gclassmap: string |-> class_info option ;
+                         (* the global map from class names to class info;
+                            can be dynamically overridden by local class
+                            declarations *)
+
               gtypemap : string |-> CPP_Type ;
+                         (* global map giving types to global variables.
+                            Can be dynamically overridden by local variables *)
+
               gvarmap  : string |-> (num # string list) ;
+                         (* global map giving adddresses and paths for
+                            global vars; can be dynamically overridden.  See
+                            varmap for explanation of why paths are necessary
+                         *)
+
               initmap  : num -> bool ;
+                         (* the set of initialised addresses *)
+
               locmap   : num -> byte ;
+                         (* memory.  Domain should be ( void * ) words *)
+
               stack    : ((string |-> class_info option) #
                           (string |-> CPP_Type) #
                           (string |-> (num # string list)) #
                           CExpr option) list ;
+                         (* stack of class, type and var info.  Updated
+                            as blocks are entered and left *)
+
+              statics  : string # string |-> (num # string list) ;
+                         (* map giving addresses and paths for static data
+                            members. Domain is classname x fieldname *)
+
               classmap : string |-> class_info option;
+                         (* local, dynamically changing class map *)
+
               typemap  : string |-> CPP_Type ;
+                         (* local information about types of variables *)
+
               varmap   : string |-> (num # string list) ;
+                         (* address and path information for local variables.
+                            The path information has to be present because
+                            variables can be references, and these can be
+                            (initialised to be) references to sub-classes. *)
+
               thisvalue: CExpr option
+                         (* the value (i.e., this will always be an ECompVal
+                            with a pointer value) of the this expression *)
              |>`;
 val _ = type_abbrev("CState", ``:state``)
 
