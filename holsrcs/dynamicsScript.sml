@@ -1084,7 +1084,8 @@ val installfn_def = Define`
 
 (* installing a bunch of member functions *)
 
-(* imemfn is where the real work gets done *)
+(* imemfn is where the real work gets done - it takes a list of fields
+   and "relationally" installs them into the state *)
 val imemfn_def = Define`
   (imemfn cnm s0 [] s = (s0 = s)) /\
   (imemfn cnm s0 ((FldDecl nm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
@@ -1093,7 +1094,10 @@ val imemfn_def = Define`
                sizeof (sizeofmap s0)
                       (MPtr cnm (Function retty (MAP SND params)))
                       (LENGTH fval) /\
-               imemfn cnm s' rest s)
+               imemfn cnm s' rest s) /\
+  (imemfn cnm s0 ((Constructor params meminits body, b, p) :: rest) s =
+     (s0 = s)) /\
+  (imemfn cnm s0 ((Destructor body, b, p) :: rest) s = (s0 = s))
 `
 
 val install_member_functions_def = Define`

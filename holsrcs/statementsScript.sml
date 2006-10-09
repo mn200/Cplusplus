@@ -42,6 +42,9 @@ val _ = Hol_datatype `
            | LVC of (num -> CPP_Type -> string list -> CExpr)
 `;
 
+(* term taken from grammar, as in 12.6.2 *)
+val _ = type_abbrev("mem_initializer", ``:string # CExpr list option``)
+
 
 val _ = Hol_datatype`
   CStmt    = CLoop of ExtE => CStmt
@@ -68,7 +71,9 @@ val _ = Hol_datatype`
            = CFnDefn of CPP_Type => string => (string # CPP_Type) list =>
                         CStmt
            | FldDecl of string => CPP_Type
-           | Constructor of (string # CPP_Type) list => CStmt
+           | Constructor of (string # CPP_Type) list =>
+                            mem_initializer list =>
+                            CStmt
            | Destructor of CStmt ;
 
   class_info   (* bool in fields is true for static members *)

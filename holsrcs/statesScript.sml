@@ -98,13 +98,10 @@ val _ = Hol_datatype
                             variables can be references, and these can be
                             (initialised to be) references to sub-classes. *)
 
-              thisvalue: CExpr option ;
+              thisvalue: CExpr option
                          (* the value (i.e., this will always be an ECompVal
                             with a pointer value) of the this expression *)
 
-              constructors: string # CPP_Type list |-> fn_info
-                         (* constructor information per class name and
-                            parameter types *)
              |>`;
 val _ = type_abbrev("CState", ``:state``)
 
@@ -116,7 +113,10 @@ val initial_state_def = Define`
                      gclassmap := FEMPTY;
                      gtypemap := FEMPTY;
                      gvarmap := FEMPTY;
-                     initmap := {};  (* note that there is no value provided for locmap *)
+                     initmap := {};
+
+                     (* note that there is no value provided for locmap *)
+
                      stack := [];
                      classmap := FEMPTY;
                      typemap := FEMPTY;
