@@ -117,25 +117,37 @@ val path_via_def = Define`
   s |- path C to D via Cs = (C,Cs) IN subobjs s /\ (LAST Cs = D)
 `;
 
-(* finding fields W et al. 5.1.3 *)
+(* finding fields W et al. 5.1.3
+   - omitting constructors and destructors as these can't be called normally *)
 val fieldname_def = Define`
   (fieldname (FldDecl n ty) = n) /\
   (fieldname (CFnDefn retty n args body) = n)
 `
 
+(* again, omitting constructors and destructors as these can't be called *)
 val fieldtype_def = Define`
   (fieldtype (FldDecl n ty) = ty) /\
   (fieldtype (CFnDefn retty n args body) = Function retty (MAP SND args))
+`;
+
+(* those fields for which the above two predicates are well-defined *)
+val okfield_def = Define`
+  (okfield (FldDecl n ty) = T) /\
+  (okfield (CFnDefn retty n args body) = T) /\
+  (okfield _ = F)
 `;
 
 val FieldDecls_def = Define`
   FieldDecls s C fnm =
      { (Cs, ty) | (C,Cs) IN subobjs s /\
                   LAST Cs IN FDOM (deNONE s.classmap) /\
-                  ?cinfo fld. (deNONE s.classmap ' (LAST Cs) = cinfo) /\
-                              MEM fld cinfo.fields /\ ~FST (SND fld) /\
-                              (fieldname (FST fld) = fnm) /\
-                              (fieldtype (FST fld) = ty) }
+                  ?cinfo centry staticp prot.
+                      (deNONE s.classmap ' (LAST Cs) = cinfo) /\
+                      MEM (centry,staticp,prot) cinfo.fields /\
+                      ~staticp /\
+                      okfield centry /\
+                      (fieldname centry = fnm) /\
+                      (fieldtype centry = ty) }
 `;
 
 
@@ -171,7 +183,8 @@ val nsdmembers_def = Define`
               (\ci. case ci of
                        (CFnDefn ret nm args bod, stat, prot) -> NONE
                     || (FldDecl nm ty, stat, prot) -> if stat then NONE
-                                                      else SOME (nm,ty))
+                                                      else SOME (nm,ty)
+                    || _ -> NONE)
               cinfo.fields)
 `
 
@@ -265,10 +278,9 @@ val hasfld_imp_lfi = store_thm(
               STRIP_ASSUME_TAC
               statementsTheory.class_info_literal_nchotomy THEN
   FULL_SIMP_TAC (srw_ss()) [] THEN
-  Cases_on `fld'` THEN Cases_on `r` THEN
-  FULL_SIMP_TAC (srw_ss()) [] THEN
-  Cases_on `q` THEN
-  FULL_SIMP_TAC (srw_ss()) [fieldtype_def, typesTheory.object_type_def] THEN
+  Cases_on `centry` THEN
+  FULL_SIMP_TAC (srw_ss()) [fieldtype_def, typesTheory.object_type_def,
+                            okfield_def] THEN
   IMP_RES_TAC MEM_splits THEN
   SRW_TAC [][mapPartial_APPEND, fieldname_def] THEN
   Q.HO_MATCH_ABBREV_TAC

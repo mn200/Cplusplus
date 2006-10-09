@@ -67,7 +67,9 @@ val _ = Hol_datatype`
   class_entry (* TODO: classes can contain nested classes *)
            = CFnDefn of CPP_Type => string => (string # CPP_Type) list =>
                         CStmt
-           | FldDecl of string => CPP_Type ;
+           | FldDecl of string => CPP_Type
+           | Constructor of (string # CPP_Type) list => CStmt
+           | Destructor of CStmt ;
 
   class_info   (* bool in fields is true for static members *)
            = <| fields : (class_entry # bool # protection) list ;
