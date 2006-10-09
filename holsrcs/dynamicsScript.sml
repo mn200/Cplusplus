@@ -233,17 +233,76 @@ val pass_parameters_def = Define`
       rec_i_params s0 ((s0.fnmap ' fnid).parameters) pv s
 `;
 
+(* installing a function *)
+val installfn_def = Define`
+  installfn s0 retty fnid params body fval s =
+     ~(fval IN FDOM s0.fndecode) /\ ~(fnid IN FDOM s.fnmap) /\
+     (s = s0 with <| fnmap updated_by
+                       (\fm. fm |+ (fnid, <| body := body;
+                                             return_type := retty;
+                                             parameters := params |>));
+                     fnencode updated_by (\fm. fm |+ (fnid, fval));
+                     fndecode updated_by (\fm. fm |+ (fval, fnid)) |>)
+`
+
+
+
+
+(* installing a bunch of member functions *)
+
+(* imemfn is where the real work gets done - it takes a list of fields
+   and "relationally" installs them into the state *)
+val imemfn_def = Define`
+  (imemfn cnm s0 [] s = (s0 = s)) /\
+  (imemfn cnm s0 ((FldDecl nm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
+  (imemfn cnm s0 ((CFnDefn retty nm params body, b, p) :: rest) s =
+     ?fval s'. installfn s0 retty (MFn cnm nm) params body fval s' /\
+               sizeof (sizeofmap s0)
+                      (MPtr cnm (Function retty (MAP SND params)))
+                      (LENGTH fval) /\
+               imemfn cnm s' rest s) /\
+  (imemfn cnm s0 ((Constructor params meminits body, b, p) :: rest) s =
+     (s0 = s)) /\
+  (imemfn cnm s0 ((Destructor body, b, p) :: rest) s = (s0 = s))
+`
+
+val install_member_functions_def = Define`
+  install_member_functions cname s0 flds_opt s =
+    case flds_opt of
+       NONE -> (s = s0)
+    || SOME entries -> imemfn cname s0 entries s
+`
+
+(* declaration only.  See
+     - 12.1 p5 for constructors
+     - 12.8 p4-5 for copy constructors
+     - 12.8 p10 for copy assignment constructors
+     - 12.4 p3 for destructors
+             - AMBIGUITY: no spec in standard of what body of implicitly
+                          defined destructor should do
+*)
+(* this defines default special members too - TODO? fix this to just declare *)
+val define_default_specials_def = Define`
+  define_default_specials info0 =
+    let constructor i0 =
+      if (?ps mems bdy statp prot.
+            MEM (Constructor ps mems bdy, statp, prot) i0.fields)
+      then i0
+      else i0 with fields updated_by
+                     CONS (Constructor [] [] EmptyStmt, F, Public) in
+    let destructor i0 =
+      if (?bdy statp prot. MEM (Destructor bdy, statp, prot) i0.fields) then
+        i0
+      else i0 with fields updated_by CONS (Destructor EmptyStmt, F, Public)
+    in
+      constructor (destructor info0)
+`
+
+
+
+
 val _ = overload_on ("mExpr", ``statements$NormE``)
 val _ = overload_on ("mStmt", ``statements$EStmt``)
-
-val is_mExprish_def = Define`
-    (is_mExprish (mExpr e se) = T) /\
-    (is_mExprish _ = F)
-`;
-
-val out_mExpr_def = Define`
-  (out_mExpr (mExpr e se) = (e, se))
-`
 
 val signed_int_def = Define`
   signed_int i = THE (REP_INT (Signed Int) i)
@@ -1067,45 +1126,6 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 `
 
-(* installing a function *)
-val installfn_def = Define`
-  installfn s0 retty fnid params body fval s =
-     ~(fval IN FDOM s0.fndecode) /\ ~(fnid IN FDOM s.fnmap) /\
-     (s = s0 with <| fnmap updated_by
-                       (\fm. fm |+ (fnid, <| body := body;
-                                             return_type := retty;
-                                             parameters := params |>));
-                     fnencode updated_by (\fm. fm |+ (fnid, fval));
-                     fndecode updated_by (\fm. fm |+ (fval, fnid)) |>)
-`
-
-
-
-
-(* installing a bunch of member functions *)
-
-(* imemfn is where the real work gets done - it takes a list of fields
-   and "relationally" installs them into the state *)
-val imemfn_def = Define`
-  (imemfn cnm s0 [] s = (s0 = s)) /\
-  (imemfn cnm s0 ((FldDecl nm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
-  (imemfn cnm s0 ((CFnDefn retty nm params body, b, p) :: rest) s =
-     ?fval s'. installfn s0 retty (MFn cnm nm) params body fval s' /\
-               sizeof (sizeofmap s0)
-                      (MPtr cnm (Function retty (MAP SND params)))
-                      (LENGTH fval) /\
-               imemfn cnm s' rest s) /\
-  (imemfn cnm s0 ((Constructor params meminits body, b, p) :: rest) s =
-     (s0 = s)) /\
-  (imemfn cnm s0 ((Destructor body, b, p) :: rest) s = (s0 = s))
-`
-
-val install_member_functions_def = Define`
-  install_member_functions cname s0 flds_opt s =
-    case flds_opt of
-       NONE -> (s = s0)
-    || SOME entries -> imemfn cname s0 entries s
-`
 
 (* ----------------------------------------------------------------------
     how to evaluate a sequence of external declarations
@@ -1166,10 +1186,11 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
    /\
 
-(!s0 s name info edecls.
+(!s0 s name info0 info edecls.
+     (info = OPTION_MAP define_default_specials info0) /\
      install_member_functions name s0 (OPTION_MAP class_info_fields info) s
    ==>
-     emeaning (Decl (VStrDec name info) :: edecls) s0
+     emeaning (Decl (VStrDec name info0) :: edecls) s0
               (copy2globals
                   (s with <| classmap updated_by
                                       (\sm. sm |+ (name,info)) |>),
