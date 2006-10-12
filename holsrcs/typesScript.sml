@@ -5,7 +5,7 @@
 open HolKernel boolLib Parse BasicProvers
 open simpLib bossLib arithmeticTheory pred_setTheory boolSimps
 
-local open stringTheory integerTheory in end;
+local open stringTheory integerTheory namesTheory in end;
 open listTheory
 
 val _ = new_theory "types";
@@ -18,10 +18,10 @@ val _ = Hol_datatype
      Unsigned of basic_integral_type |
      Signed of basic_integral_type |
      Ptr of CPP_Type |
-     MPtr of string => CPP_Type | (* member pointer *)
+     MPtr of CPPname => CPP_Type | (* member pointer *)
      Ref of CPP_Type |
      Array of CPP_Type => num |
-     Class of string | Float | Double | LDouble |
+     Class of CPPname | Float | Double | LDouble |
      Function of CPP_Type => CPP_Type list`;
 
 val ptrdiff_t = Rsyntax.new_specification {

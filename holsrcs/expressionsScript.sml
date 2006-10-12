@@ -26,7 +26,7 @@ val c_unops = Hol_datatype`
 `;
 
 val _ = Hol_datatype`
-  fnid = GlobalFn of string | MFn of string => string
+  fnid = GlobalFn of CPPname | MFn of CPPname => string
 `;
 
 (* expressions *)
@@ -36,7 +36,7 @@ val _ = Hol_datatype
          | Cchar of num
          | Cnullptr of CType   (* BAD_ASSUMPTION: want to get rid of this *)
          | This
-         | Var of string
+         | Var of CPPname
          | COr of CExpr => CExpr
          | CAnd of CExpr => CExpr
          | CCond of CExpr => CExpr => CExpr
@@ -44,7 +44,7 @@ val _ = Hol_datatype
          | CApUnary of c_unops => CExpr
          | Deref of CExpr
          | Addr of CExpr
-         | MemAddr of string => string
+         | MemAddr of CPPname => string
          | Assign of c_binops option => CExpr => CExpr
          | SVar of CExpr => string
          | FnApp of CExpr => CExpr list
@@ -64,7 +64,7 @@ val _ = Hol_datatype
             (* this is an object lvalue, the string list is the sub-object
                path a la Wasserab et al for values of class type.  Elsewhere
                the list will be empty *)
-         | LVal of num => CType => string list
+         | LVal of num => CType => CPPname list
 
             (* this is a function l-value.  The expression argument represents
                the class object if the function is a member function *)

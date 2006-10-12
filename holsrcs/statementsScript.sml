@@ -39,11 +39,11 @@ val _ = Hol_datatype `traptype = BreakTrap | ContTrap`;
    reference or not. *)
 val _ = Hol_datatype `
   conttype = RVC of (byte list -> CPP_Type -> CExpr)
-           | LVC of (num -> CPP_Type -> string list -> CExpr)
+           | LVC of (num -> CPP_Type -> CPPname list -> CExpr)
 `;
 
 (* term taken from grammar, as in 12.6.2 *)
-val _ = type_abbrev("mem_initializer", ``:string # CExpr list option``)
+val _ = type_abbrev("mem_initializer", ``:CPPname # CExpr list option``)
 
 
 val _ = Hol_datatype`
@@ -63,22 +63,42 @@ val _ = Hol_datatype`
   ExtE     = NormE of CExpr => se_info
            | EStmt of CStmt => conttype ;
 
-  var_decl = VDec of CType => string
-           | VDecInit of CType => string => ExtE
-           | VStrDec of string => class_info option ;
+  var_decl = VDec of CType => CPPname
+           | VDecInit of CType => CPPname => ExtE
+           | VStrDec of CPPname => class_info option ;
 
-  class_entry (* TODO: classes can contain nested classes *)
-           = CFnDefn of CPP_Type => string => (string # CPP_Type) list =>
+  (* TODO: classes can contain nested classes
+             - resolution(?): imagine a translated language where nested
+                  classes can be declared in a class scope in advance of the
+                  enclosing class's definition. *)
+  (* TODO: allow declaration of friends *)
+  class_entry =
+
+             CFnDefn of CPP_Type => string => (string # CPP_Type) list =>
                         CStmt
+               (* function definitions within a class must be of member
+                  function for that class, it is not legit to write
+                     class A {
+                        class B { int f(void); };
+                        int B::f(void) { ... }
+                     }
+                  so the first string below has to be string and not
+                  CPPname.   See 9.3 p2 : "a member function definition that
+                  occurs outside of the class definition shall appear in a
+                  namespace scope enclosing the class definition".  *)
+
            | FldDecl of string => CPP_Type
            | Constructor of (string # CPP_Type) list =>
                             mem_initializer list =>
                             CStmt
            | Destructor of CStmt ;
 
-  class_info   (* bool in fields is true for static members *)
-           = <| fields : (class_entry # bool # protection) list ;
-                ancestors : string option |>
+  class_info =
+             <| fields : (class_entry # bool # protection) list ;
+                   (* bool in fields is true for static members *)
+
+                ancestors : CPPname option
+             |>
 `;
 (* A declaration can be used to declare (but not define a function).
    A VStrDec with a NONE class_info is the equivalent of
@@ -181,9 +201,7 @@ val intstmt_free_def = Define`
 
 (* external declarations can appear at the top level of a translation unit *)
 val _ = Hol_datatype`
-  ext_decl = FnDefn of CPP_Type => string => (string # CPP_Type) list => CStmt
-           | CMFnDefn of CPP_Type => string => string =>
-                         (string # CPP_Type) list => CStmt
+  ext_decl = FnDefn of CPP_Type => CPPname => (string # CPP_Type) list => CStmt
            | Decl of var_decl
 `;
 

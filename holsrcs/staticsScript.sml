@@ -186,9 +186,9 @@ val nodups_lfi_det = store_thm(
 val _ = Hol_datatype `expr_value_type = LValue | RValue`;
 
 val _ = Hol_datatype `
-  static_info = <| class_fields : string |-> (string # CPP_Type) list ;
-                   var_types    : string |-> CPP_Type ;
-                   abs_classes  : string set |>
+  static_info = <| class_fields : CPPname |-> (string # CPP_Type) list ;
+                   var_types    : CPPname |-> CPP_Type ;
+                   abs_classes  : CPPname set |>
 `
 
 val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`

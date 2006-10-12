@@ -213,8 +213,9 @@ val rec_i_params_def = Define`
           rec_i_params
             (val2mem (s0 with
                         <| varmap updated_by
-                              (\v. v |+ (pname, (a, default_path ptype))) ;
-                           typemap updated_by (\t. t |+ (pname, ptype));
+                              (\v. v |+ (Base pname,
+                                         (a, default_path ptype))) ;
+                           typemap updated_by (\t. t |+ (Base pname, ptype));
                            allocmap updated_by ((UNION) rs);
                            initmap updated_by ((UNION) rs) |>)
                      a
@@ -223,8 +224,8 @@ val rec_i_params_def = Define`
        (?a ty p vtl.
           (vallist = LVal a ty p :: vtl) /\ (ptype = Ref ty) /\
           rec_i_params
-            (s0 with <| varmap updated_by (\v. v |+ (pname, (a, p)));
-                        typemap updated_by (\t. t |+ (pname, ty)) |>)
+            (s0 with <| varmap updated_by (\v. v |+ (Base pname, (a, p)));
+                        typemap updated_by (\t. t |+ (Base pname, ty)) |>)
             ptl vtl s))
 `;
 

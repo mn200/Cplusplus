@@ -54,16 +54,16 @@ val _ = Hol_datatype
               fndecode : byte list |-> fnid ;
                          (* map inverting fnencode *)
 
-              gclassmap: string |-> class_info option ;
+              gclassmap: CPPname |-> class_info option ;
                          (* the global map from class names to class info;
                             can be dynamically overridden by local class
                             declarations *)
 
-              gtypemap : string |-> CPP_Type ;
+              gtypemap : CPPname |-> CPP_Type ;
                          (* global map giving types to global variables.
                             Can be dynamically overridden by local variables *)
 
-              gvarmap  : string |-> (num # string list) ;
+              gvarmap  : CPPname |-> (num # CPPname list) ;
                          (* global map giving adddresses and paths for
                             global vars; can be dynamically overridden.  See
                             varmap for explanation of why paths are necessary
@@ -75,24 +75,24 @@ val _ = Hol_datatype
               locmap   : num -> byte ;
                          (* memory.  Domain should be ( void * ) words *)
 
-              stack    : ((string |-> class_info option) #
-                          (string |-> CPP_Type) #
-                          (string |-> (num # string list)) #
+              stack    : ((CPPname |-> class_info option) #
+                          (CPPname |-> CPP_Type) #
+                          (CPPname |-> (num # CPPname list)) #
                           CExpr option) list ;
                          (* stack of class, type and var info.  Updated
                             as blocks are entered and left *)
 
-              statics  : string # string |-> (num # string list) ;
+              statics  : CPPname # string |-> (num # CPPname list) ;
                          (* map giving addresses and paths for static data
                             members. Domain is classname x fieldname *)
 
-              classmap : string |-> class_info option;
+              classmap : CPPname |-> class_info option;
                          (* local, dynamically changing class map *)
 
-              typemap  : string |-> CPP_Type ;
+              typemap  : CPPname |-> CPP_Type ;
                          (* local information about types of variables *)
 
-              varmap   : string |-> (num # string list) ;
+              varmap   : CPPname |-> (num # CPPname list) ;
                          (* address and path information for local variables.
                             The path information has to be present because
                             variables can be references, and these can be
@@ -163,11 +163,11 @@ val install_global_maps_def = Define`
    the list will be two elements long, consisting of the class name twice *)
 val _ = new_constant(
   "ptr_encode",
-  ``:state # CPP_Type -> num # string list -> byte list option``)
+  ``:state # CPP_Type -> num # CPPname list -> byte list option``)
 
 val _ = new_constant(
   "ptr_decode",
-  ``:state # CPP_Type -> byte list -> (num # string list) option``)
+  ``:state # CPP_Type -> byte list -> (num # CPPname list) option``)
 
 (* BAD_ASSUMPTION *)
 (* would be nice to have this as an Isabelle style locale assumption.  *)

@@ -189,8 +189,10 @@ val nsdmembers_def = Define`
 `
 
 (* p is the set of all the subobjs for a given class *)
+(* use of SET_TO_LIST means that one particular ordering of the set is taken
+   and used to determine the order in which the sub-objects appear *)
 val class_layout_def = Define`
-  class_layout (p : string list set) = SET_TO_LIST p
+  class_layout (p : CPPname list set) = SET_TO_LIST p
 `
 
 val class_layout_SING = store_thm(
@@ -199,14 +201,39 @@ val class_layout_SING = store_thm(
   SRW_TAC [][class_layout_def, containerTheory.SET_TO_LIST_THM, CHOICE_SING])
 val _ = export_rewrites ["class_layout_SING"]
 
+(* This function is a little complicated because of inheritance.
+
+   Imagine a class hierarchy where B sits at the bottom, C is derived from
+   B, and D is derived from C.  Each of these classes has its own fields as
+   well: those things that appear between the braces when you write
+
+     class B { ... }
+
+   The sizeof function where this map is used expects to lookup a class name
+   and get back a list of things to look at further.  These things may be
+   normal fields, or more classes, which it will look up in turn.
+
+   The problem is that you don't want to look up D, learn that it
+   contains a B and C class, and then recursively look into the C,
+   learn that it contains a B etc.  You would then get multiple
+   unwarranted copies of ancestor classes.  Instead, when looking up a
+   genuine class, its hierarchy's classes are presented back as the
+   result of an intermediate calculation and the concatenation of the
+   non-static data members for those classes can be returned
+
+*)
 
 val class_szmap_def = Define`
    class_szmap s =
-      FUN_FMAP (\c. if HD (EXPLODE c) = #" " then
-                      MAP SND (THE (nsdmembers s (IMPLODE (TL (EXPLODE c)))))
-                    else let subs = class_layout { so | (c,so) IN subobjs s }
-                         in
-                           MAP (\p. Class (STRCAT " " (LAST p))) subs)
+      FUN_FMAP (\c. let subs = class_layout { so | (c,so) IN subobjs s }
+                          (* get "subobjects", which includes the most
+                             derived class name *)
+                    in
+                      (* the end of the path in the subobj is the name of the
+                         class, get its nsdmembers, map SND to strip out
+                         the field names, and flatten the result *)
+                      FLAT (MAP (\p. MAP SND
+                                         (THE (nsdmembers s (LAST p)))) subs))
                { c | ?v. c IN FDOM s.classmap /\ (s.classmap ' c = SOME v) }
 `
 
