@@ -267,12 +267,8 @@ val imemfn_def = Define`
   (imemfn cnm s0 ((Destructor body, b, p) :: rest) s = (s0 = s))
 `
 
-val install_member_functions_def = Define`
-  install_member_functions cname s0 flds_opt s =
-    case flds_opt of
-       NONE -> (s = s0)
-    || SOME entries -> imemfn cname s0 entries s
-`
+val install_member_functions_def =
+    overload_on ("install_member_functions", ``imemfn``)
 
 (* declaration only.  See
      - 12.1 p5 for constructors
@@ -856,6 +852,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: member-function-call *)
 (*   by the time this call is made, we have already figured out which
      function we will be jumping into
+
+     TODO: set up class member values as "locals".  I.e., if class C
+       has a member x, then x can be directly referred to in the
+       class's member functions
 *)
 (!fnid ftype a cname args rt se0 s0 s1 p body this.
      pass_parameters
@@ -1134,6 +1134,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
+(* RULE-ID: fndefn *)
 (!s0 s fval name rettype params body ftype edecls.
      installfn s0 rettype (GlobalFn name) params body fval s /\
      ~(name IN FDOM s.typemap) /\
@@ -1145,11 +1146,13 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
        (s with <| typemap updated_by (\tm. tm |+ (name, ftype)) |>,
         edecls)) /\
 
+(* RULE-ID: global-var-defn *)
 (!s0 ty name s edecls.
-     vdeclare s0 ty name NONE s
+     vdeclare s0 ty name NONE s /\ object_type ty
    ==>
      emeaning (Decl (VDec ty name) :: edecls) s0 (copy2globals s, edecls)) /\
 
+(* RULE-ID: global-var-init-evaluation *)
 (!s0 ty name exte exte' edecls s.
      meaning exte s0 (s, exte')
    ==>
@@ -1158,6 +1161,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: global-var-init-lval2rval *)
 (!ty name e0 se0 edecls s0 s e se.
      lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty
    ==>
@@ -1166,6 +1170,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: global-var-init-eval-finished *)
 (!s0 s name v ty dty v' edecls se.
      vdeclare s0 dty name (SOME (ECompVal v' dty)) s /\
      parameter_coerce (v,ty) (v',dty) /\
@@ -1177,6 +1182,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: global-var-init-eval-ref-finished *)
 (!s0 ty name a t p s se edecls.
      vdeclare s0 ty name (SOME (LVal a t p)) s /\ is_null_se se /\
      ref_type ty
@@ -1187,14 +1193,29 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
    /\
 
-(!s0 s name info0 info edecls.
-     (info = OPTION_MAP define_default_specials info0) /\
-     install_member_functions name s0 (OPTION_MAP class_info_fields info) s
+(* RULE-ID: global-class-declaration *)
+(*   one might argue that this is a useless rule to have dynamically, as
+     class declarations are only made for the benefit of static type-checking
+*)
+(!name edecls s0.
+     T
    ==>
-     emeaning (Decl (VStrDec name info0) :: edecls) s0
+     emeaning (Decl (VStrDec name NONE) :: edecls) s0
+              (copy2globals
+                   (s0 with classmap updated_by (\sm. sm |+ (name, NONE))),
+               edecls))
+
+   /\
+
+(* RULE-ID: global-class-definition *)
+(!s0 s name info0 info edecls.
+     (info = define_default_specials info0) /\
+     install_member_functions name s0 info.fields s
+   ==>
+     emeaning (Decl (VStrDec name (SOME info0)) :: edecls) s0
               (copy2globals
                   (s with <| classmap updated_by
-                                      (\sm. sm |+ (name,info)) |>),
+                                      (\sm. sm |+ (name,SOME info)) |>),
                edecls))
 `;
 
