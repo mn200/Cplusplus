@@ -65,7 +65,7 @@ val _ = Hol_datatype`
 
   var_decl = VDec of CType => CPPname
            | VDecInit of CType => CPPname => ExtE
-           | VStrDec of CPPname => class_info option ;
+           | VStrDec of string => class_info option ;
 
   (* TODO: classes can contain nested classes
              - resolution(?): imagine a translated language where nested
@@ -176,7 +176,7 @@ val erec_stmt_def = Define`
 
   (erec_vdec P (VDec ty nm) = T) /\
   (erec_vdec P (VDecInit ty nm ee) = erec_exte P ee) /\
-  (erec_vdec P (VStrDec nm copt) = T)
+  (erec_vdec P (VStrDec cnm copt) = T)
 `
 
 (* categorising some forms of statement *)

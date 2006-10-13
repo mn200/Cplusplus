@@ -25,9 +25,8 @@ val c_unops = Hol_datatype`
   c_unops = CUnPlus | CUnMinus | CComp | CNot
 `;
 
-val _ = Hol_datatype`
-  fnid = GlobalFn of CPPname | MFn of CPPname => string
-`;
+val fnid_def = type_abbrev("fnid", ``:CPPname``)
+val _ = disable_tyabbrev_printing "fnid"
 
 (* expressions *)
 val _ = type_abbrev ("CType", ``:CPP_Type``)

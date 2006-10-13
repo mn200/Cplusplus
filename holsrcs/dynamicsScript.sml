@@ -234,10 +234,13 @@ val pass_parameters_def = Define`
       rec_i_params s0 ((s0.fnmap ' fnid).parameters) pv s
 `;
 
-(* installing a function *)
+(* installing a function - generating an address for it at the same time *)
 val installfn_def = Define`
-  installfn s0 retty fnid params body fval s =
+  installfn s0 ftype retty fnid params body fval s =
      ~(fval IN FDOM s0.fndecode) /\ ~(fnid IN FDOM s.fnmap) /\
+     sizeof (sizeofmap s)
+            (ftype (Function retty (MAP SND params)))
+            (LENGTH fval) /\
      (s = s0 with <| fnmap updated_by
                        (\fm. fm |+ (fnid, <| body := body;
                                              return_type := retty;
@@ -257,10 +260,15 @@ val imemfn_def = Define`
   (imemfn cnm s0 [] s = (s0 = s)) /\
   (imemfn cnm s0 ((FldDecl nm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
   (imemfn cnm s0 ((CFnDefn retty nm params body, b, p) :: rest) s =
-     ?fval s'. installfn s0 retty (MFn cnm nm) params body fval s' /\
-               sizeof (sizeofmap s0)
-                      (MPtr cnm (Function retty (MAP SND params)))
-                      (LENGTH fval) /\
+     ?s' fval. installfn s0
+                         (MPtr (Base cnm))
+                         retty
+                         <| absolute := F; classes := [cnm];
+                             nspaces := []; base := nm|>
+                         params
+                         body
+                         fval
+                         s' /\
                imemfn cnm s' rest s) /\
   (imemfn cnm s0 ((Constructor params meminits body, b, p) :: rest) s =
      (s0 = s)) /\
@@ -447,10 +455,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      which can happen in the body of member functions *)
 (!vname se s ty.
      vname IN FDOM s.typemap /\ (ty = s.typemap ' vname) /\
-     function_type ty /\ GlobalFn vname IN FDOM s.fnencode
+     function_type ty /\ vname IN FDOM s.fnencode
    ==>
-     ^mng (mExpr (Var vname) se) s
-          (s, ev (FVal (GlobalFn vname) ty NONE) se))
+     ^mng (mExpr (Var vname) se) s (s, ev (FVal vname ty NONE) se))
 
    /\
 
@@ -695,8 +702,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!cname fldname se s addr ty cinfo prot pth ptrval.
      cname IN FDOM s.classmap /\ (s.classmap ' cname = SOME cinfo) /\
      MEM (FldDecl fldname ty, T, prot) cinfo.fields /\
-     (cname, fldname) IN FDOM s.statics /\
-     (s.statics ' (cname, fldname) = (addr, pth)) /\
+     (s.varmap ' (Member cname fldname) = (addr, pth)) /\
      (SOME ptrval = ptr_encode (s,ty) (addr,pth))
    ==>
      ^mng (mExpr (MemAddr cname fldname) se) s
@@ -786,7 +792,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
        (* recall that C will be the last element of p (INVARIANT) *)
    ==>
      ^mng (mExpr (SVar (LVal a (Class C) p) fld) se) s
-          (s, ev (FVal (MFn (LAST p') fld)
+          (s, ev (FVal (Member (LAST p') fld)
                        (Function retty argtys)
                        (SOME (LVal a (Class (LAST p')) p')))
                  se))
@@ -1122,7 +1128,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      ^mng (mStmt (Block T (VStrDec name info :: vds) sts) c) s
-          (s with classmap updated_by (\sm. sm |+ (name,info)),
+          (s with classmap updated_by (\sm. sm |+ (Base name,info)),
            mStmt (Block T vds sts) c))
 
 `
@@ -1135,10 +1141,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
 (* RULE-ID: fndefn *)
+(* can handle member function definition *)
 (!s0 s fval name rettype params body ftype edecls.
-     installfn s0 rettype (GlobalFn name) params body fval s /\
-     ~(name IN FDOM s.typemap) /\
-     (LENGTH fval = ptr_size ftype) /\
+     installfn s0 Ptr rettype name params body fval s /\
+     ~(name IN FDOM s.typemap) /\ ~is_class_name name /\
      (ftype = Function rettype (MAP SND params))
    ==>
      emeaning
@@ -1200,10 +1206,11 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 (!name edecls s0.
      T
    ==>
-     emeaning (Decl (VStrDec name NONE) :: edecls) s0
-              (copy2globals
-                   (s0 with classmap updated_by (\sm. sm |+ (name, NONE))),
-               edecls))
+     emeaning
+        (Decl (VStrDec name NONE) :: edecls) s0
+        (copy2globals
+           (s0 with classmap updated_by (\sm. sm |+ (Base name, NONE))),
+         edecls))
 
    /\
 
@@ -1215,7 +1222,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
      emeaning (Decl (VStrDec name (SOME info0)) :: edecls) s0
               (copy2globals
                   (s with <| classmap updated_by
-                                      (\sm. sm |+ (name,SOME info)) |>),
+                                      (\sm. sm |+ (Base name,SOME info)) |>),
                edecls))
 `;
 

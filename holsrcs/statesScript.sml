@@ -82,10 +82,6 @@ val _ = Hol_datatype
                          (* stack of class, type and var info.  Updated
                             as blocks are entered and left *)
 
-              statics  : CPPname # string |-> (num # CPPname list) ;
-                         (* map giving addresses and paths for static data
-                            members. Domain is classname x fieldname *)
-
               classmap : CPPname |-> class_info option;
                          (* local, dynamically changing class map *)
 
