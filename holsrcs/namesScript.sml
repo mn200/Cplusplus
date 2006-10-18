@@ -12,6 +12,15 @@ val _ = Hol_datatype`CPPname = <| base : string ;
 
 val is_class_name_def = Define`is_class_name n = ~(NULL n.classes)`;
 
+(* only makes sense to call this on something for which is_class_name is true
+*)
+val class_part_def = Define`
+  class_part nm = <| base := LAST nm.classes;
+                     nspaces := nm.nspaces;
+                     absolute := nm.absolute;
+                     classes := FRONT nm.classes |>
+`;
+
 val Base_def = Define`
   Base s = <| base := s; absolute := F; nspaces := []; classes := [] |>
 `;
