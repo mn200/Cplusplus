@@ -254,25 +254,26 @@ val installfn_def = Define`
 
 (* installing a bunch of member functions *)
 
-(* imemfn is where the real work gets done - it takes a list of fields
-   and "relationally" installs them into the state *)
+(* imemfn is where the real work gets done - it takes a list of function
+   definitions from with a class_info and "relationally" installs them into
+   the state.  It doesn't bother with constructor or destructors as these
+   can be specially looked up when needed, and can't have their addresses
+   taken. *)
 val imemfn_def = Define`
   (imemfn cnm s0 [] s = (s0 = s)) /\
   (imemfn cnm s0 ((FldDecl nm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
-  (imemfn cnm s0 ((CFnDefn retty nm params body, b, p) :: rest) s =
-     ?s' fval. installfn s0
-                         (MPtr (Base cnm))
-                         retty
-                         <| absolute := F; classes := [cnm];
-                             nspaces := []; base := nm|>
-                         params
-                         body
-                         fval
-                         s' /\
-               imemfn cnm s' rest s) /\
-  (imemfn cnm s0 ((Constructor params meminits body, b, p) :: rest) s =
-     (s0 = s)) /\
-  (imemfn cnm s0 ((Destructor body, b, p) :: rest) s = (s0 = s))
+  (imemfn cnm s0 ((CFnDefn retty nm params body, statp, p) :: rest) s =
+     if statp then
+       ?s' fval. installfn s0 Ptr retty (Member cnm nm) params body fval s' /\
+                 imemfn cnm s' rest s
+     else
+       ?s' fval. installfn s0 (MPtr cnm) retty (Member cnm nm) params body
+                           fval
+                           s' /\
+                 imemfn cnm s' rest s) /\
+  (imemfn cnm s0 ((Constructor _ _ _, _, _) :: rest) s =
+     imemfn cnm s0 rest s) /\
+  (imemfn cnm s0 ((Destructor _, b, p) :: rest) s = imemfn cnm s0 rest s)
 `
 
 val install_member_functions_def =
@@ -286,19 +287,19 @@ val install_member_functions_def =
              - AMBIGUITY: no spec in standard of what body of implicitly
                           defined destructor should do
 *)
-(* this defines default special members too - TODO? fix this to just declare *)
-val define_default_specials_def = Define`
+(* this declares default special members too *)
+val declare_default_specials_def = Define`
   define_default_specials info0 =
     let constructor i0 =
       if (?ps mems bdy statp prot.
             MEM (Constructor ps mems bdy, statp, prot) i0.fields)
       then i0
       else i0 with fields updated_by
-                     CONS (Constructor [] [] EmptyStmt, F, Public) in
+                     CONS (Constructor [] [] NONE, F, Public) in
     let destructor i0 =
       if (?bdy statp prot. MEM (Destructor bdy, statp, prot) i0.fields) then
         i0
-      else i0 with fields updated_by CONS (Destructor EmptyStmt, F, Public)
+      else i0 with fields updated_by CONS (Destructor NONE, F, Public)
     in
       constructor (destructor info0)
 `
@@ -1138,10 +1139,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
     how to evaluate a sequence of external declarations
    ---------------------------------------------------------------------- *)
 
+(* if the evaluation can't get the list of external declarations to the
+   empty list, this is (implicitly) an occurrence of undefined behaviour *)
 val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
-(* RULE-ID: fndefn *)
-(* can handle member function definition *)
+(* RULE-ID: global-fndefn *)
 (!s0 s fval name rettype params body ftype edecls.
      installfn s0 Ptr rettype name params body fval s /\
      ~(name IN FDOM s.typemap) /\ ~is_class_name name /\
@@ -1150,7 +1152,37 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
      emeaning
        (FnDefn rettype name params body :: edecls) s
        (s with <| typemap updated_by (\tm. tm |+ (name, ftype)) |>,
-        edecls)) /\
+        edecls))
+
+   /\
+
+(* RULE-ID: member-fndefn *)
+(* The first MEM clause looks up the assumed declaration, and gets
+   static-ness and protection information there.
+   The second MEM clauses checks that this is not a duplicate definition
+     (this is a static check, one that would be performed by the compiler
+      if the duplication occurred within a single translation unit, or by
+      the linker if it occurred across multiple units)
+*)
+(!rettype name params body edecls s0 s cinfo staticp prot.
+     is_class_name name /\
+     (SOME cinfo = s0.classmap ' (class_part name)) /\
+     MEM (FldDecl name.base (Function rettype (MAP SND params)),
+          staticp, prot)
+         cinfo.fields /\
+     (!bdy' rettype' statp prot pms'.
+         MEM (CFnDefn rettype' name.base pms' bdy', statp, prot) cinfo.fields
+           ==>
+         ~(MAP SND pms' = MAP SND params)) /\
+     install_member_functions (class_part name) s0
+                              [(CFnDefn rettype name.base params body,
+                                staticp, prot)]
+                              s
+   ==>
+     emeaning (FnDefn rettype name params body :: edecls) s0
+              (s, edecls))
+
+   /\
 
 (* RULE-ID: global-var-defn *)
 (!s0 ty name s edecls.
@@ -1217,7 +1249,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 (* RULE-ID: global-class-definition *)
 (!s0 s name info0 info edecls.
      (info = define_default_specials info0) /\
-     install_member_functions name s0 info.fields s
+     install_member_functions (Base name) s0 info.fields s
    ==>
      emeaning (Decl (VStrDec name (SOME info0)) :: edecls) s0
               (copy2globals

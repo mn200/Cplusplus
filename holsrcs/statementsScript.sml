@@ -90,8 +90,8 @@ val _ = Hol_datatype`
            | FldDecl of string => CPP_Type
            | Constructor of (string # CPP_Type) list =>
                             mem_initializer list =>
-                            CStmt
-           | Destructor of CStmt ;
+                            CStmt option
+           | Destructor of CStmt option;
 
   class_info =
              <| fields : (class_entry # bool # protection) list ;
@@ -203,6 +203,10 @@ val intstmt_free_def = Define`
 val _ = Hol_datatype`
   ext_decl = FnDefn of CPP_Type => CPPname => (string # CPP_Type) list => CStmt
            | Decl of var_decl
+           | ClassConDef of CPPname => (string # CPP_Type) list =>
+                            mem_initializer list =>
+                            CStmt
+           | ClassDestDef of CPPname => CStmt
 `;
 
 val _ = export_theory();
