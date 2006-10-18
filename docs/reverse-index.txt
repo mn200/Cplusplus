@@ -1,0 +1,83 @@
+This document maps from sections of the ISO standard to locations
+within holsrcs/.
+
+01. General
+
+    This section includes definitions of some standard terms
+
+    1.7 C++ Memory Model
+
+        Definition of bytes.  See memoryScript.
+        Implementation-definedness of width of bytes is handled by
+        specification of CHAR_BIT constant
+
+    1.8 The C++ object model
+
+    1.9 Program Execution
+
+        p16 - p18.
+
+        Sequence point model.  This is implicit in rules in
+        dynamicsScript.  For example, the rule [and-true] expresses the
+        sequence point requirement between the first and second
+        arguments of && with its side condition ``is_null_se se``
+
+02. Lexical Conventions
+
+    This section is completely ignored by the model.
+
+03. Basic concepts
+
+    3.1 Declarations and definitions
+
+        In the model as it stands, all top-level variable declarations
+        are also definitions.  The only situation in the standard
+        where a variable can be declared, but not defined, is with
+        extern variables that are not initialised, or static class
+        variables.  (The latter can't count as a definition because
+        the same declaration will end up appearing in multiple
+        translation units through header files, and you don't want
+        multiple bits of space allocated for each.  Put alternatively,
+        you don't want class declarations to result in the definition
+        of any objects in memory.  This can be confirmed in the model,
+        where rule global-class-declaration does not touch varmap,
+        typemap or allocmap.)  In other words, the model doesn't
+        currently handle the declaration of extern variables, but does
+        at least handle the declaration (rather than definition) of
+        static class members.
+
+        For functions, a declaration is made with a VDec of Function
+        type, and a definition is made with a FnDefn (all in
+        statementsScript).  The types are different: the VDec is a
+        declaration, while a FnDefn is an external declaration, which
+        means that the former can only occur at the top-level.  A
+        similar distinction is made within classes, where a member
+        function is declared as a normal field with Function type
+        (using the FldDecl form), but a function definition uses
+        CFnDefn.
+
+        Constructors and destructors aren't proper functions (they
+        can't have their addresses taken), so aren't installed into
+        the state's function maps.  They are just left in the class
+        map.  But there have to be more abstract-syntax forms to
+        support them.  In class declarations, a declaration (as
+        opposed to a definition) is represented by having the body
+        component be NONE.  (The mem-initialisors should be empty for
+        constructors too, but that's irrelevant.)  If there is SOME
+        body, then this is a definition.
+
+        Otherwise, these special functions have to be defined at
+        namespace level, and this is done by AST constructors
+        ClassConDef and ClassDestDef, belonging to the ext_decl type.
+
+08. Declarators
+
+    8.5 Initializers
+
+        p10 requires the initialisation of a static member to bring in
+        all of the class's names, even the non-static ones.  Referring
+        to the non-static members is a compile-time error.  (The same
+        thing happens in the body of a static member function.) We can
+        assume that the statics have prevented these scenarios, so the
+        dynamics can just copy across the static member information.
+

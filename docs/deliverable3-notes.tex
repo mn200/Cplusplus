@@ -1,0 +1,157 @@
+\documentclass[11pt]{article}
+
+\usepackage{charter}
+\usepackage{alltt}
+\usepackage{url}
+\usepackage{proof}
+\usepackage{amsfonts}
+
+\include{cpp-macros}
+
+\title{Notes on Deliverable 3 (August 2006)}
+\author{Michael Norrish\\{\small \texttt{Michael.Norrish@nicta.com.au}}}
+\date{}
+
+
+\begin{document}
+\maketitle
+
+\section{Form}
+
+This deliverable consists of a compressed \texttt{tar}-file, that when
+unpacked consists of a directory called \texttt{qinetiq-cpp}, which in
+turn contains four directories
+\begin{itemize}
+\item \texttt{holsrcs}, containing the HOL source files of the
+  mechanisation.  These files will build with the version of HOL4
+  present in the CVS repository at SourceForge, with timestamp
+  \texttt{2006-07-31 00:00Z}.  See Section~\ref{sec:getting-hol}
+  below for instructions on how this version of HOL can be retrieved,
+  and how the deliverable's HOL source files can then be built and
+  checked.
+\item \texttt{talks}, containing the \LaTeX{} source and a PDF for the
+  talk presented at the DARP meeting in Newcastle in April 2006.  The
+  source assumes that the \texttt{latex-beamer} and \texttt{PSTricks}
+  packages are available.
+\item \texttt{docs}, containing \LaTeX{} sources and a PDF version of
+  this document, as well as sources for the notes on Deliverable~1.
+\item \texttt{notes}, some C++ source files that illustrate various
+  aspects of C++ behaviour.  An accompanying text file explains some
+  of the behaviours.
+\end{itemize}
+
+\subsection{Building HOL Source-Files}
+\label{sec:getting-hol}
+
+\paragraph{Getting HOL From SourceForge}
+
+To get a particular, dated, version of the HOL4 sources from the CVS
+repository, one must first issue the command
+
+{\small
+\begin{verbatim}
+   cvs -d:pserver:anonymous@hol.cvs.sourceforge.net:/cvsroot/hol login
+\end{verbatim}
+}
+
+When prompted for a password, just press \texttt{Enter} to send a null
+response.  The check-out of source code from SourceForge can now
+proceed.  The source code fits into 60MB.  Issue the command
+
+{\small
+\begin{alltt}
+   cvs \textit{repository-spec} co -D \textit{date} hol98
+\end{alltt}
+}
+
+\noindent where \textit{\ttfamily repository-spec} is the string
+
+{\small
+\begin{alltt}
+   -d:pserver:anonymous@hol.cvs.sourceforge.net:/cvsroot/hol
+\end{alltt}
+}
+
+\noindent (also used in the \texttt{login} command), and where
+\textit{\ttfamily date} is the desired date, best specified as an
+ISO~8601 string enclosed in double-quotes.  For example,
+\texttt{"2006-06-30 04:05Z"}.
+
+Once a copy of the sources have been downloaded, further commands can
+be used to update this copy to correspond to different dates.  As long
+as such commands are issued from within the \texttt{hol98} directory,
+the repository specification can be omitted.  The update command is
+
+{\small
+\begin{alltt}
+   cvs update -d -D \textit{date}
+\end{alltt}
+}
+
+\paragraph{Installing HOL} Once the sources have been downloaded, the
+installation instructions from the page at
+\url{http://hol.sourceforge.net} should be followed to build a copy of
+HOL.  An installation of the Moscow~ML compiler (v2.01) will also be
+required.
+
+\paragraph{Building Deliverable Sources}
+When HOL4 has been installed, the \texttt{Holmake} program (found in
+the \texttt{hol98/bin} directory) can be run in the \texttt{holsrcs}
+directory to create and check the logical theories.
+
+\section{Content}
+
+This deliverable extends the existing HOL semantics for deliverable
+2's ``\cpp-like'' language by adding treatments of \texttt{const},
+multiple inheritance and constructor and destructor functions.  In
+addition a number of other wrinkles are addressed.  The existence of
+the latter suggests that a more detailed plan of work for other
+language features should be drawn up.
+
+\subsection{Postponing Statics}
+
+There is a great deal of language in the standard encoding complicated
+rules that are entirely static in their scope.  In this context,
+``static'' means that these are rules that will be implemented by
+compilers, and that programs that fail to be adhered to them will be
+flagged as such at compile time.
+
+For example, one such rule is the requirement that data members in
+classes have unique names.  (Multiple functions can share the same
+name because of overloading.)
+
+\section{Future}
+
+The next deliverable will include a treatment of multiple inheritance,
+\texttt{const} types and object lifetimes.  Multiple inheritance
+should be straight-forward, given the Wasserrab's model.  The
+treatment of \texttt{const} should also be fairly easy.  Object
+lifetimes will require a treatment of class constructors and
+destructors at the very least, and could well be moderately
+complicated, particularly if the standard's level of
+under-specification is to be modelled.
+
+If destructors are to be called before a certain deadline is reached,
+this might best be modelled in a way similar to the treatment of side
+effects.  Object destructions can be accumulated in some sort of state
+field (a set, say), and non-deterministically pulled from this as
+evaluation progresses.  When a deadline is reached, there will be a
+side-condition on the relevant rule requiring that the state field be
+empty.
+
+\bibliographystyle{plain}
+\bibliography{deliverables}
+
+\end{document}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
