@@ -64,7 +64,9 @@ val _ = Hol_datatype`
            | EStmt of CStmt => conttype ;
 
   var_decl = VDec of CType => CPPname
-           | VDecInit of CType => CPPname => ExtE
+           | VDecInit of CType => CPPname => bool => initializer
+               (* boolean records when space for variable has been allocated *)
+
            | VStrDec of string => class_info option ;
 
   (* TODO: classes can contain nested classes
@@ -98,7 +100,19 @@ val _ = Hol_datatype`
                    (* bool in fields is true for static members *)
 
                 ancestors : CPPname option
-             |>
+             |> ;
+
+  initializer =
+             (* see 8.5 p12 for discussion of difference *)
+             DirectInit of ExtE
+                (* the expression will be a FnApp where the arguments are the
+                   arguments that appear in the source, and where the function
+                   will be the place-holder ConstructorFVal *)
+           | CopyInit of ExtE
+                (* copy initialisation of classes also results in a constructor
+                   being called, once the expression has been evaluated and
+                   found to be of the right type through a conversion
+                   sequence *)
 `;
 (* A declaration can be used to declare (but not define a function).
    A VStrDec with a NONE class_info is the equivalent of
@@ -175,8 +189,11 @@ val erec_stmt_def = Define`
   (erec_vdecs P (vd::vds) = erec_vdec P vd /\ erec_vdecs P vds) /\
 
   (erec_vdec P (VDec ty nm) = T) /\
-  (erec_vdec P (VDecInit ty nm ee) = erec_exte P ee) /\
-  (erec_vdec P (VStrDec cnm copt) = T)
+  (erec_vdec P (VDecInit ty nm b i) = erec_idec P i) /\
+  (erec_vdec P (VStrDec cnm copt) = T) /\
+
+  (erec_idec P (DirectInit ee) = erec_exte P ee) /\
+  (erec_idec P (CopyInit ee) = erec_exte P ee)
 `
 
 (* categorising some forms of statement *)

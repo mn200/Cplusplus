@@ -1,4 +1,4 @@
-(* Dynamic Semantics of C(++) forms *)
+(* Dynamic Semantics of C++ forms *)
 
 (* Michael Norrish *)
 
@@ -321,7 +321,7 @@ val signed_int_def = Define`
 
 (* note that this predicate is two-valued: the possibility that a value
    isn't well-defined for the type is ignored.  This is because we assume
-   that possibility is dealt with elsewher: when values are read out of
+   that possibility is dealt with elsewhere: when values are read out of
    memory or otherwise constructed. *)
 val is_zero_def = Define`
   (is_zero (Signed i) v = (INT_VAL (Signed i) v = SOME 0)) /\
@@ -343,27 +343,30 @@ val final_value_def = Define`
 `;
 
 val vdeclare_def = Define`
-  vdeclare s0 ty nm optval s =
-     (?a sz s' rs.
+  vdeclare s0 ty nm s =
+     (?a sz rs.
          (rs = range_set a sz) /\
          object_type ty /\ malloc s0 ty a /\ sizeof (sizeofmap s) ty sz /\
-         (s' = s0 with <| allocmap updated_by (UNION) rs;
-                           varmap updated_by
-                              (\vm. vm |+ (nm,(a,default_path ty)));
-                           typemap updated_by (\tm. tm |+ (nm,ty)) |>) /\
-         (case optval of
-             NONE -> (s = s')
-          || SOME (ECompVal v ty') ->
-                (s = val2mem (s' with initmap updated_by (UNION) rs) a v)
-          || SOME other -> F))
+         (s = s0 with <| allocmap updated_by (UNION) rs;
+                          varmap updated_by
+                             (\vm. vm |+ (nm,(a,default_path ty)));
+                          typemap updated_by (\tm. tm |+ (nm,ty)) |>))
         \/
      (function_type ty /\
       (s = s0 with typemap updated_by (\tm. tm |+ (nm, ty))))
         \/
-     (?a t ty0 p.
-        (ty = Ref ty0) /\ (optval = SOME (LVal a t p)) /\
-        (s = s0 with <| varmap updated_by (\vm. vm |+ (nm, (a, p)));
-                        typemap updated_by (\tm. tm |+ (nm, ty)) |>))
+     (?ty0.
+        (ty = Ref ty0) /\
+        (* before the reference gets initialised, what should its value be?
+           Or, what does an uninitialised reference what look like?
+           Certainly, references must be initialised by valid objects, so
+           attempting
+              int &y = y ;
+           must be bad.  So, let's make it a reference to a guaranteed bad
+           address, 0 *)
+        (s = s0 with
+             <| varmap updated_by (\vm. vm |+ (nm, (0, default_path ty0)));
+                typemap updated_by (\tm. tm |+ (nm, ty0)) |>))
 
 `;
 
@@ -374,6 +377,7 @@ val copy2globals_def = Define`
 `;
 
 (* true if the nth argument of f is not a reference type *)
+(* TODO: deal with overloading *)
 val fn_expects_rval_def = Define`
   fn_expects_rval s f n =
     ?retty args.
@@ -381,6 +385,15 @@ val fn_expects_rval_def = Define`
        expr_type (expr_type_comps s) RValue f (Ptr (Function retty args))) /\
       ~ref_type (EL n args)
 `;
+
+(* true if the nth argument of the constructor for cnm is not a reference
+   type - the actual arguments are passed so that we have a hope of figuring
+   out which actual constructor is going to get called *)
+(* TODO: deal with overloading *)
+(* TODO: complete definition of constructor_expects_rval *)
+val constructor_expects_rval_def = Define`
+  constructor_expects_rval s cnm arglist n = T
+`
 
 val return_cont_def = Define`
   return_cont ty = if ref_type ty then LVC LVal
@@ -660,6 +673,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: deref-objptr *)
 (* 5.3.1 p1 - pointer to an object type *)
 (!mval t se s addr pth.
      object_type t /\ (SOME (addr,pth) = ptr_decode(s,t) mval)
@@ -669,6 +683,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: deref-objptr-fails *)
 (!mval t se s.
      object_type t /\ (ptr_decode(s,t) mval = NONE)
    ==>
@@ -677,6 +692,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: deref-fnptr *)
 (* 5.3.1 p1 - pointer to a function type *)
 (!v retty argtys se s.
      v IN FDOM s.fndecode
@@ -810,6 +826,20 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mExpr (FnApp (FVal fnid fty eopt) params) se) s
           (s, ev (FnApp_sqpt (FVal fnid fty eopt) params) base_se))
+
+   /\
+
+(* RULE-ID: constructor-call-sqpt *)
+(!cnm params se s.
+     EVERYi (\i e. if constructor_expects_rval s cnm params i then
+                     ?a t p. e = LVal a t p
+                   else
+                     ?v t. e = ECompVal v t)
+            params /\
+     is_null_se se
+   ==>
+     ^mng (mExpr (FnApp (ConstructorFVal cnm) params) se) s
+          (s, ev (FnApp_sqpt (ConstructorFVal cnm) params) base_se))
 
    /\
 
@@ -1073,50 +1103,108 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: block-vdec *)
+(* RULE-ID: block-vdec-nonclass *)
 (!s0 s ty name vds sts c.
-     vdeclare s0 ty name NONE s
+     vdeclare s0 ty name s /\ (!cnm. ~(ty = Class cnm))
    ==>
      ^mng (mStmt (Block T (VDec ty name :: vds) sts) c) s0
           (s, mStmt (Block T vds sts) c))
 
    /\
 
-(* RULE-ID: block-vdecinit-evaluate *)
-(!ty name exte exte' s0 s vds sts c.
-     ^mng exte s0 (s, exte')
+(* RULE-ID: block-vdec-class *)
+(* if called on to declare a class variable, then the default, argument-less
+   constructor gets called *)
+(* TODO: handle construction of arrays of objects, which happens in order
+   of increasing subscripts (see 12.6 p3) *)
+(!s0 s name cnm vds sts c.
+     vdeclare s0 (Class cnm) name s
    ==>
-     ^mng (mStmt (Block T (VDecInit ty name exte::vds) sts) c) s0
-          (s, mStmt (Block T (VDecInit ty name exte'::vds) sts) c))
+     ^mng (mStmt (Block T (VDec (Class cnm) name :: vds) sts) c) s0
+          (s, mStmt (Block
+                       T
+                       (CONS (VDecInit
+                                (Class cnm)
+                                name
+                                T
+                                (DirectInit
+                                   (NormE (FnApp
+                                             (ConstructorFVal cnm)
+                                             [])
+                                          base_se)))
+                             vds)
+                       sts)
+                    c))
+
+   /\
+
+(* RULE-ID: block-vdecinit-start-evaluate *)
+(* internal flag switches from F to T *)
+(!ty name ii s0 s vds sts c.
+     vdeclare s0 ty name s
+   ==>
+     ^mng (mStmt (Block T (VDecInit ty name F ii::vds) sts) c) s0
+          (s, mStmt (Block T (VDecInit ty name T ii::vds) sts) c))
+
+   /\
+
+(* RULE-ID: block-vdecinit-evaluate *)
+(!ty name exte0 exte s0 s vds sts c f.
+     ^mng exte0 s0 (s, exte) /\ ((f = CopyInit) \/ (f = DirectInit))
+   ==>
+     ^mng (mStmt (Block T (VDecInit ty name T (f exte0) :: vds) sts) c) s0
+          (s, mStmt (Block T (VDecInit ty name T (f exte) :: vds) sts) c))
 
    /\
 
 (* RULE-ID: block-vdecinit-lval2rval *)
-(!s0 e0 se0 s e se ty name vds sts c.
-     lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty
+(!s0 e0 se0 s e se ty name vds sts c f.
+     lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty /\
+     ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     ^mng (mStmt (Block T (VDecInit ty name (mExpr e0 se0) :: vds) sts) c) s0
-          (s, mStmt (Block T (VDecInit ty name (mExpr e se) :: vds) sts) c))
+     ^mng (mStmt (Block T
+                        (VDecInit ty name T (f (mExpr e0 se0)) :: vds)
+                        sts)
+                 c) s0
+          (s, mStmt (Block T
+                           (VDecInit ty name T (f (mExpr e se)) :: vds)
+                           sts)
+                    c))
 
    /\
 
-(* RULE-ID: block-vdecinit-finish-nonref *)
-(!dty name v ty v' se vds sts c s0 s.
-     is_null_se se /\ vdeclare s0 dty name (SOME (ECompVal v' dty)) s /\
-     parameter_coerce (v,ty) (v',dty)
+(* RULE-ID: block-vdecinit-finish *)
+(* for non-class, non-reference declarations.  Non-class is checked for
+   explicitly.  Non-reference is implicit in that the RHS has evaluated as
+   far as an ECompVal *)
+(!dty name v ty v' se vds sts c s0 s rs f a pth.
+     is_null_se se /\
+     (!cnm. ~(dty = Class cnm)) /\
+     ((a,pth) = s0.varmap ' name) /\
+     parameter_coerce (v,ty) (v',dty) /\
+     (rs = range_set a (LENGTH v')) /\
+     (s = val2mem (s0 with initmap updated_by (UNION) rs) a v') /\
+     ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     ^mng (mStmt (Block T (VDecInit dty name (NormE (ECompVal v ty) se) :: vds)
-                          sts) c)
+     ^mng (mStmt (Block T
+                        (VDecInit dty name T
+                                  (f (NormE (ECompVal v ty) se)) :: vds)
+                        sts) c)
           s0
           (s, mStmt (Block T vds sts) c))
 
    /\
 
 (* RULE-ID: block-vdecinit-finish-ref *)
-(!se s0 ty name a t p s vds sts c.
-     is_null_se se /\ vdeclare s0 ty name (SOME (LVal a t p)) s
+(!se s0 ty1 ty2 name a p s vds sts c f.
+     is_null_se se /\ ((f = CopyInit) \/ (f = DirectInit)) /\
+     (s = s0 with varmap updated_by (\fm. fm |+ (name, (a,p))))
    ==>
-     ^mng (mStmt (Block T (VDecInit ty name (NormE (LVal a t p) se) :: vds)
+     ^mng (mStmt (Block T (VDecInit
+                             (Ref ty1)
+                             name
+                             T
+                             (f (NormE (LVal a ty2 p) se)) :: vds)
                         sts) c)
           s0
           (s, mStmt (Block T vds sts) c))
@@ -1184,50 +1272,97 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: global-var-defn *)
+(* RULE-ID: global-nonclass-var-defn *)
 (!s0 ty name s edecls.
-     vdeclare s0 ty name NONE s /\ object_type ty
+     vdeclare s0 ty name s /\ object_type ty /\ (!cnm. ~(ty = Class cnm))
    ==>
-     emeaning (Decl (VDec ty name) :: edecls) s0 (copy2globals s, edecls)) /\
+     emeaning (Decl (VDec ty name) :: edecls) s0 (copy2globals s, edecls))
+
+   /\
+
+(* RULE-ID: global-class-var-defn *)
+(!s0 cnm name s edecls.
+     vdeclare s0 (Class cnm) name s
+   ==>
+     emeaning (Decl (VDec (Class cnm) name) :: edecls)
+              s0
+              (copy2globals s,
+               CONS (Decl
+                       (VDecInit (Class cnm)
+                                 name
+                                 T
+                                 (DirectInit
+                                    (NormE (FnApp
+                                              (ConstructorFVal cnm)
+                                              [])
+                                           base_se))))
+                    edecls))
+
+   /\
+
+(* RULE-ID: global-vdecinit-start-evaluate *)
+(* internal flag switches from F to T *)
+(!s0 ty name ii edecls s.
+     vdeclare s0 ty name s
+   ==>
+     emeaning (Decl (VDecInit ty name F ii) :: edecls) s0
+              (s, Decl (VDecInit ty name T ii) :: edecls))
+
+   /\
+
 
 (* RULE-ID: global-var-init-evaluation *)
-(!s0 ty name exte exte' edecls s.
-     meaning exte s0 (s, exte')
+(!s0 ty name exte exte' edecls s f.
+     meaning exte s0 (s, exte') /\
+     ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     emeaning (Decl (VDecInit ty name exte) :: edecls) s0
-              (s, Decl (VDecInit ty name exte') :: edecls))
+     emeaning (Decl (VDecInit ty name T (f exte)) :: edecls) s0
+              (s, Decl (VDecInit ty name T (f exte')) :: edecls))
 
    /\
 
 (* RULE-ID: global-var-init-lval2rval *)
-(!ty name e0 se0 edecls s0 s e se.
-     lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty
+(!ty name e0 se0 edecls s0 s e se f.
+     lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty /\
+     ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     emeaning (Decl (VDecInit ty name (mExpr e0 se0)) :: edecls) s0
-              (s, Decl (VDecInit ty name (mExpr e se)) :: edecls))
+     emeaning (Decl (VDecInit ty name T (f (mExpr e0 se0))) :: edecls) s0
+              (s, Decl (VDecInit ty name T (f (mExpr e se))) :: edecls))
 
    /\
 
-(* RULE-ID: global-var-init-eval-finished *)
-(!s0 s name v ty dty v' edecls se.
-     vdeclare s0 dty name (SOME (ECompVal v' dty)) s /\
+(* RULE-ID: global-vdecinit-finish *)
+(* analogue of block-vdecinit-finish *)
+(* TODO: merge this with one indepedent vdec relation *)
+(!s0 s name v ty dty v' edecls se a pth rs f.
      parameter_coerce (v,ty) (v',dty) /\
-     is_null_se se /\ ~ref_type dty
+     is_null_se se /\
+     (!cnm. ~(dty = Class cnm)) /\
+     ((a,pth) = s0.varmap ' name) /\
+     (s = val2mem (s0 with initmap updated_by (UNION) rs) a v') /\
+     (rs = range_set a (LENGTH v')) /\
+     ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     emeaning (Decl (VDecInit dty name (NormE (ECompVal v ty) se)) :: edecls)
-              s0
-              (copy2globals s, edecls))
+     emeaning
+       (Decl (VDecInit dty name T (f (NormE (ECompVal v ty) se))) :: edecls)
+       s0
+       (copy2globals s, edecls))
 
    /\
 
-(* RULE-ID: global-var-init-eval-ref-finished *)
-(!s0 ty name a t p s se edecls.
-     vdeclare s0 ty name (SOME (LVal a t p)) s /\ is_null_se se /\
-     ref_type ty
+(* RULE-ID: global-vdecinit-finish-ref *)
+(* analogue of block-vdecinit-finish-ref *)
+(* TODO: merge with independent vdec relation *)
+(!s0 ty1 name a ty2 p s se edecls f.
+     is_null_se se /\ ((f = CopyInit) \/ (f = DirectInit)) /\
+     (s = s0 with varmap updated_by (\fm. fm |+ (name, (a, p))))
    ==>
-     emeaning (Decl (VDecInit ty name (NormE (LVal a t p) se)) :: edecls)
-              s0
-              (copy2globals s, edecls))
+     emeaning
+       (CONS
+          (Decl (VDecInit (Ref ty1) name T (f (NormE (LVal a ty2 p) se))))
+          edecls)
+       s0
+       (copy2globals s, edecls))
 
    /\
 

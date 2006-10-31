@@ -49,10 +49,8 @@ val pass_parameters_preserves_fnmaps = prove(
   FULL_SIMP_TAC (srw_ss()) [])
 
 val vdeclare_preserves_fnmaps = prove(
-  ``vdeclare s0 ty name optval s ==> (s0.fnmap = s.fnmap)``,
-  SRW_TAC [][vdeclare_def] THEN SRW_TAC [][] THEN
-  Cases_on `optval` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-  Cases_on `x` THEN FULL_SIMP_TAC (srw_ss()) []);
+  ``vdeclare s0 ty name s ==> (s0.fnmap = s.fnmap)``,
+  SRW_TAC [][vdeclare_def] THEN SRW_TAC [][]);
 
 (* final result *)
 val fninfo_invariant = store_thm(

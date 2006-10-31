@@ -66,8 +66,16 @@ val _ = Hol_datatype
          | LVal of num => CType => CPPname list
 
             (* this is a function l-value.  The expression argument represents
-               the class object if the function is a member function *)
+               the class object if the function is a member function, the
+               type is the function type, i.e. of form Function rettype args *)
          | FVal of fnid => CPP_Type => CExpr option
+
+            (* this is a "constructor function" l-value.  These can only arise
+               when an object is created and are used in the function
+               designator position.  They don't need to encode any information
+               about types and object identities because this is all
+               elsewhere. *)
+         | ConstructorFVal of CPPname
          | RValreq of CExpr
          | ECompVal of byte list => CType
          | UndefinedExpr `;
@@ -112,6 +120,7 @@ val rec_expr_P_def = Define`
     (rec_expr_P (RValreq e) P = P (RValreq e) /\ rec_expr_P e P) /\
     (rec_expr_P (ECompVal v t) P = P (ECompVal v t)) /\
     (rec_expr_P UndefinedExpr P = P UndefinedExpr) /\
+    (rec_expr_P (ConstructorFVal nm) P = P (ConstructorFVal nm)) /\
     (rec_exprl_P [] P = T) /\
     (rec_exprl_P (CONS e es) P = rec_expr_P e P /\ rec_exprl_P es P) /\
     (rec_expr_opt NONE P = T) /\
