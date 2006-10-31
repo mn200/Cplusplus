@@ -52,14 +52,33 @@ val vdeclare_preserves_fnmaps = prove(
   ``vdeclare s0 ty name s ==> (s0.fnmap = s.fnmap)``,
   SRW_TAC [][vdeclare_def] THEN SRW_TAC [][]);
 
+val declmng_preserves_fnmaps = prove(
+  ``(!ee0 s0 see. mng ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)) /\
+    (!s. (vdf s).fnmap = s.fnmap) ==>
+    !d0s0 ds. declmng mng vdf d0s0 ds ==>
+              ((SND d0s0).fnmap = (SND ds).fnmap)``,
+  STRIP_TAC THEN HO_MATCH_MP_TAC declmng_ind THEN
+  SRW_TAC [][] THEN
+  TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps,
+                  vdeclare_preserves_fnmaps]) THEN
+  RES_TAC THEN FULL_SIMP_TAC (srw_ss()) []);
+
+val declmng_elim_preserves_fnmaps = prove(
+  ``declmng mng vdf d0s0 ds ==>
+    (!ee0 s0 see. mng ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)) ==>
+    (!s. (vdf s).fnmap = s.fnmap) ==>
+    ((SND d0s0).fnmap = (SND ds).fnmap)``,
+  METIS_TAC [declmng_preserves_fnmaps]);
+
 (* final result *)
 val fninfo_invariant = store_thm(
   "fninfo_invariant",
   ``!ee0 s0 see. meaning ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)``,
   HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
-  TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps,
-                  vdeclare_preserves_fnmaps]) THEN
-  IMP_RES_TAC pass_parameters_preserves_fnmaps THEN
+  TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps]) THEN
+  TRY (IMP_RES_TAC pass_parameters_preserves_fnmaps THEN
+       FULL_SIMP_TAC (srw_ss()) [] THEN NO_TAC) THEN
+  IMP_RES_TAC declmng_elim_preserves_fnmaps THEN
   FULL_SIMP_TAC (srw_ss()) []);
 
 (* ----------------------------------------------------------------------
