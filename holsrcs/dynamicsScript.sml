@@ -419,7 +419,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (!s0 ty name s.
      vdeclare s0 ty name s /\ object_type ty /\ (!cnm. ~(ty = Class cnm))
    ==>
-     declmng mng vdf (VDec ty name, s0) (NONE, vdf s))
+     declmng mng vdf (VDec ty name, s0) ([], vdf s))
 
    /\
 
@@ -434,13 +434,13 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      declmng mng
              vdf
              (VDec (Class cnm) name, s0)
-             (SOME (VDecInit (Class cnm)
-                             name
-                             T
-                             (DirectInit (NormE (FnApp (ConstructorFVal cnm)
-                                                       [])
-                                                base_se))),
-              s))
+             ([VDecInit (Class cnm)
+                        name
+                        T
+                        (DirectInit (NormE (FnApp (ConstructorFVal cnm)
+                                                  [])
+                                           base_se))],
+              vdf s))
 
    /\
 
@@ -450,7 +450,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      vdeclare s0 ty name s
    ==>
      declmng mng vdf (VDecInit ty name F ii, s0)
-                     (SOME (VDecInit ty name T ii), vdf s))
+                     ([VDecInit ty name T ii], vdf s))
 
    /\
 
@@ -460,7 +460,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
      declmng mng vdf (VDecInit ty name T (f exte), s0)
-                     (SOME (VDecInit ty name T (f exte')), s))
+                     ([VDecInit ty name T (f exte')], s))
 
    /\
 
@@ -470,7 +470,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
      declmng mng vdf (VDecInit ty name T (f (NormE e0 se0)), s0)
-                     (SOME (VDecInit ty name T (f (NormE e se))), s))
+                     ([VDecInit ty name T (f (NormE e se))], s))
 
    /\
 
@@ -486,7 +486,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
      declmng mng vdf (VDecInit dty name T (f (NormE (ECompVal v ty) se)), s0)
-                     (NONE, s))
+                     ([], s))
 
    /\
 
@@ -499,7 +499,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      declmng mng
              vdf
              (VDecInit (Ref ty1) name T (f (NormE (LVal a ty2 p) se)), s0)
-             (NONE, s))`
+             ([], s))`
 
 val declmng_MONO = store_thm(
   "declmng_MONO",
@@ -1206,24 +1206,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: block-declmng-continuing *)
-(!s0 s d0 d vds sts c.
-     declmng ^mng I (d0, s0) (SOME d, s)
+(* RULE-ID: block-declmng *)
+(!s0 s d0 ds vds sts c.
+     declmng ^mng I (d0, s0) (ds, s)
    ==>
      ^mng (mStmt (Block T (d0 :: vds) sts) c) s0
-          (s, mStmt (Block T (d ::vds) sts) c))
+          (s, mStmt (Block T (ds ++ vds) sts) c))
 
    /\
-
-(* RULE-ID: block-declmng-finishes *)
-(!s0 s d vds sts c.
-     declmng ^mng I (d, s0) (NONE, s)
-   ==>
-     ^mng (mStmt (Block T (d :: vds) sts) c) s0
-          (s, mStmt (Block T vds sts) c))
-
-   /\
-
 
 (* RULE-ID: block-vstrdec *)
 (* TODO: handle local classes *)
@@ -1286,19 +1276,11 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: global-declmng-continuing *)
-(!s0 s d0 d edecls.
-     declmng meaning copy2globals (d0, s0) (SOME d, s)
+(* RULE-ID: global-declmng *)
+(!s0 s d0 ds edecls.
+     declmng meaning copy2globals (d0, s0) (ds, s)
    ==>
-     emeaning (Decl d0 :: edecls) s0 (s, Decl d :: edecls))
-
-   /\
-
-(* RULE-ID: global-declmng-finishes *)
-(!s0 s d edecls.
-     declmng meaning copy2globals (d, s0) (NONE, s)
-   ==>
-     emeaning (Decl d :: edecls) s0 (s, edecls))
+     emeaning (Decl d0 :: edecls) s0 (s, MAP Decl ds ++ edecls))
 
    /\
 
