@@ -64,8 +64,15 @@ val _ = Hol_datatype`
            | EStmt of CStmt => conttype ;
 
   var_decl = VDec of CType => CPPname
-           | VDecInit of CType => CPPname => bool => initializer
-               (* boolean records when space for variable has been allocated *)
+           | VDecInit of CType => CPPname => initializer
+               (* init is the initial form of the initialising declarator *)
+           | VDecInitA of CType => CPPname => num => initializer
+               (* when space has been allocated, the form becomes the
+                  VDecInitA, where the name is augmented by the address
+                  of the start of the object in memory.  The name is necessary
+                  for initialisation of references (the model doesn't
+                  allocate any space for references, so the address is bogus
+                  (NULL, in fact) *)
 
            | VStrDec of string => class_info option ;
 
@@ -189,7 +196,8 @@ val erec_stmt_def = Define`
   (erec_vdecs P (vd::vds) = erec_vdec P vd /\ erec_vdecs P vds) /\
 
   (erec_vdec P (VDec ty nm) = T) /\
-  (erec_vdec P (VDecInit ty nm b i) = erec_idec P i) /\
+  (erec_vdec P (VDecInit ty nm i) = erec_idec P i) /\
+  (erec_vdec P (VDecInitA ty nm addr i) = erec_idec P i) /\
   (erec_vdec P (VStrDec cnm copt) = T) /\
 
   (erec_idec P (DirectInit ee) = erec_exte P ee) /\

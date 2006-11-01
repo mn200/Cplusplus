@@ -6,6 +6,7 @@
 open HolKernel boolLib Parse bossLib BasicProvers
 open boolSimps
 
+
 (* Standard HOL ancestory theories *)
 open arithmeticTheory pred_setTheory integerTheory
 local open wordsTheory integer_wordTheory finite_mapTheory in end
@@ -16,6 +17,7 @@ local open side_effectsTheory statesTheory operatorsTheory in end
 
 val _ = new_theory "dynamics";
 
+val _ = set_trace "inddef strict" 1
 
 (* an e-context is a function defining contexts where expression evaluation
    can occur *)
@@ -428,77 +430,84 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    constructor gets called *)
 (* TODO: handle construction of arrays of objects, which happens in order
    of increasing subscripts (see 12.6 p3) *)
-(!s0 s name cnm.
-     vdeclare s0 (Class cnm) name s
+(!s0 s name cnm a pth.
+     vdeclare s0 (Class cnm) name s /\
+     ((a,pth) = s.varmap ' name)
    ==>
      declmng mng
              vdf
              (VDec (Class cnm) name, s0)
-             ([VDecInit (Class cnm)
-                        name
-                        T
-                        (DirectInit (NormE (FnApp (ConstructorFVal cnm)
-                                                  [])
-                                           base_se))],
+             ([VDecInitA (Class cnm)
+                         name
+                         a
+                         (DirectInit (NormE (FnApp (ConstructorFVal cnm)
+                                                   [])
+                                            base_se))],
               vdf s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-start-evaluate *)
-(* internal flag switches from F to T *)
-(!s0 ty name ii s.
-     vdeclare s0 ty name s
+(* form switches from VDecInit to VDecInitA, reflecting allocation of space
+   for the "object".  (In fact, vdeclare handles functions and references as
+   well.  Functions can't be initialised, so they won't appear here.
+   References must be initialised, and the behaviour of vdeclare on
+   references is to put them into the typemap, but to allocate no space,
+   and to put them into the varmap at address 0. *)
+(!s0 ty name ii s a pth.
+     vdeclare s0 ty name s /\
+     ((a,pth) = s.varmap ' name)
    ==>
-     declmng mng vdf (VDecInit ty name F ii, s0)
-                     ([VDecInit ty name T ii], vdf s))
+     declmng mng vdf (VDecInit ty name ii, s0)
+                     ([VDecInitA ty name a ii], vdf s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-evaluation *)
-(!s0 ty name exte exte' s f.
+(!s0 ty a nm exte exte' s f.
      mng exte s0 (s, exte') /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInit ty name T (f exte), s0)
-                     ([VDecInit ty name T (f exte')], s))
+     declmng mng vdf (VDecInitA ty nm a (f exte), s0)
+                     ([VDecInitA ty nm a (f exte')], s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-lval2rval *)
-(!ty name e0 se0 s0 s e se f.
+(!ty a nm e0 se0 s0 s e se f.
      lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInit ty name T (f (NormE e0 se0)), s0)
-                     ([VDecInit ty name T (f (NormE e se))], s))
+     declmng mng vdf (VDecInitA ty nm a (f (NormE e0 se0)), s0)
+                     ([VDecInitA ty nm a (f (NormE e se))], s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-finish *)
 (* for non-class, non-reference types *)
-(!s0 s name v ty dty v' se a pth rs f.
+(!s0 s nm v ty dty v' se a rs f.
      parameter_coerce (v,ty) (v',dty) /\
      is_null_se se /\
      (!cnm. ~(dty = Class cnm)) /\
-     ((a,pth) = s0.varmap ' name) /\
      (s = val2mem (s0 with initmap updated_by (UNION) rs) a v') /\
      (rs = range_set a (LENGTH v')) /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInit dty name T (f (NormE (ECompVal v ty) se)), s0)
+     declmng mng vdf (VDecInitA dty nm a (f (NormE (ECompVal v ty) se)), s0)
                      ([], s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-finish-ref *)
-(!s0 ty1 name a ty2 p s se f.
+(* a0 is bogus, NULL even. *)
+(!s0 ty1 nm a0 a ty2 p s se f.
      is_null_se se /\
      ((f = CopyInit) \/ (f = DirectInit)) /\
-     (s = s0 with varmap updated_by (\fm. fm |+ (name, (a,p))))
+     (s = s0 with varmap updated_by (\fm. fm |+ (nm, (a,p))))
    ==>
      declmng mng
              vdf
-             (VDecInit (Ref ty1) name T (f (NormE (LVal a ty2 p) se)), s0)
+             (VDecInitA (Ref ty1) nm a0 (f (NormE (LVal a ty2 p) se)), s0)
              ([], s))`
 
 val declmng_MONO = store_thm(
@@ -516,7 +525,6 @@ val _ = print "About to define meaning relation\n"
 val mng  =
     mk_var("meaning", ``:ExtE -> CState -> (CState # ExtE) -> bool``)
 val _ = temp_overload_on("ev", ``mExpr``)
-val _ = set_trace "inddef strict" 1
 
 val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
