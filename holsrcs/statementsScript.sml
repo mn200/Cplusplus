@@ -38,8 +38,8 @@ val _ = Hol_datatype `traptype = BreakTrap | ContTrap`;
 (* sorts of continuations, depending on whether a function is to return a
    reference or not. *)
 val _ = Hol_datatype `
-  conttype = RVC of (byte list -> CPP_Type -> CExpr)
-           | LVC of (num -> CPP_Type -> CPPname list -> CExpr)
+  conttype = RVC of (byte list -> CPP_Type -> CExpr) => se_info
+           | LVC of (num -> CPP_Type -> CPPname list -> CExpr) => se_info
 `;
 
 (* term taken from grammar, as in 12.6.2 *)

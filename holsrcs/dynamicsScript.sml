@@ -398,13 +398,13 @@ val constructor_expects_rval_def = Define`
 `
 
 val return_cont_def = Define`
-  return_cont ty = if ref_type ty then LVC LVal
-                   else RVC ECompVal
+  return_cont se ty = if ref_type ty then LVC LVal se
+                      else RVC ECompVal se
 `
 
 val cont_comp_def = Define`
-  (cont_comp f (RVC rc) = RVC (\v rt. f (rc v rt))) /\
-  (cont_comp f (LVC lc) = LVC (\a t p. f (lc a t p)))
+  (cont_comp f (RVC rc se) = RVC (\v rt. f (rc v rt)) se) /\
+  (cont_comp f (LVC lc se) = LVC (\a t p. f (lc a t p)) se)
 `
 
 val RVR_def = Define`
@@ -813,8 +813,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* 5.3.1 p2-5 - taking the address of an lvalue
-                TODO: taking the address of a qualified-id, thereby generating
+(* RULE-ID: addr-lvalue *)
+(* See 5.3.1 p2-5 - taking the address of an lvalue *)
+(*   TODO: taking the address of a qualified-id, thereby generating
                 a pointer to member *)
 (!a t pth se s result.
      (SOME result = ptr_encode (s,t) (a,pth))
@@ -895,6 +896,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: non-static-data-member-field-selection *)
+(* Note how the path p of the original LVal is ignored.  This is because
+   only functions can get a "virtual" treatment.
+   This doesn't mean that a field reference can't be to an ancestor's field.
+
+*)
 (!s C fld ftype Cflds se offn i a p p'.
      s |- C has least fld -: ftype via p' /\
      (Cflds = THE (nsdmembers s (LAST p'))) /\
@@ -943,9 +949,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: constructor-call-sqpt *)
 (!cnm params se s.
      EVERYi (\i e. if constructor_expects_rval s cnm params i then
-                     ?a t p. e = LVal a t p
+                     ?v t. e = ECompVal v t
                    else
-                     ?v t. e = ECompVal v t)
+                     ?a t p. e = LVal a t p)
             params /\
      is_null_se se
    ==>
@@ -983,7 +989,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
           (s1 with
             stack updated_by
                   (CONS (s0.classmap, s0.typemap, s0.varmap, s0.thisvalue)),
-           EStmt body (return_cont rt)))
+           EStmt body (return_cont se rt)))
 
    /\
 
@@ -1021,9 +1027,21 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                         (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
                       thisvalue := SOME (ECompVal this (Ptr (Class cname)))
                    |>,
-           EStmt body (return_cont rt)))
+           EStmt body (return_cont se0 rt)))
 
    /\
+
+(* RULE-ID: constructor-function-call *)
+(* (!classname args se0
+     pass_parameters
+       (s0 with <| classmap := s0.gclassmap ;
+                   typemap := s0.gtypemap
+   ==>
+     ^mng (mExpr (FnApp_sqpt (ConstructorFVal classname) args) se0)
+          s0
+          (s1 with <|
+*)
+
 
 (* RULE-ID: function-application-lval2rval *)
 (!f pfx e0 e sfx se0 se s0 s.
@@ -1044,35 +1062,35 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: return-lval2rval *)
-(!e0 se0 s0 e se s c.
+(!e0 se0 s0 e se ret_se s c.
      lval2rval (s0,e,se0) (s,e,se)
    ==>
-     ^mng (mStmt (Ret (NormE e0 se0)) (RVC c)) s0
-          (s, mStmt (Ret (NormE e se)) (RVC c)))
+     ^mng (mStmt (Ret (NormE e0 se0)) (RVC c ret_se)) s0
+          (s, mStmt (Ret (NormE e se)) (RVC c ret_se)))
 
    /\
 
 (* RULE-ID: return-rvalue *)
 (* all recursive stmt rules require RHS of reduction to still be
    an mStmt, preventing this rule from firing at depth *)
-(!v t s se c smap tmap vmap thisval stack'.
-     is_null_se se /\ (s.stack = (smap,tmap,vmap,thisval)::stack')
+(!v t s se0 se c smap tmap vmap thisval stack'.
+     is_null_se se0 /\ (s.stack = (smap,tmap,vmap,thisval)::stack')
    ==>
-     ^mng (mStmt (Ret (NormE (ECompVal v t) se)) (RVC c)) s
+     ^mng (mStmt (Ret (NormE (ECompVal v t) se0)) (RVC c se)) s
           (s with <| stack := stack'; classmap := smap; typemap := tmap;
                      varmap := vmap; thisvalue := thisval |>,
-           mExpr (c v t) base_se))
+           mExpr (c v t) se))
 
    /\
 
 (* RULE-ID: return-lvalue *)
-(!a t p se c s cmap tmap vmap thisval stack'.
-     is_null_se se /\ (s.stack = (cmap,tmap,vmap,thisval)::stack')
+(!a t p se0 se c s cmap tmap vmap thisval stack'.
+     is_null_se se0 /\ (s.stack = (cmap,tmap,vmap,thisval)::stack')
    ==>
-     ^mng (mStmt (Ret (NormE (LVal a t p) se)) (LVC c)) s
+     ^mng (mStmt (Ret (NormE (LVal a t p) se0)) (LVC c se)) s
           (s with <| stack := stack'; classmap := cmap; typemap := tmap;
                      varmap := vmap; thisvalue := thisval |>,
-           mExpr (c a t p) base_se))
+           mExpr (c a t p) se))
 
    /\
 
