@@ -365,7 +365,9 @@ val vdeclare_def = Define`
            attempting
               int &y = y ;
            must be bad.  So, let's make it a reference to a guaranteed bad
-           address, 0 *)
+           address, 0.  We can't just leave the varmap unchanged as
+           the declaration of a variable masks other variables of the same
+           name.  See notes/ref001.cpp *)
         (s = s0 with
              <| varmap updated_by (\vm. vm |+ (nm, (0, default_path ty0)));
                 typemap updated_by (\tm. tm |+ (nm, ty0)) |>))
@@ -438,9 +440,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
              vdf
              (VDec (Class cnm) name, s0)
              ([VDecInitA (Class cnm)
-                         name
-                         a
-                         (DirectInit (NormE (FnApp (ConstructorFVal cnm)
+                         (ObjPlace a)
+                         (DirectInit (NormE (FnApp (ConstructorFVal a cnm)
                                                    [])
                                             base_se))],
               vdf s))
@@ -454,38 +455,39 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    References must be initialised, and the behaviour of vdeclare on
    references is to put them into the typemap, but to allocate no space,
    and to put them into the varmap at address 0. *)
-(!s0 ty name ii s a pth.
+(!s0 ty name ii s a pth loc.
      vdeclare s0 ty name s /\
-     ((a,pth) = s.varmap ' name)
+     ((a,pth) = s.varmap ' name) /\
+     (loc = if ref_type ty then RefPlace NONE name else ObjPlace a)
    ==>
      declmng mng vdf (VDecInit ty name ii, s0)
-                     ([VDecInitA ty name a ii], vdf s))
+                     ([VDecInitA ty loc ii], vdf s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-evaluation *)
-(!s0 ty a nm exte exte' s f.
+(!s0 ty loc exte exte' s f.
      mng exte s0 (s, exte') /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInitA ty nm a (f exte), s0)
-                     ([VDecInitA ty nm a (f exte')], s))
+     declmng mng vdf (VDecInitA ty loc (f exte), s0)
+                     ([VDecInitA ty loc (f exte')], s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-lval2rval *)
-(!ty a nm e0 se0 s0 s e se f.
+(!ty loc e0 se0 s0 s e se f.
      lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInitA ty nm a (f (NormE e0 se0)), s0)
-                     ([VDecInitA ty nm a (f (NormE e se))], s))
+     declmng mng vdf (VDecInitA ty loc (f (NormE e0 se0)), s0)
+                     ([VDecInitA ty loc (f (NormE e se))], s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-finish *)
 (* for non-class, non-reference types *)
-(!s0 s nm v ty dty v' se a rs f.
+(!s0 s v ty dty v' se a rs f.
      parameter_coerce (v,ty) (v',dty) /\
      is_null_se se /\
      (!cnm. ~(dty = Class cnm)) /\
@@ -493,21 +495,25 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      (rs = range_set a (LENGTH v')) /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInitA dty nm a (f (NormE (ECompVal v ty) se)), s0)
+     declmng mng vdf (VDecInitA dty
+                                (ObjPlace a)
+                                (f (NormE (ECompVal v ty) se)), s0)
                      ([], s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-finish-ref *)
-(* a0 is bogus, NULL even. *)
-(!s0 ty1 nm a0 a ty2 p s se f.
+(* a0 is bogus, NULL even. - assume for the moment that aopt doesn't matter *)
+(!s0 ty1 nm a aopt ty2 p s se f.
      is_null_se se /\
      ((f = CopyInit) \/ (f = DirectInit)) /\
      (s = s0 with varmap updated_by (\fm. fm |+ (nm, (a,p))))
    ==>
      declmng mng
              vdf
-             (VDecInitA (Ref ty1) nm a0 (f (NormE (LVal a ty2 p) se)), s0)
+             (VDecInitA (Ref ty1)
+                        (RefPlace aopt nm)
+                        (f (NormE (LVal a ty2 p) se)), s0)
              ([], s))`
 
 val declmng_MONO = store_thm(
@@ -515,7 +521,8 @@ val declmng_MONO = store_thm(
   ``(!x y z. P x y z ==> Q x y z) ==>
     (declmng P f s1 s2 ==> declmng Q f s1 s2)``,
   STRIP_TAC THEN MAP_EVERY Q.ID_SPEC_TAC [`s2`, `s1`] THEN
-  HO_MATCH_MP_TAC declmng_ind THEN SRW_TAC [][declmng_rules] THEN
+  HO_MATCH_MP_TAC declmng_ind THEN SIMP_TAC (srw_ss()) [declmng_rules] THEN
+  REPEAT STRIP_TAC THEN
   FIRST (map (fn th => MATCH_MP_TAC th THEN SRW_TAC [][] THEN METIS_TAC [])
              (CONJUNCTS
                 (SIMP_RULE bool_ss [FORALL_AND_THM] declmng_rules))));
@@ -947,7 +954,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: constructor-call-sqpt *)
-(!cnm params se s.
+(!a cnm params se s.
      EVERYi (\i e. if constructor_expects_rval s cnm params i then
                      ?v t. e = ECompVal v t
                    else
@@ -955,8 +962,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
             params /\
      is_null_se se
    ==>
-     ^mng (mExpr (FnApp (ConstructorFVal cnm) params) se) s
-          (s, ev (FnApp_sqpt (ConstructorFVal cnm) params) base_se))
+     ^mng (mExpr (FnApp (ConstructorFVal a cnm) params) se) s
+          (s, ev (FnApp_sqpt (ConstructorFVal a cnm) params) base_se))
 
    /\
 
@@ -1032,16 +1039,24 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: constructor-function-call *)
-(* (!classname args se0
-     pass_parameters
+(* (!classname a args se0 params s0 s1.
+     find_constructor_info classname args params mem_inits body /\
+     rec_i_params
        (s0 with <| classmap := s0.gclassmap ;
-                   typemap := s0.gtypemap
+                   typemap := s0.gtypemap ;
+                   varmap := s0.varmap |>)
+       params
+       args
+       s1 /\
+     (SOME this = ptr_encode (s0, Class classname) (a, [classname])) /\
+     (
    ==>
-     ^mng (mExpr (FnApp_sqpt (ConstructorFVal classname) args) se0)
+     ^mng (mExpr (FnApp_sqpt (ConstructorFVal a classname) args) se0)
           s0
-          (s1 with <|
+          (s1 with <| stack updated_by
+                        (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
+                      thisvalue := SOME (ECompVal this
 *)
-
 
 (* RULE-ID: function-application-lval2rval *)
 (!f pfx e0 e sfx se0 se s0 s.

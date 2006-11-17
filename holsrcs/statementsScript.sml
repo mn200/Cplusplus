@@ -45,6 +45,10 @@ val _ = Hol_datatype `
 (* term taken from grammar, as in 12.6.2 *)
 val _ = type_abbrev("mem_initializer", ``:CPPname # CExpr list option``)
 
+val _ = Hol_datatype `varlocn = RefPlace of num option => CPPname
+                              | ObjPlace of num
+`
+
 
 val _ = Hol_datatype`
   CStmt    = CLoop of ExtE => CStmt
@@ -66,13 +70,13 @@ val _ = Hol_datatype`
   var_decl = VDec of CType => CPPname
            | VDecInit of CType => CPPname => initializer
                (* init is the initial form of the initialising declarator *)
-           | VDecInitA of CType => CPPname => num => initializer
+           | VDecInitA of CType => varlocn => initializer
                (* when space has been allocated, the form becomes the
-                  VDecInitA, where the name is augmented by the address
-                  of the start of the object in memory.  The name is necessary
-                  for initialisation of references (the model doesn't
-                  allocate any space for references, so the address is bogus
-                  (NULL, in fact) *)
+                  VDecInitA, where the name is replaced by the location
+                  of the start of the object in memory.  If the object is
+                  actually a reference, then the location is just the
+                  reference's name with an optional address for any
+                  enclosing class. *)
 
            | VStrDec of string => class_info option ;
 
@@ -197,7 +201,7 @@ val erec_stmt_def = Define`
 
   (erec_vdec P (VDec ty nm) = T) /\
   (erec_vdec P (VDecInit ty nm i) = erec_idec P i) /\
-  (erec_vdec P (VDecInitA ty nm addr i) = erec_idec P i) /\
+  (erec_vdec P (VDecInitA ty vloc i) = erec_idec P i) /\
   (erec_vdec P (VStrDec cnm copt) = T) /\
 
   (erec_idec P (DirectInit ee) = erec_exte P ee) /\

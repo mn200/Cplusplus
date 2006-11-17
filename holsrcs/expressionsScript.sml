@@ -75,7 +75,7 @@ val _ = Hol_datatype
                designator position.  They don't need to encode any information
                about types and object identities because this is all
                elsewhere. *)
-         | ConstructorFVal of CPPname
+         | ConstructorFVal of num => CPPname
          | RValreq of CExpr
          | ECompVal of byte list => CType
          | UndefinedExpr `;
@@ -120,7 +120,7 @@ val rec_expr_P_def = Define`
     (rec_expr_P (RValreq e) P = P (RValreq e) /\ rec_expr_P e P) /\
     (rec_expr_P (ECompVal v t) P = P (ECompVal v t)) /\
     (rec_expr_P UndefinedExpr P = P UndefinedExpr) /\
-    (rec_expr_P (ConstructorFVal nm) P = P (ConstructorFVal nm)) /\
+    (rec_expr_P (ConstructorFVal a nm) P = P (ConstructorFVal a nm)) /\
     (rec_exprl_P [] P = T) /\
     (rec_exprl_P (CONS e es) P = rec_expr_P e P /\ rec_exprl_P es P) /\
     (rec_expr_opt NONE P = T) /\
