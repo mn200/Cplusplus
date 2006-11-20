@@ -71,6 +71,13 @@ val mapPartial_def = Define`
 `
 val _ = export_rewrites ["mapPartial_def"]
 
+val mapPartial_APPEND = store_thm(
+  "mapPartial_APPEND",
+  ``!l1 l2. mapPartial f (l1 ++ l2) = mapPartial f l1 ++ mapPartial f l2``,
+  Induct THEN SRW_TAC [][] THEN Cases_on `f h` THEN SRW_TAC [][]);
+val _ = export_rewrites ["mapPartial_APPEND"]
+
+
 (* ----------------------------------------------------------------------
     EVERYi : (num -> 'a -> bool) -> 'a list -> bool
 
