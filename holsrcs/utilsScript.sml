@@ -53,6 +53,13 @@ val deNONE_FUPDATE = store_thm(
   ])
 val _ = export_rewrites ["deNONE_FUPDATE"]
 
+val FDOM_deNONE_SUBSET = store_thm(
+  "FDOM_deNONE_SUBSET",
+  ``!f. x IN FDOM (deNONE f) ==> x IN FDOM f``,
+  HO_MATCH_MP_TAC fmap_INDUCT THEN SRW_TAC [][] THEN
+  Cases_on `y` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  METIS_TAC [DOMSUB_NOT_IN_DOM]);
+
 (* ----------------------------------------------------------------------
     mapPartial : ('a -> 'b option) -> 'a list -> 'b list
    ---------------------------------------------------------------------- *)
@@ -82,6 +89,15 @@ val EVERYi_def = Define`
   (EVERYi P (h::t) = P 0 h /\ EVERYi (P o SUC) t)
 `;
 val _ = export_rewrites ["EVERYi_def"]
+
+(* ----------------------------------------------------------------------
+    FINDL : ('a -> bool) -> 'a list -> 'a option
+   ---------------------------------------------------------------------- *)
+
+val FINDL_def = Define`
+  (FINDL P [] = NONE) /\
+  (FINDL P (h :: t) = if P h then SOME h else FINDL P t)
+`;
 
 
 
