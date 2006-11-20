@@ -28,6 +28,16 @@ val ancestor_def = Define`
                      ((THE(s.classmap ' c1)).ancestors = SOME c2)
 `;
 
+(* similarly, direct base classes, in order of declaration *)
+val get_direct_bases_def = Define`
+  get_direct_bases s cnm : CPPname list =
+    [THE (THE (s.classmap ' cnm)).ancestors]
+`
+
+val get_virtual_bases_def = Define`
+  get_virtual_bases s cnm : CPPname list = []
+`;
+
 
 (* Appending paths.  (Wasserab et al., section 3.4) *)
 val path_app_def = Define`
@@ -225,17 +235,25 @@ val _ = export_rewrites ["class_layout_SING"]
 
 val class_szmap_def = Define`
    class_szmap s =
-      FUN_FMAP (\c. let subs = class_layout { so | (c,so) IN subobjs s }
+      FUN_FMAP
+         (\c. let subs = class_layout { so | (c,so) IN subobjs s }
                           (* get "subobjects", which includes the most
                              derived class name *)
-                    in
+              in
                       (* the end of the path in the subobj is the name of the
                          class, get its nsdmembers, map SND to strip out
                          the field names, and flatten the result *)
-                      FLAT (MAP (\p. MAP SND
-                                         (THE (nsdmembers s (LAST p)))) subs))
-               { c | ?v. c IN FDOM s.classmap /\ (s.classmap ' c = SOME v) }
+                 FLAT (MAP (\p. MAP SND (THE (nsdmembers s (LAST p)))) subs))
+         (FDOM (deNONE s.classmap))
 `
+
+(* SANITY *)
+val FDOM_class_szmap = store_thm(
+  "FDOM_class_szmap",
+  ``FDOM (class_szmap s) = FDOM (deNONE s.classmap)``,
+  SRW_TAC [][class_szmap_def, finite_mapTheory.FUN_FMAP_DEF])
+val _ = export_rewrites ["FDOM_class_szmap"]
+
 
 val genoffset_def = Define`
   (genoffset [] acc szf alnf e = NONE) /\
@@ -245,7 +263,10 @@ val genoffset_def = Define`
       if h = e then SOME acc'
       else genoffset t (acc' + szf h) szf alnf e)
 `
+val _ = export_rewrites ["genoffset_def"]
 
+(* given derived class name C, state s, and path to base sub-object p, return
+   the offset of the latter within an object of type C *)
 val subobj_offset_def = Define`
   subobj_offset s C p =
     let tyfm = class_szmap s
@@ -260,6 +281,30 @@ val subobj_offset_def = Define`
                else @a. align tyfm (Class (LAST pth)) a)
         p
 `
+
+
+val nsds_bases_def = Define`
+  nsds_bases s cnm =
+    let layout = class_layout { so | (cnm, so) IN subobjs s } in
+    let info p =
+      let off = THE (subobj_offset s cnm p)
+      in
+          if p = [cnm] then
+            let nsds = THE (nsdmembers s cnm)
+            in
+              MAP (\ (fld,ty).
+                   (SOME fld, ty,
+                    THE (genoffset nsds off
+                              (\ (nm,ty). @sz. sizeof (class_szmap s) ty sz)
+                              (\ (nm,ty). @a. align (class_szmap s) ty a)
+                              (fld,ty))))
+                  nsds
+          else [(NONE, Class (LAST p), off)]
+    in
+      FLAT (MAP info layout)
+`
+
+
 
 (* BAD ASSUMPTION: no classes are abstract *)
 (* type-checking requires a variety of pieces of information, which we derive
@@ -289,11 +334,6 @@ val MEM_splits = prove(
     SRW_TAC [][]
   ]);
 
-val mapPartial_APPEND = store_thm(
-  "mapPartial_APPEND",
-  ``!l1 l2. mapPartial f (l1 ++ l2) = mapPartial f l1 ++ mapPartial f l2``,
-  Induct THEN SRW_TAC [][] THEN Cases_on `f h` THEN SRW_TAC [][]);
-
 (* SANITY *)
 val hasfld_imp_lfi = store_thm(
   "hasfld_imp_lfi",
@@ -309,7 +349,7 @@ val hasfld_imp_lfi = store_thm(
   FULL_SIMP_TAC (srw_ss()) [fieldtype_def, typesTheory.object_type_def,
                             okfield_def] THEN
   IMP_RES_TAC MEM_splits THEN
-  SRW_TAC [][mapPartial_APPEND, fieldname_def] THEN
+  SRW_TAC [][fieldname_def] THEN
   Q.HO_MATCH_ABBREV_TAC
     `?i. lookup_field_info (L1 ++ (X,Y) :: L2) X (i,Y)` THEN
   SRW_TAC [][staticsTheory.lookup_field_info_def] THEN
