@@ -13,6 +13,7 @@ local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 (* C++ ancestor theories  *)
 open typesTheory memoryTheory expressionsTheory staticsTheory class_infoTheory
+open aggregatesTheory
 local open side_effectsTheory statesTheory operatorsTheory in end
 
 val _ = new_theory "dynamics";
@@ -63,7 +64,7 @@ val lval2rval_def = Define`
        ?n t p.
           (e0 = LVal n t p) /\
              (~array_type t /\ (!cn. ~(t = Class cn)) /\
-              (?sz. sizeof (sizeofmap s0) t sz /\
+              (?sz. sizeof T (sizeofmap s0) t sz /\
                     (mark_ref n sz se0 se /\
                      range_set n sz SUBSET s0.initmap /\
                      (e = ECompVal (mem2val s0 n sz) t) \/
@@ -181,11 +182,14 @@ val valid_fvcontext_def = Define`
 `
 
 (* malloc s0 ty a is true if a is a valid address for a value of type ty,
-   and is currently unallocated *)
+   and is currently unallocated.
+
+   If you are malloc-ing space for a class, then it will be for a most-derived
+   class, which is they there are T's passed to sizeof and align. *)
 val malloc_def = Define`
   malloc s0 ty a =
-     ?sz aln. sizeof (sizeofmap s0) ty sz /\
-              align (sizeofmap s0) ty aln /\
+     ?sz aln. sizeof T (sizeofmap s0) ty sz /\
+              align (sizeofmap s0) T ty aln /\
               DISJOINT s0.allocmap (range_set a sz) /\
               ~(a = 0) /\ (a MOD aln = 0) /\
               a + sz <= 2 EXP (CHAR_BIT * ptr_size ty)
@@ -210,7 +214,7 @@ val rec_i_params_def = Define`
           ~ref_type ptype /\
           (vallist = ECompVal vval vtype :: vtl) /\
           parameter_coerce (vval, vtype) (newval, ptype) /\
-          sizeof (sizeofmap s0) ptype n /\ malloc s0 ptype a /\
+          sizeof T (sizeofmap s0) ptype n /\ malloc s0 ptype a /\
           (rs = range_set a n) /\
           rec_i_params
             (val2mem (s0 with
@@ -240,7 +244,8 @@ val pass_parameters_def = Define`
 val installfn_def = Define`
   installfn s0 ftype retty fnid params body fval s =
      ~(fval IN FDOM s0.fndecode) /\ ~(fnid IN FDOM s.fnmap) /\
-     sizeof (sizeofmap s)
+     sizeof T
+            (sizeofmap s)
             (ftype (Function retty (MAP SND params)))
             (LENGTH fval) /\
      (s = s0 with <| fnmap updated_by
@@ -292,18 +297,20 @@ val install_member_functions_def =
 (* this declares default special members too *)
 val declare_default_specials_def = Define`
   define_default_specials info0 =
-    let constructor i0 =
+    let constructor (i0,set) =
       if (?ps mems bdy statp prot.
             MEM (Constructor ps mems bdy, statp, prot) i0.fields)
-      then i0
-      else i0 with fields updated_by
-                     CONS (Constructor [] [] NONE, F, Public) in
-    let destructor i0 =
+      then (i0, DefaultConstructor INSERT set)
+      else (i0 with fields updated_by
+                      CONS (Constructor [] [] NONE, F, Public),
+            set) in
+    let destructor (i0,set) =
       if (?bdy statp prot. MEM (Destructor bdy, statp, prot) i0.fields) then
-        i0
-      else i0 with fields updated_by CONS (Destructor NONE, F, Public)
+        (i0,Destructor INSERT set)
+      else (i0 with fields updated_by CONS (Destructor NONE, F, Public),
+            set)
     in
-      constructor (destructor info0)
+      constructor (destructor (info0, {}))
 `
 
 
@@ -348,7 +355,7 @@ val vdeclare_def = Define`
   vdeclare s0 ty nm s =
      (?a sz rs.
          (rs = range_set a sz) /\
-         object_type ty /\ malloc s0 ty a /\ sizeof (sizeofmap s) ty sz /\
+         object_type ty /\ malloc s0 ty a /\ sizeof T (sizeofmap s) ty sz /\
          (s = s0 with <| allocmap updated_by (UNION) rs;
                           varmap updated_by
                              (\vm. vm |+ (nm,(a,default_path ty)));
@@ -399,6 +406,196 @@ val constructor_expects_rval_def = Define`
   constructor_expects_rval s cnm arglist n = T
 `
 
+(* s, cnm and args are "inputs".  *)
+(* TODO: deal with overloading *)
+val find_constructor_info_def = Define`
+  find_constructor_info s0 cnm args params mem_inits body =
+    cnm IN defined_classes s0 /\
+    ?prot.
+       MEM (Constructor params mem_inits (SOME body), F, prot)
+           (cinfo s0 cnm).fields /\
+         (* constructors can't be static *)
+       (MAP SND params = MAP value_type args)
+`
+
+
+val initA_constructor_call_def = Define`
+  initA_constructor_call mdp cnm addr args =
+      VDecInitA (Class cnm)
+                (ObjPlace addr)
+                (DirectInit
+                   (mExpr (FnApp (ConstructorFVal mdp addr cnm) args) base_se))
+`;
+
+
+(* 8.5 p5 : zero-initialisation *)
+(* TODO: handle unions *)
+val (zero_init_rules, zero_init_ind, zero_init_cases) = Hol_reln`
+   (!s mdp ty a.
+     scalar_type ty
+   ==>
+     zero_init s mdp ty a [VDecInitA ty
+                                     (ObjPlace a)
+                                     (DirectInit (mExpr (Cnum 0) base_se))])
+
+   /\
+
+   (!s mdp ty a.
+     ref_type ty
+   ==>
+     zero_init s mdp ty a [])
+
+   /\
+
+   (!s mdp cnm a sub_inits.
+     listRel (\(cc,off) l. zero_init s (nsdp cc) (cc_type cc) (a + off) l)
+             (init_order_offsets s mdp cnm)
+             sub_inits
+   ==>
+     zero_init s mdp (Class cnm) a (FLAT sub_inits))
+
+   /\
+
+   (!s mdp ty n a sz sub_inits.
+     sizeof T (sizeofmap s) ty sz /\
+     listRel (\m l. zero_init s mdp ty (a + m * sz) l)
+             (GENLIST I n)
+             sub_inits
+   ==>
+     zero_init s mdp (Array ty n) a (FLAT sub_inits))
+`;
+
+(* 8.5 p5 : default-initialisation *)
+(* TODO: handle unions *)
+val (default_init_rules, default_init_ind, default_init_cases) = Hol_reln`
+   (!s mdp cnm a.
+     ~PODstruct s cnm
+   ==>
+     default_init s mdp (Class cnm) a [initA_constructor_call mdp cnm a []])
+
+   /\
+
+   (!s mdp ty n a sz sub_inits.
+     sizeof T (sizeofmap s) ty sz /\
+     listRel (\m l. default_init s mdp ty (a + m * sz) l)
+             (GENLIST I n)
+             sub_inits
+   ==>
+     default_init s mdp (Array ty n) a (FLAT sub_inits))
+
+   /\
+
+   (!s mdp ty a inits.
+     ~array_type ty /\
+     (!cnm. (ty = Class cnm) ==> PODstruct s cnm) /\
+     zero_init s mdp ty a inits
+   ==>
+     default_init s mdp ty a inits)
+`;
+
+(* 8.5 p5 : value-initialisation *)
+(* AMBIGUITY: (??)
+    What is the order that the non-static data members and base-class
+    components are initialised in?  It looks to be (literally) unspecified.
+    Or should 12.6.2 p5 take precedence, though it is about
+    the situation where we are inside a constructor call and looking at
+    mem-initializers.  Think so.
+
+    Similarly, it is not specified that arrays should be
+    value-initialised in index order.  BUT, 12.6 does say that arrays
+    of (and presumably, arrays of arrays of) class objects should be
+    initialised in index order.  It is only initialisation of classes
+    that can make any difference (through calls to constructors, so we
+    can value-initialise all arrays in index order).
+
+    Used in initialisation of aggregates: 8.5.1 p7 (see also 12.6.1)
+    Used when a mem-initializer mentions a constituent, but doesn't pass any
+    paramters (12.6.2 p3)
+*)
+(* TODO: handle unions *)
+val (value_init_rules, value_init_ind, value_init_cases) = Hol_reln`
+   (!s mdp cnm addr.
+     has_user_constructor s cnm
+   ==>
+     value_init s mdp (Class cnm) addr
+                [initA_constructor_call mdp cnm addr []])
+
+   /\
+
+   (!s mdp cnm a sub_inits.
+     ~has_user_constructor s cnm /\
+     listRel (\(cc,off) l.
+                value_init s (nsdp cc) (cc_type cc) (a + off) l)
+             (init_order_offsets s mdp cnm)
+             sub_inits
+   ==>
+     value_init s mdp (Class cnm) a (FLAT sub_inits))
+
+   /\
+
+   (!s mdp ty n addr sz sub_inits.
+     sizeof T (sizeofmap s) ty sz /\
+     listRel (\n l. value_init s T ty (addr + n * sz) l)
+             (GENLIST I n)
+             sub_inits
+   ==>
+     value_init s mdp (Array ty n) addr (FLAT sub_inits))
+
+   /\
+
+   (!s mdp a ty inits.
+     (!ty0. ~(ty = Class ty0)) /\ ~array_type ty /\
+     zero_init s mdp ty a inits
+   ==>
+     value_init s mdp ty a inits)
+`;
+
+
+(* this function takes the body of a constructor function and wraps it inside
+   a series of declarations corresponding to the mem-initialisors
+   associated with that constructor
+*)
+val construct_ctor_body_def = Define`
+  construct_ctor_body s mdp a cnm (mem_inits : mem_initializer list) body =
+    let allccs = constituent_offsets s mdp cnm in
+    let direct_bases = get_direct_bases s cnm in
+    let virt_bases = get_virtual_bases s cnm in
+    let data_fields = THE (nsdmembers s cnm) in
+    let lookup nm = FINDL (\ (nm',mi). nm' = nm) mem_inits in
+           (* TODO: replace equality with a name comparison functionality
+                    that copes with the example in notes/12.6.2p1.cpp *)
+
+    let do_bases pth =
+      let a' = subobj_offset s (cnm, pth) in
+      let nm = LAST pth
+      in
+         case lookup nm of
+           NONE -> (* 12.6.2 p4 - default initialisation *)
+             [initA_constructor_call F nm (a + a') []]
+        || SOME (nm',NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
+             (@inits. value_init s F (Class nm) (a + a') inits)
+        || SOME (nm',SOME args) -> (* direct initialisation, with args as
+                                      initialiser *)
+             [initA_constructor_call F nm (a + a') args] in
+    let bases = FLAT (MAP (\bnm. do_bases [cnm; bnm]) direct_bases) in
+    let virtuals = if mdp then FLAT (MAP (\vnm. do_bases [vnm]) virt_bases)
+                   else [] in
+    let do_nsd (nsdname, nsdty) =
+      let (c,a') = THE (FINDL (\ (c, off). c = NSD nsdname nsdty) allccs)
+      in
+          case lookup (Base nsdname) of
+             NONE -> (* 12.6.2 p4 - default initialisation *)
+               (@inits. default_init s T nsdty (a + a') inits)
+          || SOME(nm', NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
+               (@inits. value_init s T nsdty (a + a') inits)
+          || SOME(nm', SOME args) -> (* direct initialisation, with args as
+                                        initialiser *)
+               [initA_constructor_call T (Base nsdname) (a + a') args] in
+    let nsds = FLAT (MAP do_nsd data_fields)
+  in
+    Block F (virtuals ++ bases ++ nsds) [body]
+`
+
 val return_cont_def = Define`
   return_cont se ty = if ref_type ty then LVC LVal se
                       else RVC ECompVal se
@@ -417,6 +614,8 @@ val RVR_def = Define`
 val _ = print "Defining (utility) declaration relation\n"
 (* this relation performs the various manipulations on declaration syntax
    that are independent of the rest of the meaning relation *)
+(* TODO: handle construction of arrays of objects, which happens in order
+   of increasing subscripts (see 12.6 p3) *)
 val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 (* RULE-ID: decl-vdec-nonclass *)
@@ -430,40 +629,70 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (* RULE-ID: decl-vdec-class *)
 (* if called on to declare a class variable, then the default, argument-less
    constructor gets called *)
-(* TODO: handle construction of arrays of objects, which happens in order
-   of increasing subscripts (see 12.6 p3) *)
-(!s0 s name cnm a pth.
-     vdeclare s0 (Class cnm) name s /\
+(!s0 name cnm.
+     T
+   ==>
+     declmng mng vdf (VDec (Class cnm) name, s0)
+             ([VDecInit (Class cnm) name (DirectInit0 [])], s0))
+
+   /\
+
+
+(* decl-vdecinit-start-evaluate rules switche from VDecInit to
+   VDecInitA, reflecting allocation of space for the "object".  The
+   vdeclare relation handles functions and references as well.
+   Functions can't be initialised, so they won't appear here.
+   References must be initialised, and the behaviour of vdeclare on
+   references is to put them into the typemap, but to allocate no
+   space, and to put them into the varmap at address 0. *)
+
+
+(* RULE-ID: decl-vdecinit-start-evaluate-direct-class *)
+(!s0 ty cnm name args s a pth.
+     (ty = Class cnm) /\
+     vdeclare s0 ty name s /\
      ((a,pth) = s.varmap ' name)
    ==>
      declmng mng
              vdf
-             (VDec (Class cnm) name, s0)
-             ([VDecInitA (Class cnm)
+             (VDecInit ty name (DirectInit0 args), s0)
+             ([VDecInitA ty
                          (ObjPlace a)
-                         (DirectInit (NormE (FnApp (ConstructorFVal a cnm)
-                                                   [])
-                                            base_se))],
-              vdf s))
+                         (DirectInit (mExpr
+                                        (FnApp (ConstructorFVal T a cnm) args)
+                                        base_se))], vdf s))
 
    /\
 
-(* RULE-ID: decl-vdecinit-start-evaluate *)
-(* form switches from VDecInit to VDecInitA, reflecting allocation of space
-   for the "object".  (In fact, vdeclare handles functions and references as
-   well.  Functions can't be initialised, so they won't appear here.
-   References must be initialised, and the behaviour of vdeclare on
-   references is to put them into the typemap, but to allocate no space,
-   and to put them into the varmap at address 0. *)
-(!s0 ty name ii s a pth loc.
+(* RULE-ID: decl-vdecinit-start-evaluate-direct-nonclass *)
+(* A direct initialisation of a non-class object is the same as a
+   copy-initialisation *)
+(!s0 ty name arg s a pth loc.
+     (!cnm. ~(ty = Class cnm)) /\
      vdeclare s0 ty name s /\
      ((a,pth) = s.varmap ' name) /\
      (loc = if ref_type ty then RefPlace NONE name else ObjPlace a)
    ==>
-     declmng mng vdf (VDecInit ty name ii, s0)
-                     ([VDecInitA ty loc ii], vdf s))
+     declmng mng
+             vdf
+             (VDecInit ty name (DirectInit0 [arg]), s0)
+             ([VDecInitA ty loc (CopyInit (mExpr arg base_se))], vdf s))
 
    /\
+
+(* RULE-ID: decl-vdecinit-start-evaluate-copy *)
+(!s0 ty name arg s a pth loc.
+     vdeclare s0 ty name s /\
+     ((a,pth) = s.varmap ' name) /\
+     (loc = if ref_type ty then RefPlace NONE name else ObjPlace a)
+   ==>
+     declmng mng
+             vdf
+             (VDecInit ty name (CopyInit arg), s0)
+             ([VDecInitA ty loc (CopyInit arg)], vdf s))
+
+   /\
+
 
 (* RULE-ID: decl-vdecinit-evaluation *)
 (!s0 ty loc exte exte' s f.
@@ -514,7 +743,10 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
              (VDecInitA (Ref ty1)
                         (RefPlace aopt nm)
                         (f (NormE (LVal a ty2 p) se)), s0)
-             ([], s))`
+             ([], s))
+
+(* TODO: add a rule for performing class based CopyInit updates *)
+`
 
 val declmng_MONO = store_thm(
   "declmng_MONO",
@@ -525,13 +757,14 @@ val declmng_MONO = store_thm(
   REPEAT STRIP_TAC THEN
   FIRST (map (fn th => MATCH_MP_TAC th THEN SRW_TAC [][] THEN METIS_TAC [])
              (CONJUNCTS
-                (SIMP_RULE bool_ss [FORALL_AND_THM] declmng_rules))));
+                (SIMP_RULE pure_ss [FORALL_AND_THM] declmng_rules))));
 val _ = export_mono "declmng_MONO"
 
 val _ = print "About to define meaning relation\n"
 val mng  =
     mk_var("meaning", ``:ExtE -> CState -> (CState # ExtE) -> bool``)
 val _ = temp_overload_on("ev", ``mExpr``)
+
 
 val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
@@ -828,15 +1061,16 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (SOME result = ptr_encode (s,t) (a,pth))
    ==>
      ^mng (mExpr (Addr (LVal a t pth)) se) s
-           (s, ev (ECompVal result (Ptr t)) se))
+           (s, ev (ECompVal result (Ptr (static_type (t,pth)))) se))
 
    /\
 
 (* RULE-ID: mem-addr-static-nonfn *)
 (* 5.3.1 p2 if the address is taken of a qualified-ident that is actually a
    static member, then a normal address is generated *)
-(!cname fldname se s addr ty cinfo prot pth ptrval.
-     cname IN FDOM s.classmap /\ (s.classmap ' cname = SOME cinfo) /\
+(!cname fldname se s addr ty cinfo prot pth ptrval userdefs.
+     cname IN FDOM s.classmap /\
+     (s.classmap ' cname = SOME (cinfo, userdefs)) /\
      MEM (FldDecl fldname ty, T, prot) cinfo.fields /\
      (s.varmap ' (Member cname fldname) = (addr, pth)) /\
      (SOME ptrval = ptr_encode (s,ty) (addr,pth))
@@ -877,7 +1111,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: postinc *)
 (!se0 se s t t' sz v nv nv1 a resv.
-     sizeof (sizeofmap s) t sz /\ (v = mem2val s a sz) /\
+     sizeof T (sizeofmap s) t sz /\ (v = mem2val s a sz) /\
      range_set a sz SUBSET s.initmap /\
      binop_meaning s CPlus v t (signed_int 1) (Signed Int) nv1 t' /\
      parameter_coerce (nv1,t') (nv,t) /\
@@ -892,7 +1126,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: postinc-fails-inc-or-initialised *)
 (!a t se0 sz s v.
-     sizeof (sizeofmap s) t sz /\
+     sizeof T (sizeofmap s) t sz /\
      (v = mem2val s a sz) /\
      ((!nv1 t'.
          ~binop_meaning s CPlus v t (signed_int 1) (Signed Int) nv1 t') \/
@@ -903,20 +1137,27 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: non-static-data-member-field-selection *)
-(* Note how the path p of the original LVal is ignored.  This is because
+(* Note how the path p is used:
+     - to figure out the static type of the l-value (LAST p)
+     - to derive the path from the most-derived class to the sub-object
+       enclosing the field.  The offset is calculated with respect to
+       this because the sub-object could be anywhere, and might be virtual.
+
+
+       subobject of the original LVal is ignored.  This is because
    only functions can get a "virtual" treatment.
    This doesn't mean that a field reference can't be to an ancestor's field.
 
 *)
-(!s C fld ftype Cflds se offn i a p p'.
-     s |- C has least fld -: ftype via p' /\
+(!s cnm fld ftype Cflds se offn i a p p'.
+     s |- LAST p has least fld -: ftype via p' /\
      (Cflds = THE (nsdmembers s (LAST p'))) /\
      object_type ftype /\
      lookup_field_info Cflds fld (i,ftype) /\
-     offset (sizeofmap s) (MAP SND Cflds) i offn
+     offset (sizeofmap s) (MAP (UNCURRY NSD) Cflds) i offn
    ==>
-     ^mng (mExpr (SVar (LVal a (Class C) p) fld) se) s
-          (s, ev (LVal (a + THE (subobj_offset s C p') + offn) ftype
+     ^mng (mExpr (SVar (LVal a (Class cnm) p) fld) se) s
+          (s, ev (LVal (a + subobj_offset s (cnm, p ^ p') + offn) ftype
                        (default_path ftype)) se))
 
    /\
@@ -954,7 +1195,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: constructor-call-sqpt *)
-(!a cnm params se s.
+(!mdp a cnm params se s.
      EVERYi (\i e. if constructor_expects_rval s cnm params i then
                      ?v t. e = ECompVal v t
                    else
@@ -962,8 +1203,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
             params /\
      is_null_se se
    ==>
-     ^mng (mExpr (FnApp (ConstructorFVal a cnm) params) se) s
-          (s, ev (FnApp_sqpt (ConstructorFVal a cnm) params) base_se))
+     ^mng (mExpr (FnApp (ConstructorFVal mdp a cnm) params) se) s
+          (s, ev (FnApp_sqpt (ConstructorFVal mdp a cnm) params) base_se))
 
    /\
 
@@ -1039,8 +1280,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: constructor-function-call *)
-(* (!classname a args se0 params s0 s1.
-     find_constructor_info classname args params mem_inits body /\
+(!cnm mdp a args se0 params s0 s1 mem_inits this body body'.
+     find_constructor_info s0 cnm args params mem_inits body /\
      rec_i_params
        (s0 with <| classmap := s0.gclassmap ;
                    typemap := s0.gtypemap ;
@@ -1048,15 +1289,18 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
        params
        args
        s1 /\
-     (SOME this = ptr_encode (s0, Class classname) (a, [classname])) /\
-     (
+     (SOME this = ptr_encode (s0, Class cnm) (a, [cnm])) /\
+     (body' = construct_ctor_body s0 mdp a cnm mem_inits body)
    ==>
-     ^mng (mExpr (FnApp_sqpt (ConstructorFVal a classname) args) se0)
+     ^mng (mExpr (FnApp_sqpt (ConstructorFVal mdp a cnm) args) se0)
           s0
           (s1 with <| stack updated_by
                         (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
-                      thisvalue := SOME (ECompVal this
-*)
+                      thisvalue := SOME (ECompVal this (Ptr (Class cnm)))
+                   |>,
+           EStmt body' (return_cont se0 Void)))
+
+   /\
 
 (* RULE-ID: function-application-lval2rval *)
 (!f pfx e0 e sfx se0 se s0 s.
@@ -1262,7 +1506,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      ^mng (mStmt (Block T (VStrDec name info :: vds) sts) c) s
-          (s with classmap updated_by (\sm. sm |+ (Base name,info)),
+          (s with classmap
+           updated_by (\sm. sm |+ (Base name,
+                                   case info of NONE -> NONE
+                                             || SOME i -> SOME (i,{}))),
            mStmt (Block T vds sts) c))
 
 `
@@ -1297,9 +1544,9 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
       if the duplication occurred within a single translation unit, or by
       the linker if it occurred across multiple units)
 *)
-(!rettype name params body edecls s0 s cinfo staticp prot.
+(!rettype userdefs name params body edecls s0 s cinfo staticp prot.
      is_class_name name /\
-     (SOME cinfo = s0.classmap ' (class_part name)) /\
+     (SOME (cinfo, userdefs) = s0.classmap ' (class_part name)) /\
      MEM (FldDecl name.base (Function rettype (MAP SND params)),
           staticp, prot)
          cinfo.fields /\
@@ -1341,14 +1588,15 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: global-class-definition *)
-(!s0 s name info0 info edecls.
-     (info = define_default_specials info0) /\
+(!s0 s name info0 userdefs info edecls.
+     ((info,userdefs) = define_default_specials info0) /\
      install_member_functions (Base name) s0 info.fields s
    ==>
      emeaning (Decl (VStrDec name (SOME info0)) :: edecls) s0
               (copy2globals
                   (s with <| classmap updated_by
-                                      (\sm. sm |+ (Base name,SOME info)) |>),
+                                      (\sm. sm |+ (Base name,
+                                                   SOME (info, userdefs))) |>),
                edecls))
 `;
 

@@ -77,6 +77,33 @@ val mapPartial_APPEND = store_thm(
   Induct THEN SRW_TAC [][] THEN Cases_on `f h` THEN SRW_TAC [][]);
 val _ = export_rewrites ["mapPartial_APPEND"]
 
+val mapPartial_MAP = store_thm(
+  "mapPartial_MAP",
+  ``mapPartial f (MAP g l) = mapPartial (f o g) l``,
+  Induct_on `l` THEN SRW_TAC [][]);
+
+val MAP_mapPartial = store_thm(
+  "MAP_mapPartial",
+  ``MAP f (mapPartial g l) = mapPartial (OPTION_MAP f o g) l``,
+  Induct_on `l` THEN SRW_TAC [][] THEN Cases_on `g h` THEN SRW_TAC [][]);
+
+val mapPartial_mapPartial = store_thm(
+  "mapPartial_mapPartial",
+  ``mapPartial f (mapPartial g l) = mapPartial (option_case NONE f o g) l``,
+  Induct_on `l` THEN SRW_TAC [][] THEN Cases_on `g h` THEN
+  SRW_TAC [][])
+
+val mapPartial_K_NONE = store_thm(
+ "mapPartial_K_NONE",
+  ``mapPartial (\x. NONE) l = []``,
+  Induct_on `l` THEN SRW_TAC [][]);
+val _ = export_rewrites ["mapPartial_K_NONE"]
+
+val mapPartial_SOME = store_thm(
+  "mapPartial_SOME",
+  ``mapPartial SOME l = l``,
+  Induct_on `l` THEN SRW_TAC [][])
+val _ = export_rewrites ["mapPartial_SOME"]
 
 (* ----------------------------------------------------------------------
     EVERYi : (num -> 'a -> bool) -> 'a list -> bool
@@ -106,7 +133,57 @@ val FINDL_def = Define`
   (FINDL P (h :: t) = if P h then SOME h else FINDL P t)
 `;
 
+(* ----------------------------------------------------------------------
+    NUMBER : num -> 'a list -> (num # 'a) list
+   ---------------------------------------------------------------------- *)
 
+val NUMBER_def = Define`
+  (NUMBER (n:num) [] = []) /\
+  (NUMBER n (h::t) = (n,h) :: NUMBER (n + 1) t)
+`
+val _ = export_rewrites ["NUMBER_def"]
+
+val LENGTH_NUMBER = store_thm(
+  "LENGTH_NUMBER",
+  ``!n. LENGTH (NUMBER n l) = LENGTH l``,
+  Induct_on `l` THEN SRW_TAC [][])
+val _ = export_rewrites ["LENGTH_NUMBER"]
+
+val NUMBER_MAP = store_thm(
+  "NUMBER_MAP",
+  ``!n. NUMBER n (MAP f l) = MAP (I ## f) (NUMBER n l)``,
+  Induct_on `l` THEN SRW_TAC [][]);
+
+(* ----------------------------------------------------------------------
+    LFINDi : ('a -> bool) -> 'a list -> num option
+   ---------------------------------------------------------------------- *)
+
+val LFINDi_def = Define`
+  (LFINDi P [] = NONE) /\
+  (LFINDi P (h::t) = if P h then SOME 0n
+                     else case LFINDi P t of
+                             NONE -> NONE
+                          || SOME i -> SOME (i + 1))
+`
+val _ = export_rewrites ["LFINDi_def"]
+
+val LFINDi_THM = store_thm(
+  "LFINDi_THM",
+  ``(!i. (LFINDi P l = SOME i) ==>
+            i < LENGTH l /\ P (EL i l) /\ !j. j < i ==> ~P(EL j l)) /\
+    ((LFINDi P l = NONE) ==>
+       !i. i < LENGTH l ==> ~P (EL i l))``,
+  Induct_on `l` THEN SRW_TAC [][listTheory.EL] THEN
+  SRW_TAC [][] THENL [
+    FULL_SIMP_TAC (srw_ss()) [],
+    Cases_on `LFINDi P l` THEN FULL_SIMP_TAC (srw_ss()) [] THEN DECIDE_TAC,
+    Cases_on `LFINDi P l` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+    SRW_TAC [][] THEN SRW_TAC [][GSYM ADD1],
+    Cases_on `LFINDi P l` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+    Cases_on `j` THEN SRW_TAC [ARITH_ss][],
+    Cases_on `LFINDi P l` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+    Cases_on `i` THEN SRW_TAC [ARITH_ss][]
+  ]);
 
 val _ = export_theory()
 

@@ -76,7 +76,7 @@ val _ = Hol_datatype`
                   of the start of the object in memory.  If the object is
                   actually a reference, then the location is just the
                   reference's name with an optional address for any
-                  enclosing class. *)
+                  enclosing class.   *)
 
            | VStrDec of string => class_info option ;
 
@@ -105,6 +105,7 @@ val _ = Hol_datatype`
                             mem_initializer list =>
                             CStmt option
            | Destructor of CStmt option;
+                            (* bool = user-defined or not *)
 
   class_info =
              <| fields : (class_entry # bool # protection) list ;
@@ -115,10 +116,15 @@ val _ = Hol_datatype`
 
   initializer =
              (* see 8.5 p12 for discussion of difference *)
-             DirectInit of ExtE
-                (* the expression will be a FnApp where the arguments are the
-                   arguments that appear in the source, and where the function
-                   will be the place-holder ConstructorFVal *)
+             DirectInit0 of CExpr list
+                (* The parameters given to a direct initialisation - this is
+                   the form that appears in user-provided abstract syntax. *)
+           | DirectInit of ExtE
+                (* This form is only used for the initialisation of objects of
+                   class type.  The expression will be a FnApp where the
+                   arguments are the arguments that appear in the source,
+                   and where the function will be the place-holder
+                   ConstructorFVal. *)
            | CopyInit of ExtE
                 (* copy initialisation of classes also results in a constructor
                    being called, once the expression has been evaluated and

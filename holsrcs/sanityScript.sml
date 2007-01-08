@@ -22,6 +22,8 @@ val _ = new_theory "sanity";
     The meaning relation doesn't update the function map, only the
     emeaning relation does.
 
+    This is not true in the presence of local classes
+
    ---------------------------------------------------------------------- *)
 
 open side_effectsTheory
@@ -77,6 +79,8 @@ val fninfo_invariant = store_thm(
   HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
   TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps]) THEN
   TRY (IMP_RES_TAC pass_parameters_preserves_fnmaps THEN
+       FULL_SIMP_TAC (srw_ss()) [] THEN NO_TAC) THEN
+  TRY (IMP_RES_TAC rec_i_params_preserves_fnmaps THEN
        FULL_SIMP_TAC (srw_ss()) [] THEN NO_TAC) THEN
   IMP_RES_TAC declmng_elim_preserves_fnmaps THEN
   FULL_SIMP_TAC (srw_ss()) []);

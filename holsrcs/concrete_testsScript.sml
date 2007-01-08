@@ -1,14 +1,18 @@
 open HolKernel Parse boolLib boolSimps
 open bossLib finite_mapTheory class_infoTheory pred_setTheory utilsTheory
 
+open aggregatesTheory memoryTheory
+
 val _ = new_theory "concrete_tests"
 
 val state1_def = Define`
-  state1 = ARB with classmap updated_by
+  state1 =
+    ARB with classmap updated_by
       (\fm. fm |+ (Base "c",
-                   SOME <| fields := [(FldDecl "foo" (Signed Char), F, Public);
+                   SOME (<| fields := [(FldDecl "foo" (Signed Char),F, Public);
                                       (FldDecl "bar" (Signed Int), F, Public)];
-                           ancestors := NONE |>))
+                           ancestors := NONE |>, {})))
+
 `;
 
 val simp = SIMP_CONV (srw_ss()) [state1_def]
@@ -26,14 +30,19 @@ val base_in_classmap = store_thm(
   SRW_TAC [][state1_def]);
 val _ = export_rewrites ["base_in_classmap"]
 
-val nsdmembers_state1 = SIMP_CONV (srw_ss()) [nsdmembers_def,
-                                       finite_mapTheory.FLOOKUP_DEF]
-                           ``nsdmembers state1 (Base "c")``
+val defined_classes = store_thm(
+  "defined_classes",
+  ``Base "c" IN defined_classes state1``,
+  SRW_TAC [][defined_classes_def]);
+val _ = export_rewrites ["defined_classes"]
 
-val layout = (SIMP_CONV (srw_ss()) [calc_subobjs] THENC
-              ONCE_REWRITE_CONV [calc_rsubobjs] THENC
-              SIMP_CONV (srw_ss()) [ancestor_def])
-             ``class_layout { so | (Base "c", so) IN subobjs state1 }``
+val cinfo_state1_c = save_thm(
+  "cinfo_state1_c",
+  SIMP_CONV (srw_ss()) [cinfo_def] ``cinfo state1 (Base "c")``);
+val _ = export_rewrites ["cinfo_state1_c"]
+
+val nsdmembers_state1 = SIMP_CONV (srw_ss()) [nsdmembers_def]
+                           ``nsdmembers state1 (Base "c")``
 
 val fmap_lemma = prove(
   ``!f. { c | ?v. c IN FDOM f /\ (f ' c = SOME v) } = FDOM (deNONE f)``,
@@ -47,59 +56,86 @@ val fmap_lemma = prove(
     Cases_on `x = x'` THEN SRW_TAC [][FAPPLY_FUPDATE_THM]
   ]);
 
-val class_szmap = save_thm(
-  "class_szmap",
-    SIMP_CONV (srw_ss()) [class_szmap_def, nsdmembers_state1, layout,
-                          fmap_lemma, LET_THM, base_in_classmap,
-                          finite_mapTheory.FUN_FMAP_DEF]
-              ``class_szmap state1 ' (Base "c")``)
+val gcc = store_thm(
+  "gcc",
+  ``get_class_constituents state1 mdp (Base "c") =
+      [NSD "foo" (Signed Char); NSD "bar" (Signed Int)]``,
+  SRW_TAC [][get_class_constituents_def] THEN
+  Q.SPECL_THEN [`state1`, `Base "c"`] MP_TAC
+               get_class_constituents0_def THEN
+  SIMP_TAC (srw_ss()) [nsdmembers_state1, get_direct_bases_def,
+                       get_virtual_bases_def] THEN
+  ONCE_REWRITE_TAC [sortingTheory.PERM_SYM] THEN
+  SRW_TAC [][sortingTheory.PERM_CONS_EQ_APPEND] THEN
+  Cases_on `M` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  SRW_TAC [][] THEN
+  Q.PAT_ASSUM `get_class_constituents0 w x = y` SUBST_ALL_TAC THEN
+  FULL_SIMP_TAC (srw_ss()) [])
 
-open memoryTheory
-val align_int = prove(``align m (Signed Int) a = (a = int_align)``,
+val sizeofmap = save_thm(
+  "sizeofmap",
+    SIMP_CONV (srw_ss()) [sizeofmap_def, nsdmembers_state1,
+                          fmap_lemma, LET_THM, base_in_classmap,
+                          finite_mapTheory.FUN_FMAP_DEF, gcc]
+              ``sizeofmap state1 mdp ' (Base "c")``)
+
+val FDOM_sizeofmap = store_thm(
+  "FDOM_sizeofmap",
+  ``FDOM (sizeofmap state1 mdp) = FDOM state1.classmap``,
+  SRW_TAC [][sizeofmap_def, FUN_FMAP_DEF]);
+
+val base_not_empty = store_thm(
+  "base_not_empty",
+  ``~empty_class (sizeofmap state1) mdp (Base "c")``,
+  ONCE_REWRITE_TAC [empty_class_cases] THEN
+  SRW_TAC [][sizeofmap]);
+
+val align_int = prove(``align m mdp (Signed Int) a = (a = int_align)``,
                       ONCE_REWRITE_TAC [align_cases] THEN
                       SRW_TAC [][bit_align_def])
-val align_char = prove(``align m (Signed Char) a = (a = 1)``,
+val align_char = prove(``align m mdp (Signed Char) a = (a = 1)``,
                        ONCE_REWRITE_TAC [align_cases] THEN
                        SRW_TAC [][bit_align_def])
 
-val sizeof_char = prove(``sizeof m (Signed Char) sz = (sz = 1)``,
+val sizeof_char = prove(``sizeof mdp m (Signed Char) sz = (sz = 1)``,
                         ONCE_REWRITE_TAC [sizeof_cases] THEN
                         SRW_TAC [][bit_size_def])
 
 val align_lemma = prove(
-  ``align (class_szmap state1) (Class (Base "c")) a = (a = int_align)``,
+  ``align (sizeofmap state1) mdp (Class (Base "c")) a = (a = int_align)``,
   ONCE_REWRITE_TAC [align_cases] THEN
-  SIMP_TAC (srw_ss()) [class_szmap, base_in_classmap] THEN
-  SIMP_TAC (srw_ss() ++ DNF_ss) [align_int, align_char] THEN
-  ASSUME_TAC int_align THEN DECIDE_TAC)
+  SIMP_TAC (srw_ss() ++ DNF_ss)
+           [sizeofmap, FDOM_sizeofmap, base_in_classmap,
+            base_not_empty, listTheory.listRel_CONS, align_int,
+            align_char, lcml_def]);
 
-val subobj_offset =
-    (SIMP_CONV (srw_ss() ++ ARITH_ss)
-               [subobj_offset_def, LET_THM,
-                genoffset_def, layout, nsdmembers_state1,
-                roundup_def, align_lemma, int_align])
-      ``subobj_offset state1 (Base "c") [Base "c"]``
-
-val nsds_bases = store_thm(
-  "nsds_bases",
-  ``nsds_bases state1 (Base "c") = [(SOME "foo", Signed Char, 0);
-                                    (SOME "bar", Signed Int, int_align)]``,
-
-  SIMP_TAC (srw_ss()) [nsds_bases_def, nsdmembers_state1, class_layout_def,
-                       calc_subobjs] THEN
-  ONCE_REWRITE_TAC [calc_rsubobjs] THEN
-  SIMP_TAC (srw_ss()) [ancestor_def, base_in_classmap] THEN
-  SIMP_TAC (srw_ss()) [LET_THM, subobj_offset, align_int, align_char,
-                       roundup_def, sizeof_char] THEN
-  ASSUME_TAC int_align THEN
-  Cases_on `int_align = 1` THENL [
-    SRW_TAC [][],
-    `1 < int_align` by DECIDE_TAC THEN
-    `1 MOD int_align = 1` by (MATCH_MP_TAC arithmeticTheory.MOD_UNIQUE THEN
-                              Q.EXISTS_TAC `0` THEN SRW_TAC [][]) THEN
-    `1 DIV int_align = 0` by (MATCH_MP_TAC arithmeticTheory.DIV_UNIQUE THEN
-                              Q.EXISTS_TAC `1` THEN SRW_TAC [][]) THEN
-    SRW_TAC [][]
+val roundup_1 = prove(
+  ``0 < b ==> (roundup b 1 = b)``,
+  SRW_TAC [][roundup_def] THENL [
+    SPOSE_NOT_THEN ASSUME_TAC THEN
+    `1 < b` by DECIDE_TAC THEN
+    `1 MOD b = 1` by METIS_TAC [arithmeticTheory.LESS_MOD] THEN
+    FULL_SIMP_TAC (srw_ss()) [],
+    Q_TAC SUFF_TAC `1 DIV b = 0` THEN1 SRW_TAC [][] THEN
+    MATCH_MP_TAC arithmeticTheory.DIV_UNIQUE THEN SRW_TAC [][] THEN
+    SPOSE_NOT_THEN ASSUME_TAC THEN
+    `b = 1` by DECIDE_TAC THEN FULL_SIMP_TAC (srw_ss()) []
   ]);
+
+val offset_1 = prove(
+  ``offset (sizeofmap state1) [NSD "foo" (Signed Char);
+                               NSD "bar" (Signed Int)] 1 off
+     =
+    (off = int_align)``,
+  ONCE_REWRITE_TAC [sizeof_cases] THEN SRW_TAC [][] THEN
+  STRIP_ASSUME_TAC int_align THEN SRW_TAC [ARITH_ss][roundup_1]);
+
+val sizeof_c = store_thm(
+  "sizeof_c",
+  ``sizeof mdp (sizeofmap state1) (Class (Base "c")) sz =
+        (sz = roundup int_align (int_align + int_size))``,
+  ONCE_REWRITE_TAC [sizeof_cases] THEN
+  SRW_TAC [][sizeofmap, base_not_empty, FDOM_sizeofmap, align_lemma,
+             offset_1]);
 
 val _ = export_theory()

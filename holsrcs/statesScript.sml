@@ -38,6 +38,30 @@ val _ = Hol_datatype `fn_info = <| return_type : CPP_Type ;
    NOTE, moreover that an empty C++ struct has non-zero size. (9 p3) *)
 
 
+(* those sorts of things that can get implicitly declared and defined by
+   the implementation if the user does not provide them *)
+val _ = Hol_datatype`
+  implicitly_definable = DefaultConstructor
+                       | Destructor
+                       | CopyConstructor
+                       | CopyAssignment
+`;
+
+(* when a class name is looked up, it may get
+     - that the name is not in the domain of the map, which means that the
+       name is not the name of a class at all
+     - the name maps to NONE, which means it has been declared only,
+       as in
+          class foo;
+     - the name maps to SOME(cinfo, user_provided) where cinfo is the
+       information about the class, and user_provided is the set of things
+       that were given by the user (and didn't need filling in by the
+       implementation)
+*)
+
+val _ = type_abbrev("state_class_info",
+                    ``:(class_info # implicitly_definable set) option``)
+
 
 val _ = Hol_datatype
   `state = <| allocmap : num -> bool ;
@@ -54,7 +78,7 @@ val _ = Hol_datatype
               fndecode : byte list |-> fnid ;
                          (* map inverting fnencode *)
 
-              gclassmap: CPPname |-> class_info option ;
+              gclassmap: CPPname |-> state_class_info ;
                          (* the global map from class names to class info;
                             can be dynamically overridden by local class
                             declarations *)
@@ -75,14 +99,14 @@ val _ = Hol_datatype
               locmap   : num -> byte ;
                          (* memory.  Domain should be ( void * ) words *)
 
-              stack    : ((CPPname |-> class_info option) #
+              stack    : ((CPPname |-> state_class_info) #
                           (CPPname |-> CPP_Type) #
                           (CPPname |-> (num # CPPname list)) #
                           CExpr option) list ;
                          (* stack of class, type and var info.  Updated
                             as blocks are entered and left *)
 
-              classmap : CPPname |-> class_info option;
+              classmap : CPPname |-> state_class_info;
                          (* local, dynamically changing class map *)
 
               typemap  : CPPname |-> CPP_Type ;

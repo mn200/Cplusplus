@@ -74,11 +74,19 @@ val _ = Hol_datatype
                when an object is created and are used in the function
                designator position.  They don't need to encode any information
                about types and object identities because this is all
-               elsewhere. *)
-         | ConstructorFVal of num => CPPname
+               elsewhere.  The arguments are mdp (T iff constructing a
+               most-derived object), the address where the object is
+               being constructed, and the name of the class. *)
+         | ConstructorFVal of bool => num => CPPname
          | RValreq of CExpr
          | ECompVal of byte list => CType
          | UndefinedExpr `;
+
+val value_type_def = Define`
+  (value_type (ECompVal v t) = t) /\
+  (value_type (LVal a t p) = t)
+`;
+
 
 val rec_expr_P_def = Define`
     (rec_expr_P (Cnum i) P = P (Cnum i)) /\
@@ -120,7 +128,7 @@ val rec_expr_P_def = Define`
     (rec_expr_P (RValreq e) P = P (RValreq e) /\ rec_expr_P e P) /\
     (rec_expr_P (ECompVal v t) P = P (ECompVal v t)) /\
     (rec_expr_P UndefinedExpr P = P UndefinedExpr) /\
-    (rec_expr_P (ConstructorFVal a nm) P = P (ConstructorFVal a nm)) /\
+    (rec_expr_P (ConstructorFVal mdp a nm) P = P (ConstructorFVal mdp a nm)) /\
     (rec_exprl_P [] P = T) /\
     (rec_exprl_P (CONS e es) P = rec_expr_P e P /\ rec_exprl_P es P) /\
     (rec_expr_opt NONE P = T) /\

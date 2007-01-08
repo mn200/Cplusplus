@@ -138,10 +138,11 @@ val long_size_nonzero = store_thm(
   intLib.ARITH_TAC)
 
 (* bit = "basic integral type" here *)
-val bit_size = Define`
+val bit_size_def = Define`
   (bit_size Char = 1) /\ (bit_size Short = short_size) /\
   (bit_size Int = int_size) /\ (bit_size Long = long_size)
 `;
+val _ = export_rewrites ["bit_size_def"]
 
 val bool_size = new_specification(
   "bool_size",
@@ -507,12 +508,13 @@ val bool_align = new_specification("bool_align",
         ASSUME_TAC bool_size THEN intLib.ARITH_TAC))
 
 (* alignment of the basic integral types *)
-val bit_align = Define`
+val bit_align_def = Define`
   (bit_align Char = 1) /\
   (bit_align Short = short_align) /\
   (bit_align Int = int_align) /\
   (bit_align Long = long_align)
 `;
+val _ = export_rewrites ["bit_align_def"]
 
 
 val _ = overload_on ("set", ``list$LIST_TO_SET``)
@@ -534,143 +536,8 @@ val empty_class_align_def = new_specification(
 
 (* alignment of class types being maximum alignment of member fields is
    plausible, but should probably count as an ASSUMPTION *)
-val (align_rules, align_ind, align_cases) = Hol_reln`
-  (!smap. align smap BChar 1) /\  (* same as Char *)
-
-  (!smap. align smap Bool bool_align) /\
-
-  (!smap ty. align smap (Signed ty) (bit_align ty)) /\
-
-  (!smap ty. align smap (Unsigned ty) (bit_align ty)) /\
-
-  (!smap ty. align smap (Ptr ty) (ptr_align ty)) /\
-
-  (!smap c ty. align smap (MPtr c ty) (ptr_align ty)) (* BAD_ASSUMPTION *) /\
-
-  (!smap ty n a. align smap ty a ==> align smap (Array ty n) a) /\
-
-  (!smap cnm max.
-      cnm IN FDOM smap /\
-      (!ty. ty IN set (smap ' cnm) ==>
-            ?a. align smap ty a /\ a <= max) /\
-      (?ty. ty IN set (smap ' cnm) /\ align smap ty max)
-         ==>
-      align smap (Class cnm) max) /\
-
-   (!smap cnm.
-      cnm IN FDOM smap /\ (smap ' cnm = []) ==>
-      align smap (Class cnm) empty_class_align)
-`;
-
-(* SANITY : alignment relation is deterministic *)
-val align_det = store_thm(
-  "align_det",
-  ``!smap ty a. align smap ty a ==>
-                !b. align smap ty b ==> (a = b)``,
-  HO_MATCH_MP_TAC align_ind THEN REPEAT CONJ_TAC THEN
-  REPEAT GEN_TAC THEN
-  ((Q.MATCH_ABBREV_TAC `align X Y Z ==> P` THEN
-    Q.UNABBREV_ALL_TAC THEN
-    ONCE_REWRITE_TAC [align_cases]) ORELSE
-   (STRIP_TAC THEN ONCE_REWRITE_TAC [align_cases])) THEN
-  SRW_TAC [][] THEN
-  FULL_SIMP_TAC (srw_ss()) [listTheory.IN_LIST_TO_SET] THEN
-  METIS_TAC [DECIDE ``a:num <= b /\ b <= a ==> (a = b)``])
 
 
-(* ----------------------------------------------------------------------
-    type sizes and field offsets within classes
-   ---------------------------------------------------------------------- *)
-
-val roundup_def = Define`
-  roundup base n = if n MOD base = 0 then n else (n DIV base + 1) * base
-`;
-
-
-
-
-val (offsizeof_rules, offsizeof_ind, offsizeof_cases) = Hol_reln`
-
-  (!s. sizeof s BChar 1) /\
-
-  (!s. sizeof s Bool bool_size) /\
-
-  (!s b. sizeof s (Signed b) (bit_size b)) /\
-
-  (!s b. sizeof s (Unsigned b) (bit_size b)) /\
-
-  (!s t. sizeof s (Ptr t) (ptr_size t)) /\
-
-  (!s c t. sizeof s (MPtr c t) (ptr_size t)) /\ (* BAD_ASSUMPTION *)
-
-  (!s m n t. sizeof s t m ==> sizeof s (Array t n) (m * n)) /\
-
-  (!s c tylist a lastoff lastsz.
-        c IN FDOM s /\ (s ' c = tylist) /\ 0 < LENGTH tylist /\
-        align s (Class c) a /\
-        offset s tylist (LENGTH tylist - 1) lastoff /\
-        sizeof s (EL (LENGTH tylist - 1) tylist) lastsz
-      ==>
-        sizeof s (Class c) (roundup a (lastoff + lastsz))) /\
-
-  (!s c.
-        c IN FDOM s /\ (s ' c = []) ==>
-        sizeof s (Class c) empty_class_size) /\
-
-  (!s tylist.  offset s tylist 0 0) /\
-  (!s tylist n a offn sizen.
-        offset s tylist n offn /\
-        sizeof s (EL n tylist) sizen /\
-        align s (EL (SUC n) tylist) a
-      ==>
-        offset s tylist (SUC n) (roundup a (offn + sizen)))
-`;
-
-
-(* SANITY: sizeof and offset are deterministic *)
-val det_lemma = prove(
-  ``(!s ty n. sizeof s ty n ==> !m. sizeof s ty m ==> (n = m)) /\
-    (!s tylist n off1.
-              offset s tylist n off1 ==>
-              !off2. offset s tylist n off2 ==> (off1 = off2))``,
-  HO_MATCH_MP_TAC offsizeof_ind THEN REPEAT CONJ_TAC THEN
-  REPEAT GEN_TAC THENL [
-    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
-    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
-    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
-    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
-    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
-    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
-    (* array *)
-    STRIP_TAC THEN ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][] THEN
-    METIS_TAC [],
-    (* non-empty class size *)
-    STRIP_TAC THEN ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][] THEN
-    FULL_SIMP_TAC (srw_ss()) [] THEN METIS_TAC [align_det],
-    (* empty class size *)
-    STRIP_TAC THEN ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
-    (* offset 0 *)
-    ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][],
-    (* offset SUC *)
-    STRIP_TAC THEN ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][] THEN
-    METIS_TAC [align_det, listTheory.EL]
-  ])
-val sizeof_det = save_thm("sizeof_det", CONJUNCT1 det_lemma)
-val offset_det = save_thm("offset_det", CONJUNCT2 det_lemma)
-
-(* SANITY: only object types have sizes *)
-val only_objects_have_sizes = store_thm(
-  "only_objects_have_sizes",
-  ``!s ty n. sizeof s ty n ==> object_type ty``,
-  ONCE_REWRITE_TAC [offsizeof_cases] THEN SRW_TAC [][object_type_def] THEN
-  SRW_TAC [][]);
-
-(* SANITY: for example, functions don't have sizes *)
-val functions_have_no_size = store_thm(
-  "functions_have_no_size",
-  ``~sizeof s (Function retty argtys) n``,
-  STRIP_TAC THEN IMP_RES_TAC only_objects_have_sizes THEN
-  FULL_SIMP_TAC (srw_ss()) [object_type_def])
 
 
 

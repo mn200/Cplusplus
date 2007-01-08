@@ -12,7 +12,7 @@ local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 (* C++ ancestor theories  *)
 open utilsTheory typesTheory memoryTheory expressionsTheory staticsTheory
-     statesTheory class_infoTheory
+     statesTheory class_infoTheory aggregatesTheory
 
 val _ = new_theory "operators";
 
@@ -86,10 +86,10 @@ val binop_meaning_def = Define`
 
    (binop_meaning s CPlus m1 t1 m2 t2 res rt =
       pointer_type t1 /\
-      (?n. sizeof (sizeofmap s) (@t. t1 = Ptr t) n /\
+      (?n. sizeof T (sizeofmap s) (@t. t1 = Ptr t) n /\
            add_pointer (m1,t1,n) (m2,t2) (res,rt)) \/
       pointer_type t2 /\
-      (?n. sizeof (sizeofmap s) (@t. t2 = Ptr t) n /\
+      (?n. sizeof T (sizeofmap s) (@t. t2 = Ptr t) n /\
            add_pointer (m2,t2,n) (m1,t1) (res,rt)) \/
       ~pointer_type t1 /\ ~pointer_type t2 /\
       add_arith (m1,t1) (m2,t2) (res,rt)) /\
