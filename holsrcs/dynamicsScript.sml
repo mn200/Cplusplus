@@ -745,6 +745,22 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                         (f (NormE (LVal a ty2 p) se)), s0)
              ([], s))
 
+   /\
+
+(* RULE-ID: decl-vdecinit-direct-class-finish *)
+(* differences with decl-vdecinit-finish:
+     * no need to update memory, or init_map as this will have all been
+       done by the constructor
+*)
+(!cnm a ty se0 s0.
+     is_null_se se0
+   ==>
+     declmng mng vdf
+             (VDecInitA (Class cnm)
+                        (ObjPlace a)
+                        (DirectInit (NormE (ECompVal [] ty) se0)), s0)
+             ([], s0))
+
 (* TODO: add a rule for performing class based CopyInit updates *)
 `
 
@@ -1331,7 +1347,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: return-rvalue *)
 (* all recursive stmt rules require RHS of reduction to still be
-   an mStmt, preventing this rule from firing at depth *)
+   an mStmt, preventing this rule from firing at depth.  Note that
+   class r-values can't be returned from this rule as class values are
+   never represented with ECompVals. *)
 (!v t s se0 se c smap tmap vmap thisval stack'.
      is_null_se se0 /\ (s.stack = (smap,tmap,vmap,thisval)::stack')
    ==>
