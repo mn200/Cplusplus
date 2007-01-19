@@ -59,6 +59,9 @@ val _ = Hol_datatype`
                (* boolean records whether or not block has been entered, so
                   all blocks will initially have this false *)
            | Ret of ExtE
+           | InitRV of var_decl list
+               (* for the construction of temporary objects returned
+                  from functions *)
            | EmptyRet
            | Break
            | Cont
