@@ -64,7 +64,7 @@ val _ = type_abbrev("state_class_info",
 
 
 val _ = Hol_datatype
-  `state = <| allocmap : num -> bool ;
+  `state = <| allocmap : addr -> bool ;
                          (* the set of allocated addresses *)
 
               fnmap    : fnid |-> fn_info ;
@@ -93,15 +93,15 @@ val _ = Hol_datatype
                             varmap for explanation of why paths are necessary
                          *)
 
-              initmap  : num -> bool ;
+              initmap  : addr -> bool ;
                          (* the set of initialised addresses *)
 
-              locmap   : num -> byte ;
+              locmap   : addr -> byte ;
                          (* memory.  Domain should be ( void * ) words *)
 
               stack    : ((CPPname |-> state_class_info) #
                           (CPPname |-> CPP_Type) #
-                          (CPPname |-> (num # CPPname list)) #
+                          (CPPname |-> (addr # CPPname list)) #
                           CExpr option) list ;
                          (* stack of class, type and var info.  Updated
                             as blocks are entered and left *)
@@ -118,10 +118,17 @@ val _ = Hol_datatype
                             variables can be references, and these can be
                             (initialised to be) references to sub-classes. *)
 
-              thisvalue: CExpr option
+              thisvalue: CExpr option ;
                          (* the value (i.e., this will always be an ECompVal
                             with a pointer value) of the this expression *)
 
+              blockclasses : (addr # CPP_Type # CPPname list) list ;
+              exprclasses  : (addr # CPP_Type # CPPname list) list
+                (* the stack of objects that need to have destructors
+                   called.  First field is for automatic objects that have
+                   block-delimited lifetimes.  Second is for temporary
+                   objects that need to be destroyed at the end of the
+                   full enclosing expression *)
              |>`;
 val _ = type_abbrev("CState", ``:state``)
 
