@@ -53,6 +53,10 @@ val _ = export_rewrites ["dimindex_byte_index"]
 (* establish bytes as the word type of length CHAR_BIT *)
 val _ = type_abbrev("byte", ``:bool ** byte_index``)
 
+(* establish addresses as numbers *)
+val _ = type_abbrev("addr", ``:num``)
+val _ = disable_tyabbrev_printing "addr"
+
 (* 1.7
 
      "The fundamental storage unit in the C++ memory model is the
