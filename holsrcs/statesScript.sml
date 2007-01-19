@@ -122,8 +122,8 @@ val _ = Hol_datatype
                          (* the value (i.e., this will always be an ECompVal
                             with a pointer value) of the this expression *)
 
-              blockclasses : (addr # CPP_Type # CPPname list) list ;
-              exprclasses  : (addr # CPP_Type # CPPname list) list
+              blockclasses : (addr # CPP_Type # CPPname list) list list ;
+              exprclasses  : (addr # CPP_Type # CPPname list) list list
                 (* the stack of objects that need to have destructors
                    called.  First field is for automatic objects that have
                    block-delimited lifetimes.  Second is for temporary

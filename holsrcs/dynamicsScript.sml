@@ -759,7 +759,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
              (VDecInitA (Class cnm)
                         (ObjPlace a)
                         (DirectInit (NormE (ECompVal [] ty) se0)), s0)
-             ([], s0))
+             ([], s0 with blockclasses updated_by
+                  stackenv_extend (a,Class cnm,default_path (Class cnm))))
 
 (* TODO: add a rule for performing class based CopyInit updates *)
 `

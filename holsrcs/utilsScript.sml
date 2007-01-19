@@ -185,5 +185,26 @@ val LFINDi_THM = store_thm(
     Cases_on `i` THEN SRW_TAC [ARITH_ss][]
   ]);
 
+(* ----------------------------------------------------------------------
+    stackenv_extend : 'a -> 'a list list -> 'a list list
+   ---------------------------------------------------------------------- *)
+
+val stackenv_extend_def = Define`
+  (stackenv_extend a [] = [[a]]) /\
+  (stackenv_extend a (h::t) = (a::h) :: t)
+`;
+val _ = export_rewrites ["stackenv_extend_def"]
+
+(* ----------------------------------------------------------------------
+    stackenv_newscope : 'a list list -> 'a list list
+   ---------------------------------------------------------------------- *)
+
+val stackenv_newscope_def = Define`
+  stackenv_newscope env = []::env
+`;
+
+
+
+
 val _ = export_theory()
 
