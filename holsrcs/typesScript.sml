@@ -55,6 +55,12 @@ val ref_type_def = Define`
 `;
 val _ = export_rewrites ["ref_type_def"]
 
+(* 3.9.2 p1 "implicit" *)
+val class_type_def = Define`
+  (class_type (Class nm) = T) /\ (class_type x = F)
+`;
+val _ = export_rewrites ["class_type_def"]
+
 (* 3.9 p9 *)
 val object_type_def = Define`
   object_type t = ~function_type t /\ ~ref_type t /\ ~(t = Void)
