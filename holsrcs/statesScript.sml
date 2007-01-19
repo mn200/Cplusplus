@@ -148,7 +148,10 @@ val initial_state_def = Define`
                      classmap := FEMPTY;
                      typemap := FEMPTY;
                      varmap := FEMPTY ;
-                     thisvalue := NONE |>
+                     thisvalue := NONE ;
+
+                     blockclasses := [[]];
+                     exprclasses := [[]] |>
 `
 
 (* function that updates memory with a value *)
