@@ -418,6 +418,15 @@ val find_constructor_info_def = Define`
        (MAP SND params = MAP value_type args)
 `
 
+(* TODO: deal with overloading, which is only constness *)
+val find_destructor_info_def = Define`
+  find_destructor_info s0 cnm body =
+    cnm IN defined_classes s0 /\
+    ?prot.
+       MEM (Destructor (SOME body), F, prot) (cinfo s0 cnm).fields
+`;
+
+
 
 val initA_constructor_call_def = Define`
   initA_constructor_call mdp cnm addr args =
@@ -551,12 +560,12 @@ val (value_init_rules, value_init_ind, value_init_cases) = Hol_reln`
 `;
 
 
-(* this function takes the body of a constructor function and wraps it inside
-   a series of declarations corresponding to the mem-initialisors
-   associated with that constructor
+(* this function returns the prefix of sub-object constructor calls that must
+   precede the body of a constructor, looking up mem-initialisors as
+   necessary.
 *)
-val construct_ctor_body_def = Define`
-  construct_ctor_body s mdp a cnm (mem_inits : mem_initializer list) body =
+val construct_ctor_pfx_def = Define`
+  construct_ctor_pfx s mdp a cnm (mem_inits : mem_initializer list) body =
     let allccs = constituent_offsets s mdp cnm in
     let direct_bases = get_direct_bases s cnm in
     let virt_bases = get_virtual_bases s cnm in
@@ -593,8 +602,8 @@ val construct_ctor_body_def = Define`
                [initA_constructor_call T (Base nsdname) (a + a') args] in
     let nsds = FLAT (MAP do_nsd data_fields)
   in
-    Block F (virtuals ++ bases ++ nsds) [body]
-`
+    virtuals ++ bases ++ nsds
+`;
 
 val return_cont_def = Define`
   return_cont se ty = if ref_type ty then LVC LVal se
@@ -644,14 +653,20 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    Functions can't be initialised, so they won't appear here.
    References must be initialised, and the behaviour of vdeclare on
    references is to put them into the typemap, but to allocate no
-   space, and to put them into the varmap at address 0. *)
+   space, and to put them into the varmap at address 0.
+
+   This is also the point where the class construction has to be recorded
+   in the blockclasses stack so that destructors will get called in the
+   appropriate reverse order.
+*)
 
 
 (* RULE-ID: decl-vdecinit-start-evaluate-direct-class *)
-(!s0 ty cnm name args s a pth.
+(!s0 ty cnm name args s1 s2 a pth.
      (ty = Class cnm) /\
-     vdeclare s0 ty name s /\
-     ((a,pth) = s.varmap ' name)
+     vdeclare s0 ty name s1 /\
+     ((a,pth) = s1.varmap ' name) /\
+     update_blockclasses s1 a cnm s2
    ==>
      declmng mng
              vdf
@@ -660,7 +675,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                          (ObjPlace a)
                          (DirectInit (mExpr
                                         (FnApp (ConstructorFVal T a cnm) args)
-                                        base_se))], vdf s))
+                                        base_se))], vdf s2))
 
    /\
 
@@ -759,8 +774,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
              (VDecInitA (Class cnm)
                         (ObjPlace a)
                         (DirectInit (NormE (ECompVal [] ty) se0)), s0)
-             ([], s0 with blockclasses updated_by
-                  stackenv_extend (a,Class cnm,default_path (Class cnm))))
+             ([], s0))
 
 (* TODO: add a rule for performing class based CopyInit updates *)
 `
@@ -831,6 +845,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: var-to-fvalue *)
 (* BAD_ASSUMPTION: need to add treatment of member functions that are
      called without explicitly using structure dereference operation,
      which can happen in the body of member functions *)
@@ -1290,14 +1305,15 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
           s0
           (s1 with <| stack updated_by
                         (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
-                      thisvalue := SOME (ECompVal this (Ptr (Class cname)))
+                      thisvalue := SOME (ECompVal this (Ptr (Class cname)));
+                      blockclasses updated_by stackenv_newscope
                    |>,
            EStmt body (return_cont se0 rt)))
 
    /\
 
 (* RULE-ID: constructor-function-call *)
-(!cnm mdp a args se0 params s0 s1 mem_inits this body body'.
+(!cnm mdp a args se0 params s0 s1 mem_inits this body cpfx.
      find_constructor_info s0 cnm args params mem_inits body /\
      rec_i_params
        (s0 with <| classmap := s0.gclassmap ;
@@ -1307,15 +1323,16 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
        args
        s1 /\
      (SOME this = ptr_encode (s0, Class cnm) (a, [cnm])) /\
-     (body' = construct_ctor_body s0 mdp a cnm mem_inits body)
+     (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits body)
    ==>
      ^mng (mExpr (FnApp_sqpt (ConstructorFVal mdp a cnm) args) se0)
           s0
           (s1 with <| stack updated_by
                         (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
-                      thisvalue := SOME (ECompVal this (Ptr (Class cnm)))
+                      thisvalue := SOME (ECompVal this (Ptr (Class cnm)));
+                      blockclasses updated_by stackenv_newscope
                    |>,
-           EStmt body' (return_cont se0 Void)))
+           EStmt (Block T cpfx [body]) (return_cont se0 Void)))
 
    /\
 
@@ -1386,22 +1403,42 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!tt st st' c s0 s.
      ^mng (mStmt st c) s0 (s, mStmt st' c)
    ==>
-     ^mng (mStmt (Trap tt st) c) s0 (s, mStmt (Trap tt st') c)) /\
+     ^mng (mStmt (Trap tt st) c) s0 (s, mStmt (Trap tt st') c))
+
+   /\
 
 (* final cases for Traps.  This will need generalisation for exceptions  *)
+(* RULE-ID: trap-break-catches *)
 (!c s0.
-     ^mng (mStmt (Trap BreakTrap Break) c) s0 (s0, mStmt EmptyStmt c)) /\
+     T
+   ==>
+     ^mng (mStmt (Trap BreakTrap Break) c) s0 (s0, mStmt EmptyStmt c))
 
+   /\
+
+(* RULE-ID: trap-continue-catches *)
 (!c s0.
-     ^mng (mStmt (Trap ContTrap Cont) c) s0 (s0, mStmt EmptyStmt c)) /\
+     ^mng (mStmt (Trap ContTrap Cont) c) s0 (s0, mStmt EmptyStmt c))
 
+   /\
+
+(* RULE-ID: trap-continue-passes-break *)
 (!c s0.
-     ^mng (mStmt (Trap ContTrap Break) c) s0 (s0, mStmt Break c)) /\
+     T
+   ==>
+     ^mng (mStmt (Trap ContTrap Break) c) s0 (s0, mStmt Break c))
 
+   /\
+
+(* RULE-ID: trap-break-passes-continue *)
 (!c s0.
-     ^mng (mStmt (Trap BreakTrap Cont) c) s0 (s0, mStmt Cont c)) /\
+     T
+   ==>
+     ^mng (mStmt (Trap BreakTrap Cont) c) s0 (s0, mStmt Cont c))
 
-(* RULE-ID: trap-emptystmt *)
+   /\
+
+(* RULE-ID: trap-emptystmt-passes *)
 (!c tt s0.
      T
    ==>
@@ -1409,7 +1446,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: trap-ret *)
+(* RULE-ID: trap-ret-passes *)
 (!c tt v t se s0.
      is_null_se se
    ==>
@@ -1481,13 +1518,42 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: block-exit-destructor-call *)
+(!s c st a cnm p rest bcs.
+     (s.blockclasses = ((a,Class cnm,p) :: rest) :: bcs) /\ final_stmt st
+   ==>
+     ^mng (mStmt (Block T [] [st]) c) s
+          (s with blockclasses := rest :: bcs,
+           mStmt
+             (Block T [] [Standalone (mExpr (DestructorCall a cnm) base_se);
+                          st]) c))
+
+   /\
+
+(* RULE-ID: destructor-call *)
+(!a p se0 s0 this cnm body.
+     (cnm = LAST p) /\ is_null_se se0 /\
+     (SOME this = ptr_encode (s0, Class cnm) (a, [cnm])) /\
+     find_destructor_info s0 cnm body
+   ==>
+     ^mng (mExpr (DestructorCall a cnm) se0)
+          s0
+          (s0 with <| stack updated_by
+                        (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
+                      thisvalue := SOME (ECompVal this (Ptr (Class cnm)))
+                   |>,
+           EStmt body (return_cont se0 Void)))
+
+   /\
+
 (* RULE-ID: block-exit *)
-(!st s c stm tym vrm stk'.
-     (s.stack = (stm,tym,vrm,NONE) :: stk') /\ final_stmt st
+(!st s c stm tym vrm stk' bcs.
+     (s.stack = (stm,tym,vrm,NONE) :: stk') /\ final_stmt st /\
+     (s.blockclasses = []::bcs)
    ==>
      ^mng (mStmt (Block T [] [st]) c) s
           (s with <| stack := stk'; classmap := stm; typemap := tym;
-                     varmap := vrm |>,
+                     varmap := vrm; blockclasses := bcs |>,
            mStmt st c))
 
    /\
@@ -1507,6 +1573,15 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mStmt (Block T [] (exstmt::sts)) c) s
           (s, mStmt (Block T [] [exstmt]) c))
+
+   /\
+
+(* RULE-ID: block-stmt-evaluate *)
+(!st st' sts c s0 s.
+     ^mng (mStmt st c) s0 (s, mStmt st' c)
+   ==>
+     ^mng (mStmt (Block T [] (st :: sts)) c) s0
+          (s, mStmt (Block T [] (st' :: sts)) c))
 
    /\
 

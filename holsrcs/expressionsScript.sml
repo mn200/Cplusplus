@@ -78,6 +78,9 @@ val _ = Hol_datatype
                most-derived object), the address where the object is
                being constructed, and the name of the class. *)
          | ConstructorFVal of bool => num => CPPname
+
+             (* bool is mdp flag *)
+         | DestructorCall of addr => CPPname
          | RValreq of CExpr
          | ECompVal of byte list => CType
          | UndefinedExpr `;
@@ -129,6 +132,7 @@ val rec_expr_P_def = Define`
     (rec_expr_P (ECompVal v t) P = P (ECompVal v t)) /\
     (rec_expr_P UndefinedExpr P = P UndefinedExpr) /\
     (rec_expr_P (ConstructorFVal mdp a nm) P = P (ConstructorFVal mdp a nm)) /\
+    (rec_expr_P (DestructorCall a nm) P = P (DestructorCall a nm)) /\
     (rec_exprl_P [] P = T) /\
     (rec_exprl_P (CONS e es) P = rec_expr_P e P /\ rec_exprl_P es P) /\
     (rec_expr_opt NONE P = T) /\
