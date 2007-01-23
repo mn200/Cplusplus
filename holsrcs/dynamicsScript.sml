@@ -1196,19 +1196,17 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: function-member-select *)
 (* looking up a function member *)
-(* This is the equivalent of most of Wasserab's rule BS10.  Because we're
-   not yet doing multiple inheritance (TODO), we can be sure that the head
-   of p is the enclosing, most-derived class, and that there will be a unique
-   lowest function in the hierarchy for it to call.
-*)
-(!a C p p' fld retty argtys se s.
-     s |- HD p has least fld -: Function retty argtys via p'
-       (* recall that C will be the last element of p (INVARIANT) *)
+(* This is the equivalent of most of Wasserab's rule BS10.  *)
+(* As the FVal has its last component with path = Cs', the method call will
+   jump into the method body with the right value for this *)
+(!a C Cs Cs' Ds fld dyn_retty se s static_retty body0 args0 args body.
+     s |- LAST Cs has least method fld -: (static_retty,args0,body0) via Ds /\
+     s |- (C,Cs ^ Ds) selects fld -: (dyn_retty,args,body) via Cs'
    ==>
-     ^mng (mExpr (SVar (LVal a (Class C) p) fld) se) s
-          (s, ev (FVal (Member (LAST p') fld)
-                       (Function retty argtys)
-                       (SOME (LVal a (Class (LAST p')) p')))
+     ^mng (mExpr (SVar (LVal a (Class C) Cs) fld) se) s
+          (s, ev (FVal (Member (LAST Cs') fld)
+                       (Function dyn_retty (MAP SND args))
+                       (SOME (LVal a (Class C) Cs')))
                  se))
 
    /\
