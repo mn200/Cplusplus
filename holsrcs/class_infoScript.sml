@@ -28,24 +28,58 @@ val defined_classes_def = Define`
   defined_classes s = FDOM (deNONE s.classmap)
 `;
 
-(* c2 is an ancestor of c1 *)
-val ancestor_def = Define`
-  ancestor s c1 c2 =
-    c1 IN defined_classes s /\ ((cinfo s c1).ancestors = SOME c2)
-`;
-
-
 (* similarly, direct base classes, in order of declaration *)
 val get_direct_bases_def = Define`
   get_direct_bases s cnm : CPPname list =
-    case (cinfo s cnm).ancestors of
-       NONE -> []
-    || SOME n -> [n]
+    mapPartial (\ (cnm, b, prot). if b then NONE else SOME cnm)
+               (cinfo s cnm).ancestors
 `
 
-val get_virtual_bases_def = Define`
-  get_virtual_bases s cnm : CPPname list = []
+(* c2 is a direct base of c1 *)
+val is_direct_base_def = Define`
+  is_direct_base s c1 c2 =
+    c1 IN defined_classes s /\ MEM c1 (get_direct_bases s c2)
 `;
+
+val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
+                   paren_style = OnlyIfNecessary,
+                   pp_elements = [BreakSpace(1,0), TOK "|-", BreakSpace(1,2),
+                                  BeginFinalBlock(PP.CONSISTENT,0), TM,
+                                  BreakSpace(1,0), TOK "<", BreakSpace(1,0)],
+                   term_name = "is_direct_base",
+                   fixity = Infix(NONASSOC, 460) }
+
+val get_virtual_bases_def = Define`
+  get_virtual_bases s cnm : CPPname list =
+    mapPartial (\ (cnm, b, prot). if b then SOME cnm else NONE)
+               (cinfo s cnm).ancestors
+`;
+
+(* c2 is a virtual base of c1 *)
+val is_virtual_base_def = Define`
+  is_virtual_base s c1 c2 =
+    c1 IN defined_classes s /\ MEM c1 (get_virtual_bases s c2)
+`;
+
+val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
+                   paren_style = OnlyIfNecessary,
+                   pp_elements = [BreakSpace(1,0), TOK "|-", BreakSpace(1,2),
+                                  BeginFinalBlock(PP.CONSISTENT,0), TM,
+                                  BreakSpace(1,0), TOK "<.", BreakSpace(1,0)],
+                   term_name = "is_virtual_base",
+                   fixity = Infix(NONASSOC, 460) }
+
+val RTC_class_lt_def = Define`
+  RTC_class_lt s c1 c2 = RTC (is_direct_base s RUNION is_virtual_base s) c1 c2
+`;
+
+val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
+                   paren_style = OnlyIfNecessary,
+                   pp_elements = [BreakSpace(1,0), TOK "|-", BreakSpace(1,2),
+                                  BeginFinalBlock(PP.CONSISTENT,0), TM,
+                                  BreakSpace(1,0), TOK "<=", BreakSpace(1,0)],
+                   term_name = "RTC_class_lt",
+                   fixity = Infix(NONASSOC, 460) }
 
 (* given a type, class-path pair, if the path is non-empty, then the
    static type is Class of the last element in the path. *)
@@ -104,13 +138,6 @@ val path_app_def = Define`
 val _ = set_fixity "^" (Infixl 500)
 val _ = overload_on("^", ``path_app``)
 
-val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
-                   paren_style = OnlyIfNecessary,
-                   pp_elements = [BreakSpace(1,0), TOK "|-", BreakSpace(1,2),
-                                  BeginFinalBlock(PP.CONSISTENT,0), TM,
-                                  BreakSpace(1,0), TOK "<", BreakSpace(1,0)],
-                   term_name = "ancestor",
-                   fixity = Infix(NONASSOC, 460) }
 
 
 (* See the Subjobjs_R relation of Wasserab et al. *)
@@ -136,24 +163,34 @@ val calc_rsubobjs = store_thm(
   SRW_TAC [][SPECIFICATION] THEN
   METIS_TAC [])
 
-(* The Subobjs relation of Wasserab et al.  Because of the absence of
-   multiple inheritance, let alone virtual (shared) ancestors, this is
-   currently the same as rsubobjs *)
+(* The Subobjs relation of Wasserab et al. *)
 val (subobjs_rules, subobjs_ind, subobjs_cases) = Hol_reln`
-  (!C Cs s. rsubobjs s (C,Cs) ==> subobjs s (C,Cs))
+   (!C Cs s.
+     rsubobjs s (C,Cs)
+   ==>
+     subobjs s (C,Cs))
+
+   /\
+
+  (!s C C' D Cs.
+     s |- C <= C' /\ s |- C' <. D /\ (D,Cs) IN rsubobjs s
+   ==>
+     subobjs s (C, Cs))
 `;
 
-val calc_subobjs = store_thm(
-  "calc_subobjs",
-  ``(C,Cs) IN subobjs s = (C,Cs) IN rsubobjs s``,
-  SRW_TAC [][SPECIFICATION] THEN
-  CONV_TAC (LAND_CONV (ONCE_REWRITE_CONV [subobjs_cases])) THEN
-  SRW_TAC [][]);
+(* from s3.4 of Wasserab et al *)
+val (pord1_rules, pord1_ind, pord1_cases) = Hol_reln`
+   (!C Cs Ds s.
+     (C,Cs) IN subobjs s /\ (C,Ds) IN subobjs s /\ (Cs = FRONT Ds)
+   ==>
+     pord1 (s,C) Cs Ds)
 
+   /\
 
-val pord1_def = Define`
-  pord1 (s, C) Cs Ds = (Cs = FRONT Ds) /\ (C,Cs) IN rsubobjs s /\
-                       (C,Ds) IN rsubobjs s
+   (!C Cs D s.
+     (C,Cs) IN subobjs s /\ s |- LAST Cs <. D
+   ==>
+     pord1 (s, C) Cs [D])
 `;
 
 
@@ -238,6 +275,99 @@ val fieldty_via_def = Define`
                    RTC (pord1 (s,C)) Cs Cs'
 `
 
+val MethodDefs_def = Define`
+  MethodDefs s cnm mthnm =
+    { (Cs,(rettype,ps,body)) |
+         (cnm,Cs) IN subobjs s /\
+         ?prot statp.  MEM (CFnDefn rettype mthnm ps body, statp, prot)
+                           (cinfo s (LAST Cs)).fields }
+`
+
+(* s |- C has least fld -: ty via Cs *)
+val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
+                  paren_style = OnlyIfNecessary,
+                  fixity = Infix (NONASSOC, 460),
+                  pp_elements = [BreakSpace(1,0), TOK "|-", BreakSpace(1,0),
+                                 TM, BreakSpace(1,0),
+                                 TOK "has", BreakSpace(1,0),
+                                 TOK "least", BreakSpace(1,0),
+                                 TOK "method", BreakSpace(1,0),
+                                 PPBlock([TM, BreakSpace(1,0),
+                                          TOK "-:", BreakSpace(1,0), TM],
+                                         (PP.CONSISTENT, 0)),
+                                 BreakSpace(1,0), TOK "via", BreakSpace(1,0)],
+                  term_name = "methodty_via"}
+val methodty_via_def = Define`
+  s |- C has least method mname -: minfo via Cs =
+         (Cs,minfo) IN MethodDefs s C mname /\
+         !Cs' ty'. (Cs',ty') IN MethodDefs s C mname ==>
+                   RTC (pord1 (s,C)) Cs Cs'
+`
+
+(* see 6.3.6 Wasserab et al. *)
+val MinimalMethodDefs_def = Define`
+  MinimalMethodDefs s cnm mthdnm =
+    {(Cs,minfo) | (Cs,minfo) IN MethodDefs s cnm mthdnm /\
+                  !Cs' minfo'. (Cs',minfo') IN MethodDefs s cnm mthdnm ==>
+                               RTC (pord1 (s,cnm)) Cs' Cs ==> (Cs = Cs') }
+`
+
+(* mdc = "most derived class"; ldc = "least derived class"  *)
+val mdc_def = Define`mdc (C,Cs) = C`;
+val ldc_def = Define`ldc (C,Cs) = LAST Cs`;
+
+val OverriderMethodDefs_def = Define`
+  OverriderMethodDefs s R mthdname =
+    {(Cs, minfo) | ?Cs' minfo'.
+                      s |- ldc R has least method mthdname -: minfo' via Cs' /\
+                      (Cs,minfo) IN MinimalMethodDefs s (mdc R) mthdname /\
+                      RTC (pord1 (s,mdc R)) Cs (SND R ^ Cs') }
+`;
+
+(* s |- (C,Cs) has overrider mname -: minfo via Cs *)
+val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
+                  paren_style = OnlyIfNecessary,
+                  fixity = Infix (NONASSOC, 460),
+                  pp_elements = [BreakSpace(1,0), TOK "|-", BreakSpace(1,0),
+                                 TM, BreakSpace(1,0),
+                                 TOK "has", BreakSpace(1,0),
+                                 TOK "overrider", BreakSpace(1,0),
+                                 PPBlock([TM, BreakSpace(1,0),
+                                          TOK "-:", BreakSpace(1,0), TM],
+                                         (PP.CONSISTENT, 0)),
+                                 BreakSpace(1,0), TOK "via", BreakSpace(1,0)],
+                  term_name = "has_overrider_via"}
+val has_overrider_via_def = Define`
+  s |- R has overrider mname -: minfo via Cs =
+         (OverriderMethodDefs s R mname = {(Cs,minfo)})
+`
+
+(* select unique method: s |- (C,Cs) selects M -: minfo via Cs' *)
+val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
+                  paren_style = OnlyIfNecessary,
+                  fixity = Infix (NONASSOC, 460),
+                  pp_elements = [BreakSpace(1,0), TOK "|-", BreakSpace(1,0),
+                                 TM, BreakSpace(1,0),
+                                 TOK "selects", BreakSpace(1,0),
+                                 PPBlock([TM, BreakSpace(1,0),
+                                          TOK "-:", BreakSpace(1,0), TM],
+                                         (PP.CONSISTENT, 0)),
+                                 BreakSpace(1,0), TOK "via", BreakSpace(1,0)],
+                  term_name = "selects_via"}
+val (selects_via_rules,selects_via_ind,selects_via_cases) = Hol_reln`
+   (!s C mname minfo Cs Cs'.
+     s |- C has least method mname -: minfo via Cs'
+   ==>
+     s |- (C,Cs) selects mname -: minfo via Cs')
+
+   /\
+
+   (!s mname minfo C Cs Cs'.
+     (!minfo Cs'. ~ (s |- C has least method mname -: minfo via Cs')) /\
+     s |- (C,Cs) has overrider mname -: minfo via Cs'
+   ==>
+     s |- (C,Cs) selects mname -: minfo via Cs')
+`
 
 (* nsdmembers (non-static data-members) *)
 val nsdmembers_def = Define`

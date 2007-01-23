@@ -114,7 +114,8 @@ val _ = Hol_datatype`
              <| fields : (class_entry # bool # protection) list ;
                    (* bool in fields is true for static members *)
 
-                ancestors : CPPname option
+                ancestors : (CPPname # bool # protection) list
+                   (* bool indicates virtuality *)
              |> ;
 
   initializer =

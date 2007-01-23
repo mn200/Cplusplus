@@ -11,7 +11,7 @@ val state1_def = Define`
       (\fm. fm |+ (Base "c",
                    SOME (<| fields := [(FldDecl "foo" (Signed Char),F, Public);
                                       (FldDecl "bar" (Signed Int), F, Public)];
-                           ancestors := NONE |>, {})))
+                           ancestors := [] |>, {})))
 
 `;
 
