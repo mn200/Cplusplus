@@ -191,20 +191,11 @@ val install_global_maps_def = Define`
 
    E.g., if the class is just appearing "as itself", then
    the list will be two elements long, consisting of the class name twice *)
+
+(* argument to ptr_encode are same as those to LVal *)
 val _ = new_constant(
   "ptr_encode",
-  ``:state # CPP_Type -> num # CPPname list -> byte list option``)
-
-val _ = new_constant(
-  "ptr_decode",
-  ``:state # CPP_Type -> byte list -> (num # CPPname list) option``)
-
-(* BAD_ASSUMPTION *)
-(* would be nice to have this as an Isabelle style locale assumption.  *)
-val ptr_inverse = new_axiom(
-  "ptr_inverse",
-  ``(ptr_encode (s,ty) info = SOME result) ==>
-    (ptr_decode (s,ty) result = SOME info)``)
+  ``:state -> num -> CPP_Type -> CPPname list -> byte list option``)
 
 val default_path_def = Define`
   (default_path (Class cn) = [cn]) /\

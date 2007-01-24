@@ -369,6 +369,27 @@ val (selects_via_rules,selects_via_ind,selects_via_cases) = Hol_reln`
      s |- (C,Cs) selects mname -: minfo via Cs')
 `
 
+(* s |- static_ty casts dynamic_value0 to dynamic_value1 *)
+(*    the static_ty is the desired static type *)
+val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
+                  paren_style = OnlyIfNecessary,
+                  fixity = Infix (NONASSOC, 460),
+                  pp_elements = [BreakSpace(1,0),
+                                 TOK "|-", BreakSpace(1,0),
+                                 TM, BreakSpace(1,0),
+                                 TOK "casts", BreakSpace(1,0),
+                                 TM, BreakSpace(1,0),
+                                 TOK "into", BreakSpace(1,0)],
+                  term_name = "casts_to"}
+(* this is a merge of Wasserab et al's casts to (6.3.3) and the <= subtyping
+   relation.  The former does not check for unique paths. *)
+val casts_to_def = Define`
+  s |- C casts Cs into Ds =
+       ?!Cs'. (LAST Cs,Cs') IN subobjs s /\ (LAST Cs' = C) /\
+              (Ds = Cs ^ Cs')
+`;
+
+
 (* nsdmembers (non-static data-members) *)
 val nsdmembers_def = Define`
   nsdmembers s c =

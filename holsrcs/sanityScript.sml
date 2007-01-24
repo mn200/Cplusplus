@@ -11,7 +11,7 @@ open arithmeticTheory pred_setTheory integerTheory
 local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 (* C++ ancestor theories  *)
-open dynamicsTheory
+open dynamicsTheory declaration_dynamicsTheory
 local open side_effectsTheory statesTheory operatorsTheory in end
 
 val _ = new_theory "sanity";
@@ -37,18 +37,6 @@ val apply_se_preserves_fnmaps = prove(
     SRW_TAC [][apply_se_def, apply_lse_def] THEN
     Cases_on `ise` THEN
     FULL_SIMP_TAC (srw_ss()) [se_on_state_def])
-
-val rec_i_params_preserves_fnmaps = prove(
-  ``!s0 vars s. rec_i_params s0 prms vars s ==> (s0.fnmap = s.fnmap)``,
-  Induct_on `prms` THEN
-  ASM_SIMP_TAC (srw_ss()) [pairTheory.FORALL_PROD, rec_i_params_def] THEN
-  REPEAT STRIP_TAC THEN RES_TAC THEN FULL_SIMP_TAC (srw_ss()) [])
-
-val pass_parameters_preserves_fnmaps = prove(
-  ``pass_parameters s0 fnid params s ==> (s0.fnmap = s.fnmap)``,
-  SRW_TAC [][pass_parameters_def] THEN
-  IMP_RES_TAC rec_i_params_preserves_fnmaps THEN
-  FULL_SIMP_TAC (srw_ss()) [])
 
 val vdeclare_preserves_fnmaps = prove(
   ``vdeclare s0 ty name s ==> (s0.fnmap = s.fnmap)``,
@@ -83,10 +71,6 @@ val fninfo_invariant = store_thm(
   ``!ee0 s0 see. meaning ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)``,
   HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
   TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps]) THEN
-  TRY (IMP_RES_TAC pass_parameters_preserves_fnmaps THEN
-       FULL_SIMP_TAC (srw_ss()) [] THEN NO_TAC) THEN
-  TRY (IMP_RES_TAC rec_i_params_preserves_fnmaps THEN
-       FULL_SIMP_TAC (srw_ss()) [] THEN NO_TAC) THEN
   IMP_RES_TAC declmng_elim_preserves_fnmaps THEN
   FULL_SIMP_TAC (srw_ss()) []);
 
