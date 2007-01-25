@@ -67,6 +67,12 @@ val _ = Hol_datatype
   `state = <| allocmap : addr -> bool ;
                          (* the set of allocated addresses *)
 
+              constmap : addr -> bool ;
+                         (* the set of read-only addresses on the "stack" *)
+
+              hconstmap : addr -> bool ;
+                         (* the set of read-only addresses on the "heap" *)
+
               fnmap    : fnid |-> fn_info ;
                          (* map from function 'names' to type information about
                             the given functions *)

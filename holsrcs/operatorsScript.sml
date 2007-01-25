@@ -23,10 +23,25 @@ val add_pointer_def = Define`
   add_pointer (v1, t1, s1:num) (v2, t2) (res, rt) =
        (rt = t1) /\ integral_type t2 /\ pointer_type t1 /\
        (case (INT_VAL t1 v1, INT_VAL t2 v2) of
-           (SOME r1, SOME r2) -> (case REP_INT t1 (r1 + &s1 * r2) of
-                                     SOME r -> (res = r)
-                                  || NONE -> F)
+           (SOME r1, SOME r2) ->
+               (case REP_INT t1 (r1 + &s1 * r2) of
+                   SOME r -> (res = r)
+                || NONE -> F)
         || _ -> F)
+`;
+
+val sub_pointers_def = Define`
+  sub_pointers sz (v1, t1) (v2, t2) (res, rt) =
+    (rt = ptrdiff_t) /\
+    pointer_type t1 /\
+    pointer_type t2 /\
+    (strip_ptr_const t1 = strip_ptr_const t2) /\
+    (case (INT_VAL t1 v1, INT_VAL t2 v2) of
+        (SOME r1, SOME r2) ->
+            (case REP_INT ptrdiff_t ((r1 - r2) / &sz) of
+                SOME r -> (res = r)
+             || NONE -> F)
+     || _ -> F)
 `;
 
 val add_arith_def = Define`
@@ -43,7 +58,7 @@ val add_arith_def = Define`
      within the same object *)
 val relop_def = Define`
   relop f (v1, t1) (v2, t2) (res, rt) =
-     (rt = Signed Int) /\
+     (rt = Bool) /\
      ?i1 i2. (INT_VAL t1 v1 = SOME i1) /\
              (INT_VAL t2 v2 = SOME i2) /\
              (if f i1 i2 then SOME res = REP_INT rt 1
@@ -58,7 +73,30 @@ val arithop_def = Define`
             (SOME res = REP_INT rt (f i1 i2))
 `;
 
-val binop_meaning_def = Define`
+(* \#line cholera-model.nw 6484 *)
+val unop_meaning_def = TotalDefn.Define
+   `(unop_meaning CUnPlus m1 t1 res rt =
+      unary_op_type CUnPlus t1 rt /\
+      ?i1. (SOME i1 = INT_VAL t1 m1) /\
+           (SOME res = REP_INT rt i1)) /\
+
+    (unop_meaning CUnMinus m1 t1 res rt =
+      unary_op_type CUnMinus t1 rt /\
+      ?i1. (SOME i1 = INT_VAL t1 m1) /\
+           (SOME res = REP_INT rt (~i1))) /\
+
+    (* BAD_ASSUMPTION: too hard basket *)
+    (unop_meaning CComp m1 t1 res rt = F) /\
+
+    (unop_meaning CNot m1 t1 res rt =
+       scalar_type t1 /\ (rt = Signed Int) /\
+       ?i. (INT_VAL t1 m1 = SOME i) /\
+           (SOME res = if i = 0 then REP_INT rt 1 else REP_INT rt 0))
+`;
+
+
+
+val binop_meaning_defn = Defn.Hol_defn "binop_meaning" `
    (* relational operators *)
    (binop_meaning s CLess m1 t1 m2 t2 res rt =
       binary_op_type CLess t1 t2 rt /\
@@ -85,18 +123,28 @@ val binop_meaning_def = Define`
       relop (\i1 i2. ~(i1 = i2)) (m1,t1) (m2,t2) (res,rt)) /\
 
    (binop_meaning s CPlus m1 t1 m2 t2 res rt =
-      pointer_type t1 /\
-      (?n. sizeof T (sizeofmap s) (@t. t1 = Ptr t) n /\
-           add_pointer (m1,t1,n) (m2,t2) (res,rt)) \/
-      pointer_type t2 /\
-      (?n. sizeof T (sizeofmap s) (@t. t2 = Ptr t) n /\
+      pointer_type t1 /\ ~pointer_type t2 /\
+      (?n. sizeof T (sizeofmap s) (dest_ptr t1) n /\
+           add_pointer (m1,t1,n) (m2,t2) (res,rt))
+         \/
+      pointer_type t2 /\ ~pointer_type t1 /\
+      (?n. sizeof T (sizeofmap s) (dest_ptr t2) n /\
            add_pointer (m2,t2,n) (m1,t1) (res,rt)) \/
       ~pointer_type t1 /\ ~pointer_type t2 /\
       add_arith (m1,t1) (m2,t2) (res,rt)) /\
 
    (binop_meaning s CMinus m1 t1 m2 t2 res rt =
       binary_op_type CMinus t1 t2 rt /\
-      arithop (-) (m1,t1) (m2,t2) (res,rt)) /\
+      (pointer_type t1 /\ ~pointer_type t2 /\
+       (?res0 rt0. unop_meaning CUnMinus m2 t2 res0 rt0 /\
+                   binop_meaning s CPlus m1 t1 res0 rt0 res rt)
+           \/
+       pointer_type t1 /\ pointer_type t2 /\
+       (?sz. sizeof T (sizeofmap s) (dest_ptr t1) sz /\
+             sub_pointers sz (m1,t1) (m2,t2) (res,rt))
+           \/
+       ~pointer_type t1 /\ ~pointer_type t2 /\
+       arithop (-) (m1,t1) (m2,t2) (res,rt)))  /\
 
    (binop_meaning s CTimes m1 t1 m2 t2 res rt =
        binary_op_type CTimes t1 t2 rt /\
@@ -112,26 +160,12 @@ val binop_meaning_def = Define`
       arithop (%) (m1,t1) (m2,t2) (res,rt))
 `;
 
-(* \#line cholera-model.nw 6484 *)
-val unop_meaning_def = TotalDefn.Define
-   `(unop_meaning CUnPlus m1 t1 res rt =
-      unary_op_type CUnPlus t1 rt /\
-      ?i1. (SOME i1 = INT_VAL t1 m1) /\
-           (SOME res = REP_INT rt i1)) /\
+val (binop_meaning_def, _) = Defn.tprove(
+  binop_meaning_defn,
+  WF_REL_TAC `measure (\p. case FST (SND p) of CMinus -> 1 || _ -> 0)`)
 
-    (unop_meaning CUnMinus m1 t1 res rt =
-      unary_op_type CUnMinus t1 rt /\
-      ?i1. (SOME i1 = INT_VAL t1 m1) /\
-           (SOME res = REP_INT rt (~i1))) /\
+val _ = save_thm("binop_meaning_def", binop_meaning_def)
 
-    (* BAD_ASSUMPTION: too hard basket *)
-    (unop_meaning CComp m1 t1 res rt = F) /\
-
-    (unop_meaning CNot m1 t1 res rt =
-       scalar_type t1 /\ (rt = Signed Int) /\
-       ?i. (INT_VAL t1 m1 = SOME i) /\
-           (SOME res = if i = 0 then REP_INT rt 1 else REP_INT rt 0))
-`;
 
 (* SANITY *)
 val relop_det = store_thm(
@@ -141,37 +175,6 @@ val relop_det = store_thm(
     (res1 = res2) /\ (rt1 = rt2)``,
   SRW_TAC [][relop_def] THEN METIS_TAC [TypeBase.one_one_of ``:'a option``]);
 
-val arithop_det = store_thm(
-  "arithop_det",
-  ``arithop f (m1,t1) (m2,t2) (res1,rt1) /\
-    arithop f (m1,t1) (m2,t2) (res2,rt2) ==>
-    (res1 = res2) /\ (rt1 = rt2)``,
-  SRW_TAC [][arithop_def] THEN METIS_TAC [TypeBase.one_one_of ``:'a option``]);
-
-
-val binary_ops_det = store_thm(
-  "binary_ops_det",
-  ``!f s m1 t1 m2 t2 res rt.
-       binop_meaning s f m1 t1 m2 t2 res rt ==>
-       !res' rt'. binop_meaning s f m1 t1 m2 t2 res' rt' ==>
-                  (res' = res) /\ (rt' = rt)``,
-  Cases_on `f` THEN
-  SRW_TAC [][binop_meaning_def, add_pointer_def, add_arith_def] THEN
-  FULL_SIMP_TAC (srw_ss()) [] THEN
-  TRY (METIS_TAC [relop_det, arithop_det, type_classes,sizeof_det]) THENL [
-    Cases_on `INT_VAL rt m1` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    Cases_on `INT_VAL t2 m2` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    `n = n'` by METIS_TAC [sizeof_det] THEN
-    FULL_SIMP_TAC (srw_ss()) [] THEN
-    Cases_on `REP_INT rt (x + &n' * x')` THEN
-    FULL_SIMP_TAC (srw_ss()) [],
-    `n = n'` by METIS_TAC [sizeof_det] THEN
-    Cases_on `INT_VAL rt m2` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    Cases_on `INT_VAL t1 m1` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    Cases_on `REP_INT rt (x + &n' * x')` THEN FULL_SIMP_TAC (srw_ss()) [],
-    METIS_TAC [TypeBase.one_one_of ``:'a option``]
-  ]);
-
 val unary_ops_det = store_thm(
   "unary_ops_det",
   ``!f s m1 t1 res rt.
@@ -180,6 +183,47 @@ val unary_ops_det = store_thm(
                    (res' = res) /\ (rt' = rt)``,
   Cases_on `f` THEN SRW_TAC [][unop_meaning_def] THEN
   METIS_TAC [unary_op_type_det, TypeBase.one_one_of ``:'a option``])
+
+val arithop_det = store_thm(
+  "arithop_det",
+  ``arithop f (m1,t1) (m2,t2) (res1,rt1) /\
+    arithop f (m1,t1) (m2,t2) (res2,rt2) ==>
+    (res1 = res2) /\ (rt1 = rt2)``,
+  SRW_TAC [][arithop_def] THEN METIS_TAC [TypeBase.one_one_of ``:'a option``]);
+
+val add_pointer_det = store_thm(
+  "add_pointer_det",
+  ``add_pointer (v1,t1,s1) (v2,t2) (res1,rt1) /\
+    add_pointer (v1,t1,s1) (v2,t2) (res2,rt2) ==>
+    (res1 = res2) /\ (rt1 = rt2)``,
+  SRW_TAC [][add_pointer_def] THEN
+  Cases_on `INT_VAL rt1 v1` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  Cases_on `INT_VAL t2 v2`  THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  Cases_on `REP_INT rt1 (x + &s1 * x')` THEN FULL_SIMP_TAC (srw_ss()) [])
+
+val sub_pointers_det = store_thm(
+  "sub_pointers_det",
+  ``sub_pointers sz (v1,t1) (v2,t2) (res1,rt1) /\
+    sub_pointers sz (v1,t1) (v2,t2) (res2,rt2) ==>
+    (res1 = res2) /\ (rt1 = rt2)``,
+  SRW_TAC [][sub_pointers_def] THEN
+  Cases_on `INT_VAL t1 v1` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  Cases_on `INT_VAL t2 v2` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  Cases_on `REP_INT ptrdiff_t ((x - x') / &sz)` THEN
+  FULL_SIMP_TAC (srw_ss()) []);
+
+val binary_ops_det = store_thm(
+  "binary_ops_det",
+  ``!f s m1 t1 m2 t2 res rt.
+       binop_meaning s f m1 t1 m2 t2 res rt ==>
+       !res' rt'. binop_meaning s f m1 t1 m2 t2 res' rt' ==>
+                  (res' = res) /\ (rt' = rt)``,
+  Cases_on `f` THEN
+  SRW_TAC [][binop_meaning_def, add_arith_def] THEN
+  FULL_SIMP_TAC (srw_ss()) [] THEN
+  METIS_TAC [relop_det, arithop_det, type_classes, sizeof_det,
+             add_pointer_det, sub_pointers_det, unary_ops_det,
+             TypeBase.one_one_of ``:'a option``]);
 
 val arithmetic_pair_classes = prove(
   ``!t1 t2 t.

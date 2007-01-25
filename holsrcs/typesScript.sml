@@ -14,15 +14,23 @@ val _ = Hol_datatype `basic_integral_type = Char | Short | Int | Long`;
 
 val _ = Hol_datatype
   `CPP_Type =
-     Void | BChar (* "Basic char" *) | Bool | (* Wchar_t | *)
+     Void |
+     BChar (* "Basic char" *) |
+     Bool |
+     (* Wchar_t |  - not clear if this is a distinct type, or just a synonym
+                     for an existing type *)
      Unsigned of basic_integral_type |
      Signed of basic_integral_type |
+     Class of CPPname |
+     Float |
+     Double |
+     LDouble |
      Ptr of CPP_Type |
      MPtr of CPPname => CPP_Type | (* member pointer *)
      Ref of CPP_Type |
      Array of CPP_Type => num |
-     Class of CPPname | Float | Double | LDouble |
-     Function of CPP_Type => CPP_Type list`;
+     Function of CPP_Type => CPP_Type list |
+     Const of CPP_Type`;
 
 val ptrdiff_t = Rsyntax.new_specification {
   consts = [{const_name = "ptrdiff_t", fixity = Prefix}],
@@ -30,6 +38,24 @@ val ptrdiff_t = Rsyntax.new_specification {
   sat_thm = CONV_RULE SKOLEM_CONV (prove(
     ``?t. t IN {Signed Char; Signed Short; Signed Int; Signed Long}``,
     SIMP_TAC (srw_ss()) [EXISTS_OR_THM]))};
+
+val const_type_def = Define`
+  (const_type (Const ty) = T) /\
+  (const_type _ = F)
+`;
+
+val strip_const_def = Define`
+  (strip_const (Const ty) = strip_const ty) /\
+  (strip_const ty = ty)
+`;
+
+(* strip out all consts from a pointer chain *)
+val strip_ptr_const_def = Define`
+  (strip_ptr_const (Const ty) = strip_ptr_const ty) /\
+  (strip_ptr_const (Ptr ty) = Ptr (strip_ptr_const ty)) /\
+  (strip_ptr_const (MPtr cnm ty) = MPtr cnm (strip_ptr_const ty)) /\
+  (strip_ptr_const ty = ty)
+`;
 
 (* protection types for fields *)
 val _ = Hol_datatype`
@@ -57,9 +83,17 @@ val _ = export_rewrites ["ref_type_def"]
 
 (* 3.9.2 p1 "implicit" *)
 val class_type_def = Define`
-  (class_type (Class nm) = T) /\ (class_type x = F)
+  (class_type (Class nm) = T) /\
+  (class_type (Const ty) = class_type ty) /\
+  (class_type x = F)
 `;
 val _ = export_rewrites ["class_type_def"]
+
+val dest_class_def = Define`
+  (dest_class (Class nm) = nm) /\
+  (dest_class (Const ty) = dest_class ty)
+`;
+val _ = export_rewrites ["dest_class_def"]
 
 (* 3.9 p9 *)
 val object_type_def = Define`
@@ -72,6 +106,7 @@ val integral_type_def = Define`
   (integral_type (Unsigned i) = T) /\
   (integral_type BChar = T) /\
   (integral_type Bool = T) /\
+  (integral_type (Const ty) = integral_type ty) /\
   (integral_type x = F)
 `;
 val _ = export_rewrites ["integral_type_def"]
@@ -93,13 +128,22 @@ val arithmetic_type_def = Define`
 (* 3.9.2 p1 "implicit" *)
 val pointer_type_def = Define `
   (pointer_type (Ptr t) = T) /\
+  (pointer_type (Const ty) = pointer_type ty) /\
   (pointer_type x = F)
 `;
 val _ = export_rewrites ["pointer_type_def"]
 
+val dest_ptr_def = Define`
+  (dest_ptr (Ptr t) = t) /\
+  (dest_ptr (Const t) = dest_ptr t)
+`;
+val _ = export_rewrites ["dest_ptr_def"]
+
+
 (* 3.9.2 p1 "implicit" *)
 val mpointer_type_def = Define`
   (mpointer_type (MPtr c t) = T) /\
+  (mpointer_type (Const ty) = mpointer_type ty) /\
   (mpointer_type x = F)
 `;
 val _ = export_rewrites ["mpointer_type_def"]
@@ -347,6 +391,11 @@ val wf_type_defn = Hol_defn "wf_type" `
                     ~is_abstractty abs_classes ty /\
                     wf_type abs_classes ty) a) /\
 
+  (* 3.9.3 para 1 and para 2 *)
+  (wf_type abs_classes (Const ty) =
+     (object_type ty \/ (ty = Void)) /\ ~array_type ty /\
+     wf_type abs_classes ty) /\
+
   (* all others are OK *)
   (wf_type absc ty = T)
 `;
@@ -365,16 +414,36 @@ open BasicProvers
 val _ = export_rewrites ["wf_type_def"]
 
 (* SANITY *)
+val type_classes = store_thm(
+  "type_classes",
+  ``(!t. (pointer_type t ==> ~arithmetic_type t) /\
+         (pointer_type t ==> ~array_type t) /\
+         (array_type t ==> ~arithmetic_type t) /\
+         (integral_type t ==> arithmetic_type t) /\
+         (pointer_type t ==> scalar_type t) /\
+         (arithmetic_type t ==> scalar_type t) /\
+         (arithmetic_type t ==> object_type t)) /\
+    integral_type ptrdiff_t``,
+  FULL_SIMP_TAC (srw_ss()) [arithmetic_type_def, scalar_type_def,
+                            object_type_def] THEN
+  CONJ_TAC THENL [
+    Induct_on `t` THEN SRW_TAC [][],
+    STRIP_ASSUME_TAC
+      (REWRITE_RULE [NOT_IN_EMPTY, IN_INSERT] ptrdiff_t) THEN SRW_TAC [][]
+  ]);
+
+(* SANITY *)
 val integral_types_well_formed = store_thm(
   "integral_types_well_formed",
   ``!t. integral_type t ==> !ac. wf_type ac t``,
-  Cases_on `t` THEN SRW_TAC [][]);
+  Induct_on `t` THEN SRW_TAC [][] THEN METIS_TAC [type_classes]);
 
 (* SANITY *)
 val arithmetic_types_well_formed = store_thm(
   "arithmetic_types_well_formed",
   ``!t. arithmetic_type t ==> !ac. wf_type ac t``,
-  Cases_on `t` THEN SRW_TAC [][arithmetic_type_def]);
+  Induct_on `t` THEN SRW_TAC [][arithmetic_type_def] THEN
+  METIS_TAC [type_classes]);
 
 (* SANITY *)
 val ua_converted_types_well_formed = store_thm(
@@ -405,21 +474,5 @@ val ua_conversions_safe = store_thm(
   SRW_TAC [][arithmetic_type_def, LET_THM, integral_promotions_def,
              ua_conversions_def]);
 
-(* SANITY *)
-val type_classes = store_thm(
-  "type_classes",
-  ``(!t. (pointer_type t ==> ~arithmetic_type t) /\
-         (pointer_type t ==> ~array_type t) /\
-         (array_type t ==> ~arithmetic_type t) /\
-         (integral_type t ==> arithmetic_type t) /\
-         (pointer_type t ==> scalar_type t) /\
-         (arithmetic_type t ==> scalar_type t)) /\
-    integral_type ptrdiff_t``,
-  FULL_SIMP_TAC (srw_ss()) [arithmetic_type_def, scalar_type_def] THEN
-  CONJ_TAC THENL [
-    Cases_on `t` THEN SRW_TAC [][],
-    STRIP_ASSUME_TAC
-      (REWRITE_RULE [NOT_IN_EMPTY, IN_INSERT] ptrdiff_t) THEN SRW_TAC [][]
-  ]);
 
 val _ = export_theory();

@@ -461,7 +461,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: binop-fails *)
 (!f v1 type1 v2 type2 se0 s.
-     (!res restype. ~binop_meaning s f v1 type1 v2 type2 res restype)
+     (!res restype. ~binop_meaning s f v1 (strip_const type1)
+                                       v2 (strip_const type2)
+                                       res restype)
    ==>
      ^mng (mExpr (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se0) s
           (s, ev UndefinedExpr se0))
@@ -470,7 +472,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: binop-computes *)
 (!s f v1 type1 v2 type2 res restype se.
-     binop_meaning s f v1 type1 v2 type2 res restype
+     binop_meaning s f v1 (strip_const type1)
+                       v2 (strip_const type2)
+                       res restype
    ==>
       ^mng (mExpr (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se) s
            (s, ev (ECompVal res restype) se))
@@ -479,7 +483,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: unop-computes *)
 (!s f ival t result rt se.
-     unop_meaning f ival t result rt
+     unop_meaning f ival (strip_const t) result rt
    ==>
      ^mng (mExpr (CApUnary f (ECompVal ival t)) se) s
           (s, ev (ECompVal result rt) se))
@@ -488,7 +492,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: unop-fails *)
 (!s0 se0 f ival t.
-     (!res rt. ~(unop_meaning f ival t res rt))
+     (!res rt. ~(unop_meaning f ival (strip_const t) res rt))
    ==>
      ^mng (mExpr (CApUnary f (ECompVal ival t)) se0) s0
           (s0, ev UndefinedExpr se0))

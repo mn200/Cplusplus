@@ -91,7 +91,20 @@ val (align_rules, align_ind, align_cases) = Hol_reln`
 
   (!smap mdp ty. align smap mdp (Unsigned ty) (bit_align ty)) /\
 
-  (!smap mdp ty. align smap mdp (Ptr ty) (ptr_align ty)) /\
+   (!smap mdp ty.
+     T
+   ==>
+     align smap mdp (Ptr ty) (ptr_align ty))
+
+   /\
+
+   (!smap mdp ty a.
+     align smap mdp ty a
+   ==>
+     align smap mdp (Const ty) a)
+
+  /\
+
 
   (* BAD_ASSUMPTION *)
   (!smap mdp c ty. align smap mdp (MPtr c ty) (ptr_align ty)) /\

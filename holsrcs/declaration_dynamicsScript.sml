@@ -104,24 +104,37 @@ val malloc_def = Define`
               a + sz <= 2 EXP (CHAR_BIT * ptr_size ty)
 `
 
-(* clause 4's conversions, referenced in 8.5 para 14 *)
-(* doesn't include lvalue-to-rvalue conversion - this is handled specially
-    elsewhere because of the restrictions on accessing and reading memory
-    at the same time. *)
+(* ----------------------------------------------------------------------
+    clause 4's conversions
+      referenced in 8.5 para 14 and elsewhere
+   ---------------------------------------------------------------------- *)
+
+
+(* - doesn't include lvalue-to-rvalue conversion - this is handled
+     specially elsewhere because of the restrictions on accessing and
+     reading memory at the same time.
+   - doesn't worry about outer constness (assumes that it is being called
+     in an initialisation setting, where consts can be initialised by non-
+     consts and vice-versa).
+   - OMITS (preventative) rules of 4.4 - these are checked statically
+*)
 val nonclass_conversion_def = Define`
   nonclass_conversion s (v1,ty1) (v2,ty2) =
-    (integral_type ty1 /\ integral_type ty2 \/
-     (?ty0. {ty1; ty2} = {Ptr Void; Ptr ty0})) /\
-    (?i. (INT_VAL ty1 v1 = SOME i) /\
-         (SOME v2 = REP_INT ty2 i))
-       \/
-    (ty1 = ty2) /\ (v1 = v2)
-       \/
-    (?c1 c2 addr pth1 pth2.  (* this is an upcast *)
-        (ty1 = Ptr (Class (LAST pth1))) /\ (ty2 = Ptr (Class c2)) /\
-        (SOME v1 = ptr_encode s addr (Class c1) pth1) /\
-        s |- c2 casts pth1 into pth2 /\
-        (SOME v2 = ptr_encode s addr (Class c1) pth2))
+    let ty1 = strip_const ty1
+    and ty2 = strip_const ty2
+    in
+      (integral_type ty1 /\ integral_type ty2 \/
+       ?ty0. (ty1 = Ptr ty0) /\ (ty2 = Ptr Void)) /\
+      (?i. (INT_VAL ty1 v1 = SOME i) /\
+           (SOME v2 = REP_INT ty2 i))
+         \/
+      (strip_ptr_const ty1 = strip_ptr_const ty2) /\ (v1 = v2)
+         \/
+      (?c1 c2 addr pth1 pth2.  (* this is an upcast *)
+          (ty1 = Ptr (Class (LAST pth1))) /\ (ty2 = Ptr (Class c2)) /\
+          (SOME v1 = ptr_encode s addr (Class c1) pth1) /\
+          s |- c2 casts pth1 into pth2 /\
+          (SOME v2 = ptr_encode s addr (Class c1) pth2))
 `;
 
 
@@ -163,10 +176,12 @@ val vdeclare_def = Define`
      (?a sz rs.
          (rs = range_set a sz) /\
          object_type ty /\ malloc s0 ty a /\ sizeof T (sizeofmap s) ty sz /\
-         (s = s0 with <| allocmap updated_by (UNION) rs;
-                          varmap updated_by
-                             (\vm. vm |+ (nm,(a,default_path ty)));
-                          typemap updated_by (\tm. tm |+ (nm,ty)) |>))
+         (s = s0 with <| constmap updated_by
+                           (UNION) (if const_type ty then rs else {});
+                         allocmap updated_by (UNION) rs;
+                         varmap updated_by
+                            (\vm. vm |+ (nm,(a,default_path ty)));
+                         typemap updated_by (\tm. tm |+ (nm,ty)) |>))
         \/
      (function_type ty /\
       (s = s0 with typemap updated_by (\tm. tm |+ (nm, ty))))
@@ -449,10 +464,13 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 (* RULE-ID: decl-vdecinit-finish-ref *)
 (* a0 is bogus, NULL even. - assume for the moment that aopt doesn't matter *)
-(!s0 ty1 nm a aopt ty2 p s se f.
+(!s0 ty1 nm a aopt ty2 p p' s se f.
      is_null_se se /\
      ((f = CopyInit) \/ (f = DirectInit)) /\
-     (s = s0 with varmap updated_by (\fm. fm |+ (nm, (a,p))))
+     (if class_type ty1 then
+        s0 |- dest_class ty1 casts p into p'
+      else (p' = p)) /\
+     (s = s0 with varmap updated_by (\fm. fm |+ (nm, (a,p'))))
    ==>
      declmng mng
              vdf
