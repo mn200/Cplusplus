@@ -5,7 +5,7 @@ cd /tmp
 svn export file:///home/users/michaeln/nicta/projects/cpp-project/qcpp-repos/deliverables/$tgt qinetiq-cpp
 cd qinetiq-cpp
 cd docs
-atex $tgt-notes
+latex $tgt-notes
 bibtex $tgt-notes
 latex $tgt-notes
 latex $tgt-notes
@@ -14,13 +14,7 @@ mdvips $tgt-notes
 
 cd .. ; /bin/rm -r bin
 
-cd talks
-latex darp2006
-latex darp2006
-mdvips  darp2006
-rm darp2006.{aux,dvi,log,nav,out,ps,snm,toc}
-
-cd ../..
+cd ../
 mv -i qinetiq-cpp/docs/$tgt-notes.pdf $localdir
 tar cvzf $tgt.tgz qinetiq-cpp
 mv -i $tgt.tgz $localdir
