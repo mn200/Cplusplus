@@ -759,6 +759,23 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: new-simple-class *)
+(* handle other forms in 5.3.4 para 15 *)
+(!cnm s0 se s ty a sz args ptrval.
+     (Class cnm = strip_const ty) /\ malloc s0 ty a /\
+     sizeof T (sizeofmap s0) ty sz /\
+     (s = s0 with <| hallocmap updated_by (UNION) (range_set a sz) ;
+                     constmap := if const_type ty then
+                                   s0.constmap UNION range_set a sz
+                                 else s0.constmap DIFF range_set a sz|>) /\
+     (SOME ptrval = ptr_encode s0 a ty [cnm])
+   ==>
+     ^mng (mExpr (New ty (SOME args)) se) s0
+          (s, mExpr (CommaSep (FnApp (ConstructorFVal T a cnm) args)
+                              (ECompVal ptrval (Ptr ty)))
+                    se))
+
+   /\
 
 (* RULE-ID: constructor-call-sqpt *)
 (!mdp a cnm params se s.
