@@ -212,6 +212,13 @@ val initA_constructor_call_def = Define`
                    (mExpr (FnApp (ConstructorFVal mdp addr cnm) args) base_se))
 `;
 
+val initA_member_call_def = Define`
+  initA_member_call ty addr args =
+    case ty of
+       Class cnm -> initA_constructor_call T cnm addr args
+    || _ -> VDecInitA ty (ObjPlace addr) (CopyInit (mExpr (HD args) base_se))
+`;
+
 
 (* 8.5 p5 : zero-initialisation *)
 (* TODO: handle unions *)

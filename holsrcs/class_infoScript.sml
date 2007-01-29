@@ -526,7 +526,7 @@ val (corder_trav_rules, corder_trav_ind, corder_trav_cases) = Hol_reln `
    (!s a mdp cnm list.
      cclist_trav s a (init_order_offsets s mdp cnm) list
    ==>
-     corder_trav s mdp a cnm (list ++ [(a,Class cnm,[cnm])]))
+     corder_trav s mdp a cnm (list ++ [(a,cnm,[cnm])]))
 
    /\
 

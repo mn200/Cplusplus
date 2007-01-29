@@ -238,7 +238,7 @@ val find_destructor_info_def = Define`
    necessary.
 *)
 val construct_ctor_pfx_def = Define`
-  construct_ctor_pfx s mdp a cnm (mem_inits : mem_initializer list) body =
+  construct_ctor_pfx s mdp a cnm (mem_inits : mem_initializer list) =
     let allccs = constituent_offsets s mdp cnm in
     let direct_bases = get_direct_bases s cnm in
     let virt_bases = get_virtual_bases s cnm in
@@ -272,7 +272,8 @@ val construct_ctor_pfx_def = Define`
                (@inits. value_init s T nsdty (a + a') inits)
           || SOME(nm', SOME args) -> (* direct initialisation, with args as
                                         initialiser *)
-               [initA_constructor_call T (Base nsdname) (a + a') args] in
+               [initA_member_call nsdty (a + a') args]
+    in
     let nsds = FLAT (MAP do_nsd data_fields)
   in
     virtuals ++ bases ++ nsds
@@ -819,15 +820,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                                               (CopyInit (mExpr a base_se)))
                    (ZIP (params, args))) /\
      (SOME this = ptr_encode s0 a (Class cnm) [cnm]) /\
-     (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits body)
+     (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits)
    ==>
      ^mng (mExpr (FnApp_sqpt (ConstructorFVal mdp a cnm) args) se0)
           s0
-          (s0 with <| stack updated_by
-                        (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
-                      thisvalue := SOME (ECompVal this (Ptr (Class cnm)));
-                      blockclasses updated_by stackenv_newscope
-                   |>,
+          (s0 with thisvalue := SOME (ECompVal this (Ptr (Class cnm))),
            EStmt (Block T (pdecls ++ cpfx) [body]) (return_cont se0 Void)))
 
    /\
@@ -1018,7 +1015,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: block-exit-destructor-call *)
 (!s c st a cnm p rest bcs.
-     (s.blockclasses = ((a,Class cnm,p) :: rest) :: bcs) /\ final_stmt st
+     (s.blockclasses = ((a,cnm,p) :: rest) :: bcs) /\ final_stmt st
    ==>
      ^mng (mStmt (Block T [] [st]) c) s
           (s with blockclasses := rest :: bcs,
@@ -1045,13 +1042,17 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: block-exit *)
-(!st s c stm tym vrm stk' bcs.
-     (s.stack = (stm,tym,vrm,NONE) :: stk') /\ final_stmt st /\
+(!st s c stm tym vrm stk' this bcs.
+     (s.stack = (stm,tym,vrm,this) :: stk') /\ final_stmt st /\
      (s.blockclasses = []::bcs)
    ==>
      ^mng (mStmt (Block T [] [st]) c) s
-          (s with <| stack := stk'; classmap := stm; typemap := tym;
-                     varmap := vrm; blockclasses := bcs |>,
+          (s with <| stack := stk';
+                     classmap := stm;
+                     typemap := tym;
+                     varmap := vrm;
+                     thisvalue := this;
+                     blockclasses := bcs |>,
            mStmt st c))
 
    /\

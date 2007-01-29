@@ -24,10 +24,12 @@ SANITY
 THEORIES
 --------
 
-There are 11 theories in this directory.
+There are 19 theories in this directory.
 
 utils:
-   Defines
+   Defines a variety of useful functions for manipulating lists and
+   finite-maps in a functional programming style.  Defined functions
+   include
      * a utility function called deNONE for turning a finite map from
        'a to 'b option, into a finite map that maps from 'a to 'b.
      * mapPartial a function just like that of the same name in the ML
@@ -45,6 +47,9 @@ memory:
    Establishes the type of byte, defines representation and valuation
    operations between byte lists and logical values (such as
    integers), defines the offset and sizeof relations.
+
+intrep:
+
 
 expressions:
    Defines the type of C expressions, and a few predicates on these.
@@ -72,9 +77,19 @@ operators:
    Defines the dynamic semantics of expression-operators such as
    addition.
 
+overloading:
+   A stub, but provides the entry-point for resolution of function
+   calls in the presence of overloading.
+
 side_effects:
    Defines how side effects are stored in side effect information
    records and applied to states.
+
+declaration_dynamics:
+   Defines dynamic semantics for declarations (which definition is
+   parameterised by the relation giving meaning to expressions and
+   statements), and notions such as default, value and zero
+   initialisation.
 
 dynamics:
    Provides the dynamic semantics for expressions, statements (the
@@ -82,3 +97,7 @@ dynamics:
 
 sanity:
    Some larger-scale sanity theorems and their proofs.
+
+concrete_tests:
+   Sanity theorems to do with particular, "concrete" program
+   fragments.
