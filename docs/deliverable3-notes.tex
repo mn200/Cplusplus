@@ -5,10 +5,15 @@
 \usepackage{url}
 \usepackage{proof}
 \usepackage{amsfonts}
+\usepackage{underscore}
+\usepackage{pstricks}
+\usepackage{pst-node}
 
 \include{cpp-macros}
 
-\title{Notes on Deliverable 3 (August 2006)}
+\newcommand{\ie}{\emph{i.e.}}
+
+\title{Notes on Deliverable 3 (January 2007)}
 \author{Michael Norrish\\{\small \texttt{Michael.Norrish@nicta.com.au}}}
 \date{}
 
@@ -25,7 +30,7 @@ turn contains four directories
 \item \texttt{holsrcs}, containing the HOL source files of the
   mechanisation.  These files will build with the version of HOL4
   present in the CVS repository at SourceForge, with timestamp
-  \texttt{2006-07-31 00:00Z}.  See Section~\ref{sec:getting-hol}
+  \texttt{2007-01-25 00:00Z}.  See Section~\ref{sec:getting-hol}
   below for instructions on how this version of HOL can be retrieved,
   and how the deliverable's HOL source files can then be built and
   checked.
@@ -34,7 +39,8 @@ turn contains four directories
   source assumes that the \texttt{latex-beamer} and \texttt{PSTricks}
   packages are available.
 \item \texttt{docs}, containing \LaTeX{} sources and a PDF version of
-  this document, as well as sources for the notes on Deliverable~1.
+  this document, as well as sources for the notes on Deliverables~1
+  and~2.
 \item \texttt{notes}, some C++ source files that illustrate various
   aspects of C++ behaviour.  An accompanying text file explains some
   of the behaviours.
@@ -104,9 +110,10 @@ directory to create and check the logical theories.
 This deliverable extends the existing HOL semantics for deliverable
 2's ``\cpp-like'' language by adding treatments of \texttt{const},
 multiple inheritance and constructor and destructor functions.  In
-addition a number of other wrinkles are addressed.  The existence of
-the latter suggests that a more detailed plan of work for other
-language features should be drawn up.
+addition a number of other wrinkles are addressed (see
+Section~\ref{sec:wrinkles} below).  The existence of the latter
+suggests that a more detailed plan of work for other language features
+should be drawn up.
 
 \subsection{Postponing Statics}
 
@@ -118,38 +125,823 @@ flagged as such at compile time.
 
 For example, one such rule is the requirement that data members in
 classes have unique names.  (Multiple functions can share the same
-name because of overloading.)
+name because of overloading.)  Pertinently for this deliverable, there
+are also a great meany rules to do with the ways in which
+\texttt{const} pointers and reference can or can not be used, which
+are all enforced by compilers.  As per the statement of work,
+the deliverables will tend to ignore these constraints, and simply
+assume that all programs are legal, and have been accepted by a
+compiler.
+
+
+\subsection{Multiple Inheritance}
+\label{sec:multiple-inheritance}
+
+As suggested in earlier deliverables, multiple inheritance has been
+modelled by following the approach described in Wasserrab \emph{et
+  al}~\cite{wasserrab-nst-OOPSLA06}.  The changes supporting this
+addition to the model are relatively minor and almost all appear in
+the theory \texttt{class_info}, where a number of new definitions
+appear.
+
+\newcommand{\Cs}{\mathit{Cs}} \newcommand{\fld}{\mathit{fld}}
+
+At the top level, the rule for calculating the function that will be
+called dynamically (\ruleid{function-member-select}) has changed
+slightly.  It now reads
+\[
+\infer{
+  \begin{array}{l}
+    \statebrack{\textsf{Ex}((\clvalue(a,\texttt{Class}\;C,\Cs))\;\mathbf{.}\;
+      \fld,\mathit{se}),\sigma} \rightarrow \\
+    \qquad\left\langle\textsf{Ex}\left(\cfvalue\left(
+        \begin{array}{l}
+          \texttt{MFn}\;(\last(\Cs'))\;\fld,\\
+          (\funtype{\mathit{argtys}}{\mathit{dynret}}),\\
+          \SOME{(\clvalue\;a\;(\texttt{Class}\;C)\;\Cs')}
+        \end{array}\right),
+      \mathit{se}\right),\sigma\right\rangle
+  \end{array}}{
+  \begin{array}{c}
+    \sigma \vdash \last(\Cs) \textrm{ has least method } \fld :
+    \funtype{\mathit{statargs}}{\mathit{statret}} \textrm{ via } Ds \\
+    \sigma \vdash (C,\Cs \,@_p\, Ds) \textrm{ selects } \fld :
+    \funtype{\mathit{dynargs}}{\mathit{dynret}} \textrm{ via } \Cs'
+  \end{array}}
+\]
+This rule describes how the call to method $\fld$ is resolved
+for an object located at address $a$, with dynamic type $C$, and where
+the static type of the object is the last element of the list $\Cs$.
+The list $\Cs$ is also a path through the class hierarchy, starting at
+the dynamic type and ending at the current static type.  (Note that an
+object's dynamic type is determined on object creation, and persists
+for an object's entire life-time.  In contrast, an object's static
+type is the type ascribed to it by a particular piece of code.
+Different pieces of code may well ``see'' the same object as having
+different types.  In this sense, an object's dynamic type is
+unchanging, but it will have a variety of static types across the text
+of a program.  Confusing, but true!)
+
+The first premise (``has-least-method'') examines the static type of
+the object for which the method will be called, $\last(\Cs)$.
+Starting at that point in the hierarchy it looks upwards (\ie, towards
+base classes) for the nearest base class that provides an
+implementation of the desired method.  This base-class might be
+$\last(\Cs)$ itself, in which case the path found ($Ds$) will be
+empty.  There must also be a unique closest ancestor providing the
+desired method.  If this isn't the case, then there will have been a
+compile-time error, as the call will be statically ambiguous.
+
+The second premise (``selects-via'') then determines the dynamic
+location of the desired method.  There are two cases.  The simple case
+is when there is a unique best method for the dynamic type, $C$.
+Imagine, for example, that there is a four-element singly-linked
+inheritance graph, from base $B_0$ down to most-derived $B_3$, with
+implementations of the method $\fld$ at $B_0$ and $B_2$.  If the
+object is actually of type $B_3$, but is statically seen as type
+$B_1$, then $C$ is $B_3$, and $\Cs$ will be $[B_3,\,B_2,\,B_1]$.  The
+first premise (``has-least-method'') determines that, starting at
+$B_1$ (the static type) there is an implementation of $\fld$ at path
+$[B_1, B_0]$.  This will be the instantiation of the rule's variable
+$Ds$.
+
+The simple case for ``selects-via'' checks whether or not there is
+also a least method for the dynamic type (ignoring, for the moment,
+the path giving the static type).  Thus
+\[
+\infer{\sigma \vdash (C,\Cs) \textrm{ selects } \fld \textrm{ via } \Cs'}{\sigma \vdash C \textrm{ has least method } \fld :
+  \funtype{\mathit{argtys}}{\mathit{retty}} \ \textrm{ via } \Cs'}
+\]
+In the simple example, we will thus conclude that \[
+\sigma \vdash (B_3,[B_3,B_2,B_1,B_0]) \textrm{ selects } \fld
+\textrm{ via } [B_3,B_2]
+\]
+so that the call will be to the implementation of $\fld$ in $B_2$, and
+the \texttt{this} pointer will be adjusted so that the type and path
+information associated with its value will be $(B_3,[B_3,B_2])$ (a
+dynamic type of $B_3$, as always, and a static type of $B_2$).
+
+The same rule applies in a much more complicatd seeming situation,
+where multiple inheritance and shared base objects come into play.
+Consider the program in Figure~\ref{fig:diamond-cpp}.  When the call
+to \texttt{cref.f()} is made, the type and path associated with the
+reference will be $(D,[D,C_1])$.  Statically, the reference is a
+\texttt{C1} value, but dynamically, it's really of class
+\texttt{D}. The first premise in rule \ruleid{function-member-select}
+finds that there is a path ($\mathit{Ds}$ in the rule) which is
+appropriate for \texttt{f}.  This path is $[B]$.  The fact that the
+path does not include the derived object's name, and is just a bare
+reference to a class indicates that it is a path to a shared base.
+When such a path is the second argument of path concatenation (the
+$@_p$ operator in the second premise), the result is just the second
+argument, so that the second hypothesis in the rule becomes
+\[
+\sigma \vdash (D,[B]) \textrm{ selects } f :
+\funtype{\texttt{void}}{\texttt{int}} \textrm{ via } \Cs'
+\]
+\begin{figure}[hbtp]
+\begin{verbatim}
+#include <iostream>
+
+class B {
+public:
+  virtual int f() { std::cout << "B's f\n"; return 3; }
+  virtual ~B() { }
+};
+
+class C1 : virtual public B {
+};
+
+class C2 : virtual public B {
+public:
+  virtual int f() { std::cout << "C2's f\n"; return 4; }
+};
+
+class D : public C1, public C2 {
+};
+
+int dosomething(C1 &cref)
+{
+  return cref.f();
+}
+
+int main()
+{
+  D d;
+  return dosomething(d);
+}
+\end{verbatim}
+\label{fig:diamond-cpp}
+\caption{Multiple inheritance with shared base objects.  (This program is
+in the \texttt{notes} directory with name \texttt{diamond-multinherit.cpp}.)}
+\end{figure}
+
+The first, simple, rule for ``selects-via'' resolves this.  Ignoring
+the path $[B]$, the simple rule checks whether or not there is a
+unique least path to an \texttt{f} from $D$.  There is such a path,
+and it is $[D,C_2]$.  So, the call to \texttt{cref.f()} ends up being
+a call to the \texttt{f} in class $C_2$, in an ``unrelated'' part of
+the object hierarchy.
+\[
+\rule{0.2\textwidth}{.1mm}
+\]
+
+For those situations where there is not a unique path from the dynamic
+type to a best selection, there is another more complicated rule
+defining ``selects-via''.  In Figure~\ref{fig:lopsided-v}, the
+inheritance hierarchy looks like
+\[
+\psset{rowsep=3ex,nodesep=2mm,colsep=2em}
+\begin{psmatrix}
+\texttt{\psframebox{B}} \\
+\texttt{Left1}\\
+\texttt{\psframebox{Left2}} & & \texttt{\psframebox{Right}}\\
+& \texttt{D}
+\end{psmatrix}
+\ncline{1,1}{2,1}
+\ncline{2,1}{3,1}
+\ncline{3,1}{4,2}
+\ncline{3,3}{4,2}
+\]
+where the boxed class names are those that implement the function
+\texttt{f}.  The question is which \texttt{f} will be called when the
+dynamic type is \texttt{D}, and when the static type is
+\texttt{Left1}.  There is no unique, least implementation of
+\texttt{f} visible from the dynamic type (\texttt{D}), so the simple
+rule does not apply.  Instead, the notion of \emph{overrider} is
+introduced via the rule
+\[
+\infer{\sigma\vdash (C,\Cs) \textrm{ selects }\fld : m \textrm{ via }
+  \Cs'}{
+\begin{array}{c}
+  \forall m\;\Cs'. \;\;\neg \;\sigma \vdash C \textrm{ has least }\fld : m
+\textrm{ via } \Cs'\\
+\sigma \vdash (C,\Cs) \textrm{ has overrider } \fld : m \textrm{ via }
+\Cs'
+\end{array}}
+\]
+where the static type of the value again plays a role.  In this case,
+the \texttt{f} that gets called is that in \texttt{Left2}.  For
+further details on exactly how this is defined, see either
+\texttt{class_infoScript}, or~\cite{wasserrab-nst-OOPSLA06}.
+
+\begin{figure}[hbtp]
+\begin{verbatim}
+#include <iostream>
+
+class B {
+public:
+  virtual void f() { std::cout << "B's f\n"; }
+  virtual ~B() { }
+};
+
+class Left1 : public B { };
+
+class Left2 : public Left1 {
+public:
+  virtual void f() { std::cout << "Left2's f\n";  }
+};
+
+class Right {
+public:
+  virtual void f() { std::cout << "Right's f\n"; }
+  virtual ~Right() { }
+};
+
+class D : public Left2, public Right { };
+
+void dosomething(Left1 &l1ref) { l1ref.f(); }
+
+int main()
+{
+  D d;
+  // d.f();  would be statically ambiguous
+  dosomething(d);
+  return 0;
+}
+\end{verbatim}
+\caption{A lop-sided `V' inheritance hierarchy.  Available as
+  \texttt{notes/lopsided-v.cpp}.}
+\label{fig:lopsided-v}
+\end{figure}
+
+\subsection{Object Lifetimes}
+\label{sec:object-lifetimes}
+
+\paragraph{Constructors}
+Handling constructors has easily wrought the greatest change to the
+previous deliverable's model.  The basic approach taken to objects has
+been to encode as much as possible with ``evolving syntax''.  Just as
+\texttt{while} can be modelled by having
+\[
+\texttt{while}\;\texttt{(}G\texttt{)}\;\mathit{body}
+\] become \[
+\texttt{if}\;\texttt{(}G\texttt{)}\;\texttt{\{}\mathit{body}\texttt{;}\;\texttt{while}\;\texttt{(}G\texttt{)}\;\mathit{body} \texttt{\}}
+\]
+so too do calls to \cpp{} constructors create new programs ``in
+place''.  The advantage of this approach is that there is less need
+for relatively complicated state to be recorded in yet more fields in
+the big record type \texttt{state} (in \texttt{statesScript}).
+Instead, programs can unfold into more elaborate forms directly.  The
+disadvantage of this approach is that the original syntax may not
+support enough forms, requiring new constructors to be created, or
+extended with new parameters.
+
+The existing handling of block-statements is an example of this latter
+disadvantage.  In particular, the abstract syntax has a constructor
+\texttt{Block} with type
+\[
+\texttt{:bool -> decl list -> stmt list}
+\]
+where the boolean flag indicates whether or not the block has been
+entered yet.  In this way, the abstract syntax has values in it that
+can't be written down in the concrete syntax.  (Simiarly, the original
+\textsf{Cholera} model for C included the \texttt{RVR} constructor and
+the $\hat{f}$ intermediate form for function calls.)
+
+Constructors are intimately tied up with declarations and
+initialization.  In the simple C world, a variable comes into being in
+two stages.  First space in memory is allocated for the variable
+(whether on the stack or heap), and the variable name is associated
+with that space for the span of the variable's life.  Then there is an
+optional initialization phase, when the piece of memory associated
+with the variable space is filled in with some value.
+
+The \cpp{} model is similar.  All new objects (but not references)
+must be associated with some new space.  Then they may or may not be
+initialised.  Additionally, in \cpp{}, an object that is only
+declared, and which does not appear to be initialised, will actually
+have its default constructor called.
+
+The abstract syntax supporting this is all defined in the HOL source
+file \texttt{statementsScript}:
+
+\begin{center}
+\begin{tabular}{lll}
+Constructor & Argument Types & Description\\
+\hline
+\texttt{VDec} & $\mathit{name},\mathit{type}$ & no initialization\\
+\texttt{VDecInit} &
+$\mathit{name},\mathit{type},\mathit{initializer}$ &
+initialization (unallocated) \\
+\texttt{VDecInitA} &
+$\mathit{varlocation},\mathit{type},\mathit{initializer}$ &
+initialization (space allocated)
+\end{tabular}
+\end{center}
+
+For example, when a class is declared with no explicit initialization
+of any sort, meaning that the default constructor will be called, the
+syntax moves through all three stages.  The abstract syntax
+corresponding to something like
+\begin{verbatim}
+{
+   classname c;
+   ...
+}
+\end{verbatim}
+will be \texttt{VDec "c" classname}.  Because this is a class type,
+rule \ruleid{decl-vdec-class} will fire (and can do so immediately),
+and the declaration will become \texttt{VDecInit "c" classname init},
+where the form of \texttt{init} will encode the fact that a direct
+initialization is being performed, and that there are no arguments.
+Then the rule \ruleid{decl-vdecinit-start-evaluate-direct-class}
+fires.  Side conditions of this rule cause space to be allocated (at
+address \texttt{a}), the state's maps from names to addresses be
+updated, and for the construction of the class to be recorded so that
+it can be destroyed later.
+
+The syntax also evolves to become
+\begin{verbatim}
+   VDecInitA classname (ObjPlace a) init'
+\end{verbatim}
+where the new initializer records that a function call to a
+constructor is about to happen, and where that construction will
+happen (\ie, \texttt{init'} includes a reference to \texttt{a}).
+
+There are three forms of initializer.  The first two are
+\texttt{DirectInit0} and \texttt{DirectInit} and correspond to direct
+initialization~\cite[\S 8.5 paragraph 12]{cpp-standard-iso14882}.  The
+\texttt{DirectInit0} constructor takes as arguments a list of
+expressions.  In this way, concrete syntax such as
+\begin{verbatim}
+{
+  Classname c(x,&y,z+1);
+}
+\end{verbatim}
+is directly modelled.  (When the rule \ruleid{decl-vdec-class} fires,
+the newly created \texttt{DirectInit0} constructor takes an empty list
+of arguments.)
+
+The \texttt{DirectInit} constructor takes one argument, an ``extended
+expression'', which will initially be an expression constructed by an
+application of the special constructor \texttt{ConstructorFVal} to the
+same argument list.  This form needs to be an extended expression so
+that the body of the constructor (a statement) can be entered.
+
+The other form of initializer is constructed by the function
+\texttt{CopyInit}.  This corresponds to the syntax
+\begin{verbatim}
+{
+  type varname = expression;
+  ...
+}
+\end{verbatim}
+which is a
+copy-initialization~\cite[\emph{ibid}]{cpp-standard-iso14882}.  When
+the type of the new object is not a class, there is no difference
+between copy-initialization and direct-initialization, reflected in
+the rule \ruleid{decl-vdecinit-start-evaluate-direct-nonclass}, which
+moves from a \texttt{DirectInit0} to a \texttt{CopyInit} initializer.
+
+When a \texttt{CopyInit} initializer completes its evaluation,
+yielding a value, that value be copied across into the space earlier
+allocated for the object.  For non-class types this is done with the
+same \texttt{val2mem} helper function that is used to apply side
+effects.  For class types, this copying must be performed by a call to
+the copy constructor.
+
+\paragraph{Constructor Calls}
+The expression form corresponding to a constructor call uses the
+expression form for function applications, but with a special form in
+the place of the function value.  This allows the normal evaluation of
+function applications (with the unspecified order of evaluation of
+arguments, for example).  The function value position is filled by a
+new abstract syntactic form \texttt{ConstructorFVal}.  This takes
+three parameters:
+\begin{itemize}
+\item a boolean indicating whether or not the constructor is being
+  called for a most-derived object or not;
+\item the address of the space which the constructor is to operate
+  over; and
+\item the name of the class that is being constructed
+\end{itemize}
+So, if a declaration is made of the form
+\begin{verbatim}
+{
+   class v(x);
+}
+\end{verbatim}
+then, once sufficient space is allocated for the new object \texttt{v}
+(at address \texttt{a}, say), the abstract syntax will look like
+\begin{verbatim}
+  VDecInitA "class"
+            (ObjPlace a)
+            (DirectInit
+               (NormE (FnApp (ConstructorFVal T a "class")
+                             [Var "x"])
+                      base_se))
+\end{verbatim}
+The \texttt{ObjPlace} constructor is used to distinguish this from the
+situation where a reference is being initialised.  The \texttt{NormE}
+constructor specifies that the current form is an expression (as
+opposed to the statement that will be in this position once the
+constructor body is entered).  The \texttt{base_se} value is the empty
+side-effect record.  This will evolve as references to and updates of
+memory occur.
+
+Once the parameters to the constructor have been evaluated, the
+constructor body can be entered.  This happens in rule
+\ruleid{constructor-function-call}:
+\[
+\infer{
+  \begin{array}{c}
+    \statebrack{\textsf{Ex}(\texttt{FnApp_sqpt}\;
+      (\texttt{ConstructorFVal}\;\mathit{mdp}\;\mathit{addr}\;C)\; \vec{a},
+      \mathit{se}_0),\sigma_0)}\\
+    \longrightarrow\\
+    \left\langle
+      \begin{array}{l}
+        \textsf{St}\left(
+          \begin{array}{l}
+            \texttt{Block}\;\bot\;(\mathit{pdecls}\frown\mathit{cpfx})\;b,\\
+            \texttt{return_cont}\;\mathit{se}_0\;\texttt{Void}
+          \end{array}\right),\\
+        \sigma_0 \textrm{ with }
+        \texttt{thisvalue := }\lfloor\underline{(\mathit{this},(C\texttt{*}))}\rfloor
+      \end{array}
+    \right\rangle
+  \end{array}}{
+  \begin{array}{l}
+    \texttt{find_constructor_info}\;\sigma_0\;C\;\vec{a}\;\vec{p}\;\vec{\mathit{m\imath}}\;b\\
+    \!\!\begin{array}{l}
+      \mathit{pdecls} =\\
+      \quad\textsf{map}
+      \begin{array}[t]{l}
+        (\lambda((n,\tau),a).\;
+        \texttt{VDecInit}\;\tau\;n\;(\texttt{CopyInit}(\textsf{Ex}(a,\texttt{base_se})))) \\
+        (\textsf{zip}(\vec{p},\vec{a}))
+      \end{array}
+    \end{array}\\
+    \lfloor \mathit{this}\rfloor =
+    \texttt{ptr_encode}\;\sigma_0\;\mathit{addr}\;C\;[C]\\
+    \mathit{cpfx} = \texttt{construct_ctor_pfx}\;\sigma_0\;\mathit{mdp}\;\mathit{addr}\;C\;\vec{\mathit{m\imath}}
+  \end{array}}
+\]
+This is complicated enough, and there is more complexity hidden behind
+the auxiliary functions and relations.  The first auxiliary is the
+relation \texttt{find_constructor_info}, which appears in the rule's
+first hypothesis.  This relation treats its first three parameters
+($\sigma_0$, $C$ and $\vec{a}$) as inputs.  These are the current
+state, the name of the class being constructed, and the actual
+arguments being passed to the constructor.  The remaining arguments to
+the relation are ``outputs''.  The vector $\vec{p}$ is the list of
+formal parameters (names and types).  The vector
+$\vec{\mathit{m\imath}}$ is the list of ``mem-initializers''
+(see~\cite[\S12.6.2]{cpp-standard-iso14882}) associated with the
+constructor, and $b$ is the constructor's body.  The
+\texttt{find_constructor_info} auxiliary is responsible for resolving
+which constructor needs to be called, based on the types of the actual
+arguments.
+
+The second hypothesis of the rule constructs the sequence of variable
+declarations corresponding to the parameters, using standard
+functional programming auxiliaries \textsf{map} and \textsf{zip}.
+Parameter passing is just like variable declaration\footnote{This does
+  away with the \textsf{Cholera} approach which had a number of
+  auxiliary relations effectively duplicating what occurred in
+  variable declaration}, and so the model's existing treatment of
+declarations can be re-used to set up the binding between formal names
+and actual values.  Note that the expressions that initialise the
+parameters have already been fully evaluated, so that there will be no
+expression evaluation done when the declarations come to be evaluated
+(except for any class construction that may be called for).
+
+The third hypothesis calculates a value for the \texttt{this} value.
+The dynamic and static type of the \texttt{this} pointer will be the
+same (as the pair $C$ and $[C]$ are passed to \texttt{ptr_encode}),
+and there will not be any polymorphic dispatch to functions in derived
+classes if any virtual functions are called in the constructor bodies.
+
+The fourth hypothesis constructs a ``c-prefix'' of declaration calls
+to initialise class members and bases.  This is all done in the
+complicated function \texttt{construct_ctor_pfx} (defined in
+\texttt{dynamicsScript}).  This constructs a sequence of declarations
+to initialise the non-static members of the new class, and the class's
+immediate bases.  The mem-initializers are consulted to see what
+initializers should be provided.  (If a mem-initializer is not
+provided for a given member or base, then that object will be value-
+or default-initialized; see~\cite[\S12.6.2, paragraphs
+3--4]{cpp-standard-iso14882}.)
+
+For example, in Figure~\ref{fig:mem-inits}, before class \texttt{C}'s
+constructor body is even entered, the parameters \texttt{cptr} and
+\texttt{i} need to be declared and initialised with actual values.
+Subsequently, all of \texttt{C}'s immediate bases (just \texttt{B} in
+this case) need to be constructed, followed by its members
+(\texttt{ptr} and \texttt{sz}).  Note that while the paramters need to
+have space allocated for them, the bases and members do not (because
+the space for the entire object was allocated at the \texttt{VDecInit}
+stage).
+
+\begin{figure}[htbp]
+\begin{verbatim}
+#include <cstring>
+
+class B {
+  int x;
+public:
+  B(int i) : x(i) {}
+};
+
+class C : public B {
+  char *ptr;
+  int sz;
+public:
+  C(char *cptr, int i)
+    : B(cptr[i]), ptr(cptr), sz(strlen(cptr)) { }
+};
+\end{verbatim}
+\caption{\cpp{} constructors with \emph{mem-initializers}.  (Available
+as \texttt{notes/mem-inits.cpp}.)}
+\label{fig:mem-inits}
+\end{figure}
+
+Assume that the constructor has been called with parameters \texttt{x}
+and \texttt{y}, and that these have evaluated to values \texttt{xval}
+and \texttt{yval}. The sequence of declarations that are constructed
+to precede the constructor body is given in
+Figure~\ref{fig:constructor-vdecs}. The first two declarations are of
+the parameters.  The next constructs the base \texttt{B}, and the last
+two construct the non-static members.  The body of
+\texttt{construct_ctor_pfx} is responsible for calculating the offsets
+of the members (given as \texttt{Boff}, \texttt{ptroff} and
+\texttt{szoff} in the figure.
+
+\begin{figure}[hbtp]
+\begin{verbatim}
+  VDecInit (char *) cptr (CopyInit (NormE xval base_se))
+  VDecInit int      i    (CopyInit (NormE yval base_se))
+
+  VDecInitA B (ObjPlace (a + Boff))
+              (DirectInit
+                 (NormE
+                    (FnApp (ConstructorFVal F (a + Boff) B)
+                           [Deref(Plus (Var "cptr")
+                                       (Var "i"))])
+                    base_se))
+
+  VDecInitA (char *) (ObjPlace (a + ptroff))
+                     (CopyInit (NormE (Var "cptr") base_se))
+  VDecInitA int      (ObjPlace (a + szoff))
+                     (CopyInit (NormE (FnApp (Var "strlen")
+                                             [Var "cptr"])
+                                      base_se))
+\end{verbatim}
+\caption{The variable declarations constructed to precede the body of
+  C's constructor (from Figure~\ref{fig:mem-inits}).}
+\label{fig:constructor-vdecs}
+\end{figure}
+
+Note how the first argument of the \texttt{ConstructorFVal} form in
+the construction of the base \texttt{B} is false; this is because
+\texttt{B} is not the most-derived object.  If there were any shared
+bases in the example, the most-derived object would be ``responsible''
+for constructing them (see~\cite[\S12.6.2, paragraph
+5]{cpp-standard-iso14882}).  If \texttt{C} had any non-static members
+of class type, then these would be constructed with their
+$\mathit{mdp}$ flag set to true.
+
+When the constructor for the base class \texttt{B} comes to be called,
+it will in turn initialise its members.  The constructor for
+\texttt{B} is called with an argument (\texttt{cptr[i]}) that needs to
+be evaluated in the context where the parameters are in scope, so it
+is clear that the declarations for the parameters must come before the
+base and member initialisations.
+
+\paragraph{Object Destruction}
+When an object of class type is first declared (with a
+\texttt{VDecInit} form), it has memory allocated sufficient to contain
+the new class in its entirety (including sub-objects).  This
+allocation is reflected in the state's \texttt{allocmap}.  When the
+block in which this declaration was made is left, this allocation is
+forgotten.  At the same time, the destructor for the object must be
+called.  This is modelled with a new field for the state,
+\texttt{blockclasses}.  This is of type
+\begin{verbatim}
+   (addr # CPPname # CPPname list) list list
+\end{verbatim}
+The address is the address of the object which is to be destroyed, and
+the two remaining are the class name and path which serve to identify
+the object's type.  The inner list constructor reflects the fact that
+multiple objects may be declared at the same scope level.  The outer
+list constructor appears because of the stack discipline necessary for
+multiple nested scopes.
+
+When an object of class type is declared, the rule responsible
+(\ruleid{decl-vdecinit-start-evaluate-direct-class}) both allocates
+the necessary memory, and adds address and type information for all of
+the object's sub-classes and members (not just immediate bases, but
+doing a complete traversal of the inheritance graph) to the
+\texttt{blockclasses} field.  This is done by the
+\texttt{update_blockclasses} relation defined in
+\texttt{class_infoScript}.  The object information has to be added
+to the list in the correct order so that objects will be destroyed in
+reverse order of construction.
+
+The rule for exitting from a block is then adjusted so that it can
+only occur if the current scope's \texttt{blockclasses} information is
+empty.  As long as it is not empty, the destructor corresponding to
+the object on the top of the stack is set up to be called.  This is
+done in rule \ruleid{block-exit-destructor-call}:
+\[
+\infer{
+  \begin{array}{c}
+    \statebrack{
+      \textsf{St}(\texttt{Block}\;\top\;[]\;[\mathit{st}],c),\sigma}\\
+    \longrightarrow\\
+    % resulting state
+    \left\langle
+      \begin{array}{l}
+        \textsf{St}\left(\texttt{Block}\;\top\;[]\;
+          \left[
+            \begin{array}{l}
+              \texttt{Alone}
+              (\textsf{Ex}(\texttt{DestCall}\;a\;\mathit{cnm}),\texttt{base_se}),\\
+              \mathit{st}
+            \end{array}\right],
+          c\right),\\
+        \sigma\textrm{ with }\texttt{blockclasses := }
+        \mathit{rest} :: \mathit{bcs}\\
+      \end{array}
+    \right\rangle % end of resulting state
+  \end{array}
+  }{\texttt{final_stmt}\;\mathit{st} &
+    \sigma.\texttt{blockclasses} = ((a,\!\mathit{cnm},p) ::
+    \mathit{rest}) :: \mathit{bcs}}
+\]
+This is another example of evolving syntax: the block that the flow of
+control is about to leave, has this departure deferred with the
+insertion of a new statement before the block's final statement.  The
+rule allowing an exit to eventually occur is \ruleid{block-exit}:
+\[
+\infer{
+  \statebrack{
+    \textsf{St}(\texttt{Block}\;\top\;[]\;[\mathit{st}], c), \sigma_0}
+  \longrightarrow
+  \statebrack{\textsf{St}(\mathit{st}, c), \sigma}
+}{
+  \begin{array}{l}
+    \sigma_0.\texttt{stack} =
+    (\mathit{stm},\mathit{tym},\mathit{vrm},\mathit{this}) ::
+    \mathit{stk}
+    \\
+    \texttt{final_stmt}\;\mathit{st}
+    \\
+    \sigma_0.\texttt{blockclasses} = [] :: \mathit{bcs}
+    \\
+    \sigma = \sigma_0 \textrm{ with } \left\langle\begin{array}{ll}
+        \texttt{stack := }\mathit{stk}; &
+        \texttt{classmap := }\mathit{stm};\\
+        \texttt{typemap := }\mathit{tym}; &
+        \texttt{varmap := }\mathit{vrm};\\
+        \texttt{thisvalue := }\mathit{this}; &
+        \texttt{blockclasses := }\mathit{bcs}
+      \end{array}\right\rangle
+  \end{array}
+}
+\]
+The predicate \texttt{final_stmt} is true of a statement if it is
+an abnormal exit form (such as \texttt{break} or \texttt{return}), or
+simply \texttt{EmptyStmt}.
+
+Actually calling a destructor is straightforward because there are no
+parameters, nor anything comparable to the mem-initializers.  The
+requirement in the standard that sub-objects be destroyed before the
+body of a destructor is entered is handled by the fact that the
+sub-object information is entered into the \texttt{blockclasses} stack
+ahead of the final encompassing object.
+
+
+
+\subsection{The Type-modifier \texttt{const}}
+\label{sec:const-type-modifier}
+
+Handling the \texttt{const} modifier is quite straightforward if the
+model can ignore static issues.  In particular, there is really only
+one place where \texttt{const} and the dynamic semantics interact: if
+a program attempts to update memory that has been declared
+\texttt{const} then this is undefined behaviour.
+
+Types must admit the \texttt{const} modifier, so the algebra for the
+abstract syntax of types is adjusted to include the new possibility:
+\[
+\begin{array}{lcl}
+\tau & ::= & \texttt{Char} \;\;| \;\; \texttt{Ptr}\;\tau\;\;|\;\;\texttt{Array}\;\tau\;n\\
+& | & \dots\\
+& | & \texttt{Const}\; \tau
+\end{array}
+\]
+Note the confusion possible because of the differences between this
+syntax and \cpp's.  For example, what is written in \cpp{} as
+``\texttt{const char *}'' is really ``\texttt{Ptr (Const Char)}''.  An
+object of \texttt{const} type is one whose type has \texttt{Const} as
+its outermost constructor or tag.  Thus \texttt{(const char *)} is
+\emph{not} a \texttt{const} type; it's a pointer to one.
+
+When an object of \texttt{const} type is declared, this marks some
+part of memory as \texttt{const}.  This is handled by having a new
+field in the model's state, a set of memory addresses called
+\texttt{constmap}.  If an address is in this map, then it must not be
+updated.  The HOL relation \texttt{vdeclare} (in
+\texttt{declaration_dynamicsScript}) handles this situation.  This
+relation also allocates memory, updating the \texttt{allocmap}.
+Previously, the relevant part of \texttt{vdeclare}'s definition had
+\[
+  \sigma = \sigma_0 \textrm{ with } \langle\texttt{allocmap := }
+  \sigma_0.\texttt{allocmap} \cup \mathit{rs}; \dots \rangle
+\]
+(where $\mathit{rs}$ is the set of addresses ``occupied'' by the new
+object).
+
+Now, the definition has
+\[
+\sigma = \begin{array}[t]{l}\sigma_0 \textrm{ with }\\
+\;\;\left\langle
+  \begin{array}{l}
+    \texttt{allocmap := } \sigma_0.\texttt{allocmap} \cup \mathit{rs};\\
+    \texttt{constmap := } \begin{array}[t]{l}
+      \textsf{if} \;\texttt{const_type}(\tau)\;\textsf{then}\;
+      \sigma_0.\texttt{constmap} \cup \mathit{rs}\\
+      \textsf{else}\;\sigma_0.\texttt{constmap} - \mathit{rs};
+    \end{array}\\
+    \dots
+  \end{array}\right\rangle
+\end{array}
+\]
+
+This much ensures that parts of memory can become marked as
+\texttt{const}.  The other dynamic change required is to cause
+undefined behaviour if a \texttt{const} part of memory is updated.
+This is also a very small change: the definition of \texttt{apply_se}
+(in \texttt{side_effectsScript}) checks not only that a side effect is
+not updating already updated memory, but now also checks that the side
+effect is not updating memory marked as \texttt{const}.
+
+The existing rules in the dynamic semantics are already set up to flag
+undefined behaviour if it ever comes about that a side effect record
+is not empty and that no side effect can be legally applied.
+
+Note that the \texttt{constmap} does not need to be managed on a
+stacked scope basis like the variable and type maps.  This is because
+it is subsumed by the \texttt{allocmap}, and is adjusted as the
+allocmap changes.  Any attempt to update part of memory outside the
+\texttt{allocmap} will fail automatically, so its \texttt{cosnt}-ness
+is irrelevant.
+
+\subsection{Wrinkles and Omissions}
+\label{sec:wrinkles}
+
+\begin{description}
+\item[Arithmetic Operators]  The shift operators are not specified,
+  nor is arithmetic on floating point numbers.
+\item[Declarations in blocks] For the moment, the model still enforces
+  the old C requirement that blocks begin with a sequence of
+  declarations followed by a sequence of statements.  Declarations
+  inside \texttt{if}, \texttt{for} and \texttt{while} guards are also
+  not allowed.  The more liberal \cpp{} rules can be emulated by
+  introducing fresh enclosing blocks everytime a declaration appears
+  that would violate the old C rules.  (This is a dynamic emulation
+  only; this approach would allow multiple declarations of the same
+  variable at the same ``block level'' statically if nothing else
+  prevented it.)
+\item[Default arguments]  Completely omitted.
+\item[The heap] Omitted.  The allocation and management of heap memory
+  is not challenging.  Handling placement-\texttt{new} is likely to be
+  more intricate to specify.
+\item[Non-virtual member functions] The model assumes that all member
+  functions are virtual.  Non-virtual member functions should be
+  handled like data members (which are handled).
+\item[Object R-values] There is no treatment of returning class
+  r-values from functions, or constructing temporaries by explicitly
+  calling constructors inside expressions.  In turn, there is thus no
+  treatment of the acceptable elision of construction of some
+  temporaries.
+\item[Object Sizes and Layouts] The model is almost certainly too
+  concrete in its treatment of memory.  Discussion on the
+  \texttt{comp.std.c++} newsgroup has convinced me that there is no
+  real requirement in the standard for class objects to be laid out in
+  any particular way, nor even consistently across instances of the
+  same class type.  (The only real requirement is that POD structs
+  have their members occur in the order in which they are declared.)
+\item[Overloading] Completely omitted. Overloading is arguably a
+  static concern (certainly, in contrast with polymorphic dispatch, it
+  is handled entirely at compile-time).  Nonetheless it is an
+  important part of the language, and gives it much of its ``feel''.
+\end{description}
 
 \section{Future}
 
-The next deliverable will include a treatment of multiple inheritance,
-\texttt{const} types and object lifetimes.  Multiple inheritance
-should be straight-forward, given the Wasserrab's model.  The
-treatment of \texttt{const} should also be fairly easy.  Object
-lifetimes will require a treatment of class constructors and
-destructors at the very least, and could well be moderately
-complicated, particularly if the standard's level of
-under-specification is to be modelled.
-
-If destructors are to be called before a certain deadline is reached,
-this might best be modelled in a way similar to the treatment of side
-effects.  Object destructions can be accumulated in some sort of state
-field (a set, say), and non-deterministically pulled from this as
-evaluation progresses.  When a deadline is reached, there will be a
-side-condition on the relevant rule requiring that the state field be
-empty.
+The next deliverable calls for a treatment of exceptions and
+templates.  My notes for deliverable 1 cover how I believe exceptions
+will be handled.  Templates remain unclear.  I would also appreciate
+advice on which of the wrinkles and omissions above are seen as
+significant and worthy of further attention.
 
 \bibliographystyle{plain}
 \bibliography{deliverables}
 
 \end{document}
-
-
-%%% Local Variables:
-%%% mode: latex
-%%% TeX-master: t
-%%% End:
-
 
 %%% Local Variables:
 %%% mode: latex
