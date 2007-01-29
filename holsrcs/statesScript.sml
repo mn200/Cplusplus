@@ -65,13 +65,14 @@ val _ = type_abbrev("state_class_info",
 
 val _ = Hol_datatype
   `state = <| allocmap : addr -> bool ;
-                         (* the set of allocated addresses *)
+                         (* the set of stack-allocated addresses *)
+
+              hallocmap: addr -> bool ;
+                         (* the set of heap-allocated addresses *)
+
 
               constmap : addr -> bool ;
-                         (* the set of read-only addresses on the "stack" *)
-
-              hconstmap : addr -> bool ;
-                         (* the set of read-only addresses on the "heap" *)
+                         (* the set of read-only addresses *)
 
               fnmap    : fnid |-> fn_info ;
                          (* map from function 'names' to type information about
@@ -140,6 +141,7 @@ val _ = type_abbrev("CState", ``:state``)
 
 val initial_state_def = Define`
   initial_state = <| allocmap := {};
+                     hallocmap := {};
                      fnmap := FEMPTY;
                      fnencode := FEMPTY;
                      fndecode := FEMPTY;

@@ -50,6 +50,7 @@ val _ = Hol_datatype
          | CommaSep of CExpr => CExpr
          | Cast of CType => CExpr
          | PostInc of CExpr
+         | New of CType => CExpr list option
 
          (* these are "fake expression constructors" *)
 
@@ -133,6 +134,7 @@ val rec_expr_P_def = Define`
     (rec_expr_P UndefinedExpr P = P UndefinedExpr) /\
     (rec_expr_P (ConstructorFVal mdp a nm) P = P (ConstructorFVal mdp a nm)) /\
     (rec_expr_P (DestructorCall a nm) P = P (DestructorCall a nm)) /\
+    (rec_expr_P (New ty argsopt) P = P (New ty argsopt)) /\
     (rec_exprl_P [] P = T) /\
     (rec_exprl_P (CONS e es) P = rec_expr_P e P /\ rec_exprl_P es P) /\
     (rec_expr_opt NONE P = T) /\

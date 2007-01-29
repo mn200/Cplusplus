@@ -99,7 +99,7 @@ val malloc_def = Define`
   malloc s0 ty a =
      ?sz aln. sizeof T (sizeofmap s0) ty sz /\
               align (sizeofmap s0) T ty aln /\
-              DISJOINT s0.allocmap (range_set a sz) /\
+              DISJOINT (s0.allocmap UNION s0.hallocmap) (range_set a sz) /\
               ~(a = 0) /\ (a MOD aln = 0) /\
               a + sz <= 2 EXP (CHAR_BIT * ptr_size ty)
 `

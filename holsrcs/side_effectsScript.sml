@@ -85,9 +85,8 @@ val apply_ise_def = Define`
 val apply_lse_def = Define`
   apply_lse (se0, s0) (se, s) ise =
         ?se'. select_se ise se0 se' /\ apply_ise ise se' se /\
-              se_affects ise SUBSET s0.allocmap /\
+              se_affects ise SUBSET (s0.allocmap UNION  s0.hallocmap) /\
               DISJOINT (se_affects ise) s0.constmap /\
-              DISJOINT (se_affects ise) s0.hconstmap /\
               (s = se_on_state ise s0)
 `
 
@@ -99,9 +98,8 @@ val apply_se = store_thm (
   "apply_se",
   ``apply_se (se0, s0) (se, s) =
         ?ise se'. select_se ise se0 se' /\ apply_ise ise se' se /\
-                  se_affects ise SUBSET s0.allocmap /\
+                  se_affects ise SUBSET (s0.allocmap UNION s0.hallocmap) /\
                   DISJOINT (se_affects ise) s0.constmap /\
-                  DISJOINT (se_affects ise) s0.hconstmap /\
                   (s = se_on_state ise s0)``,
   REWRITE_TAC [apply_se_def, apply_lse_def]);
 

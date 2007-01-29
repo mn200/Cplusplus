@@ -741,6 +741,25 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: new-nonclass *)
+(!ty s0 s se a sz result_ty ptrval.
+     ~class_type (strip_array ty) /\ malloc s0 ty a /\
+     (result_ty = case strip_const ty of
+                     Array bty n -> bty
+                  || _ -> ty) /\
+     sizeof T (sizeofmap s0) ty sz /\
+     (s = s0 with <| hallocmap updated_by (UNION) (range_set a sz) ;
+                     constmap := if const_type ty then
+                                   s0.constmap UNION range_set a sz
+                                 else s0.constmap DIFF range_set a sz|>) /\
+     (SOME ptrval = ptr_encode s0 a result_ty [])
+   ==>
+     ^mng (mExpr (New ty NONE) se) s0
+          (s, mExpr (ECompVal ptrval (Ptr result_ty)) se))
+
+   /\
+
+
 (* RULE-ID: constructor-call-sqpt *)
 (!mdp a cnm params se s.
      EVERYi (\i e. if constructor_expects_rval s cnm params i then
