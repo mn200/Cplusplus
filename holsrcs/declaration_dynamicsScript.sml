@@ -176,8 +176,9 @@ val vdeclare_def = Define`
      (?a sz rs.
          (rs = range_set a sz) /\
          object_type ty /\ malloc s0 ty a /\ sizeof T (sizeofmap s) ty sz /\
-         (s = s0 with <| constmap updated_by
-                           (UNION) (if const_type ty then rs else {});
+         (s = s0 with <| constmap :=
+                            if const_type ty then s0.constmap UNION rs
+                            else s0.constmap DIFF rs;
                          allocmap updated_by (UNION) rs;
                          varmap updated_by
                             (\vm. vm |+ (nm,(a,default_path ty)));
