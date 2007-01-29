@@ -908,11 +908,14 @@ is irrelevant.
 \item[Default arguments]  Completely omitted.
 \item[The heap] This is handled only in very rudimentary fashion.
   There is support for simple \texttt{new} expressions, but handling
-  \textttt{delete} properly will require the state to record the types
+  \texttt{delete} properly will require the state to record the types
   of what was allocated.  (When a call to \texttt{delete []} is made,
-  the state needs to know how big the array was.) The allocation and
-  of heap memory is not challenging.  Handling placement-\texttt{new}
-  is likely to be more intricate to specify.
+  the state needs to know how big the array was.) Allocation of heap
+  memory is handled by having a \texttt{hallocmap} that records
+  allocations that have been made on the heap.  Checks that in
+  \textsf{Cholera} looked only at \texttt{allocmap} now look at the
+  union of it and \texttt{hallocmap}.  Handling placement-\texttt{new}
+  is likely to be rather intricate to specify.
 \item[Nested and local classes] Omitted.  Neither poses a big
   challenge dynamically; they are much more interesting statically.
 \item[Non-virtual member functions] The model assumes that all member
