@@ -63,6 +63,14 @@ val _ = type_abbrev("state_class_info",
                     ``:(class_info # implicitly_definable set) option``)
 
 
+val _ = type_abbrev("construction_locn", ``:addr # CPPname # CPPname list``)
+
+val _ = Hol_datatype`
+  constructed = NormalConstruct of construction_locn
+              | SubObjConstruct of construction_locn
+`;
+
+
 val _ = Hol_datatype
   `state = <| allocmap : addr -> bool ;
                          (* the set of stack-allocated addresses *)
@@ -129,8 +137,8 @@ val _ = Hol_datatype
                          (* the value (i.e., this will always be an ECompVal
                             with a pointer value) of the this expression *)
 
-              blockclasses : (addr # CPPname # CPPname list) list list ;
-              exprclasses  : (addr # CPPname # CPPname list) list list
+              blockclasses : constructed list list ;
+              exprclasses  : construction_locn list list
                 (* the stack of objects that need to have destructors
                    called.  First field is for automatic objects that have
                    block-delimited lifetimes.  Second is for temporary

@@ -206,17 +206,18 @@ val vdeclare_def = Define`
 
 
 val initA_constructor_call_def = Define`
-  initA_constructor_call mdp cnm addr args =
-      VDecInitA (Class cnm)
-                (ObjPlace addr)
-                (DirectInit
-                   (mExpr (FnApp (ConstructorFVal mdp addr cnm) args) base_se))
+  initA_constructor_call mdp subobjp cnm addr args =
+      VDecInitA
+        (Class cnm)
+        (ObjPlace addr)
+        (DirectInit
+           (mExpr (FnApp (ConstructorFVal mdp subobjp addr cnm) args) base_se))
 `;
 
 val initA_member_call_def = Define`
   initA_member_call ty addr args =
     case ty of
-       Class cnm -> initA_constructor_call T cnm addr args
+       Class cnm -> initA_constructor_call T T cnm addr args
     || _ -> VDecInitA ty (ObjPlace addr) (CopyInit (mExpr (HD args) base_se))
 `;
 
@@ -259,24 +260,32 @@ val (zero_init_rules, zero_init_ind, zero_init_cases) = Hol_reln`
 `;
 
 (* 8.5 p5 : default-initialisation *)
+(* used to
+   - initialise non-POD class members/bases (or arrays thereof) that are
+     not mentioned in a constructor's mem-initializers (first two clauses)
+       (12.6.2 p4, 8.5 p9)
+   - that's it.  The third clause looks redundant, and is commented out.
+     This redundancy is an existing Defect Report, #509.
+*)
 (* TODO: handle unions *)
 val (default_init_rules, default_init_ind, default_init_cases) = Hol_reln`
-   (!s mdp cnm a.
+   (!s mdp subobjp cnm a.
      ~PODstruct s cnm
    ==>
-     default_init s mdp (Class cnm) a [initA_constructor_call mdp cnm a []])
+     default_init s mdp subobjp (Class cnm) a
+                  [initA_constructor_call mdp subobjp cnm a []])
 
    /\
 
-   (!s mdp ty n a sz sub_inits.
+   (!s mdp subobjp ty n a sz sub_inits.
      sizeof T (sizeofmap s) ty sz /\
-     listRel (\m l. default_init s mdp ty (a + m * sz) l)
+     listRel (\m l. default_init s mdp subobjp ty (a + m * sz) l)
              (GENLIST I n)
              sub_inits
    ==>
-     default_init s mdp (Array ty n) a (FLAT sub_inits))
+     default_init s mdp subobjp (Array ty n) a (FLAT sub_inits))
 
-   /\
+(*    /\
 
    (!s mdp ty a inits.
      ~array_type ty /\
@@ -284,6 +293,8 @@ val (default_init_rules, default_init_ind, default_init_cases) = Hol_reln`
      zero_init s mdp ty a inits
    ==>
      default_init s mdp ty a inits)
+
+*)
 `;
 
 (* 8.5 p5 : value-initialisation *)
@@ -303,44 +314,44 @@ val (default_init_rules, default_init_ind, default_init_cases) = Hol_reln`
 
     Used in initialisation of aggregates: 8.5.1 p7 (see also 12.6.1)
     Used when a mem-initializer mentions a constituent, but doesn't pass any
-    paramters (12.6.2 p3)
+    parameters (12.6.2 p3)
 *)
 (* TODO: handle unions *)
 val (value_init_rules, value_init_ind, value_init_cases) = Hol_reln`
-   (!s mdp cnm addr.
+   (!s mdp subp cnm addr.
      has_user_constructor s cnm
    ==>
-     value_init s mdp (Class cnm) addr
-                [initA_constructor_call mdp cnm addr []])
+     value_init s mdp subp (Class cnm) addr
+                [initA_constructor_call mdp subp cnm addr []])
 
    /\
 
-   (!s mdp cnm a sub_inits.
+   (!s mdp subp cnm a sub_inits.
      ~has_user_constructor s cnm /\
      listRel (\(cc,off) l.
-                value_init s (nsdp cc) (cc_type cc) (a + off) l)
+                value_init s (nsdp cc) T (cc_type cc) (a + off) l)
              (init_order_offsets s mdp cnm)
              sub_inits
    ==>
-     value_init s mdp (Class cnm) a (FLAT sub_inits))
+     value_init s mdp subp (Class cnm) a (FLAT sub_inits))
 
    /\
 
-   (!s mdp ty n addr sz sub_inits.
+   (!s mdp subp ty n addr sz sub_inits.
      sizeof T (sizeofmap s) ty sz /\
-     listRel (\n l. value_init s T ty (addr + n * sz) l)
+     listRel (\n l. value_init s T subp ty (addr + n * sz) l)
              (GENLIST I n)
              sub_inits
    ==>
-     value_init s mdp (Array ty n) addr (FLAT sub_inits))
+     value_init s mdp subp (Array ty n) addr (FLAT sub_inits))
 
    /\
 
-   (!s mdp a ty inits.
+   (!s mdp subp a ty inits.
      (!ty0. ~(ty = Class ty0)) /\ ~array_type ty /\
      zero_init s mdp ty a inits
    ==>
-     value_init s mdp ty a inits)
+     value_init s mdp subp ty a inits)
 `;
 
 
@@ -379,27 +390,27 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    references is to put them into the typemap, but to allocate no
    space, and to put them into the varmap at address 0.
 
-   This is also the point where the class construction has to be recorded
-   in the blockclasses stack so that destructors will get called in the
-   appropriate reverse order.
 *)
 
 
 (* RULE-ID: decl-vdecinit-start-evaluate-direct-class *)
-(!s0 ty cnm name args s1 s2 a pth.
+(* the subobjp flag of the ConstructorFVal is F because this is a top-level
+   declaration of a object. *)
+(!s0 ty cnm name args s1 a pth.
      (ty = Class cnm) /\
      vdeclare s0 ty name s1 /\
-     ((a,pth) = s1.varmap ' name) /\
-     update_blockclasses s1 a cnm s2
+     ((a,pth) = s1.varmap ' name)
    ==>
      declmng mng
              vdf
              (VDecInit ty name (DirectInit0 args), s0)
              ([VDecInitA ty
                          (ObjPlace a)
-                         (DirectInit (mExpr
-                                        (FnApp (ConstructorFVal T a cnm) args)
-                                        base_se))], vdf s2))
+                         (DirectInit
+                            (mExpr
+                               (FnApp (ConstructorFVal T F a cnm) args)
+                               base_se))],
+              vdf s1))
 
    /\
 
@@ -494,14 +505,17 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      * no need to update memory, or init_map as this will have all been
        done by the constructor
 *)
-(!cnm a ty se0 s0.
-     is_null_se se0
+(!cnm subp a se0 s0 s construct.
+     is_null_se se0 /\
+     (construct = if subp then SubObjConstruct else NormalConstruct) /\
+     (s = s0 with blockclasses updated_by
+             stackenv_extend (construct (a,cnm,[cnm])))
    ==>
      declmng mng vdf
-             (VDecInitA (Class cnm)
-                        (ObjPlace a)
-                        (DirectInit (NormE (ECompVal [] ty) se0)), s0)
-             ([], s0))
+       (VDecInitA (Class cnm)
+                  (ObjPlace a)
+                  (DirectInit (NormE (ConstructedVal subp a cnm) se0)), s0)
+                  ([], s))
 
 (* TODO: add a rule for performing class based CopyInit updates *)
 `

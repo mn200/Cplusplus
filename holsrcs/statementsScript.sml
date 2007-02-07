@@ -59,13 +59,11 @@ val _ = Hol_datatype`
                (* boolean records whether or not block has been entered, so
                   all blocks will initially have this false *)
            | Ret of ExtE
-           | InitRV of var_decl list
-               (* for the construction of temporary objects returned
-                  from functions *)
            | EmptyRet
            | Break
            | Cont
-           | Trap of traptype => CStmt ;
+           | Trap of traptype => CStmt
+           | Throw of ExtE ;
 
   ExtE     = NormE of CExpr => se_info
            | EStmt of CStmt => conttype ;
@@ -176,6 +174,7 @@ val rec_stmt_P_def = Define `
   (rec_stmt_P EmptyRet = \P. P EmptyRet) /\
   (rec_stmt_P Break = \P. P Break) /\
   (rec_stmt_P Cont = \P. P Cont) /\
+  (rec_stmt_P (Throw e) = \P. P (Throw e)) /\
   (rec_stmt_P (Trap tt s) = \P. P (Trap tt s) /\ rec_stmt_P s P) /\
   (rec_stmtl_P [] = \P. T) /\
   (rec_stmtl_P (CONS x xs) = \P. rec_stmt_P x P /\ rec_stmtl_P xs P)
@@ -237,6 +236,11 @@ val contfree = Define`
 val intstmt_free_def = Define`
   intstmt_free stmt = rec_stmt_P stmt ($~ o is_intstmt)
 `
+
+val exception_stmt_def = Define`
+  (exception_stmt (Throw e) = T) /\
+  (exception_stmt s = F)
+`;
 
 (* external declarations can appear at the top level of a translation unit *)
 val _ = Hol_datatype`

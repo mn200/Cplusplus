@@ -251,25 +251,27 @@ val construct_ctor_pfx_def = Define`
       let a' = subobj_offset s (cnm, pth) in
       let nm = LAST pth
       in
+         (* F T records, no, not most-derived, yes, a subobject *)
          case lookup nm of
            NONE -> (* 12.6.2 p4 - default initialisation *)
-             [initA_constructor_call F nm (a + a') []]
+             [initA_constructor_call F T nm (a + a') []]
         || SOME (nm',NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
-             (@inits. value_init s F (Class nm) (a + a') inits)
+             (@inits. value_init s F T (Class nm) (a + a') inits)
         || SOME (nm',SOME args) -> (* direct initialisation, with args as
                                       initialiser *)
-             [initA_constructor_call F nm (a + a') args] in
+             [initA_constructor_call F T nm (a + a') args] in
     let bases = FLAT (MAP (\bnm. do_bases [cnm; bnm]) direct_bases) in
     let virtuals = if mdp then FLAT (MAP (\vnm. do_bases [vnm]) virt_bases)
                    else [] in
     let do_nsd (nsdname, nsdty) =
       let (c,a') = THE (FINDL (\ (c, off). c = NSD nsdname nsdty) allccs)
       in
+          (* T T pairs below record: yes, most-derived, yes, a subobject *)
           case lookup (Base nsdname) of
              NONE -> (* 12.6.2 p4 - default initialisation *)
-               (@inits. default_init s T nsdty (a + a') inits)
+               (@inits. default_init s T T nsdty (a + a') inits)
           || SOME(nm', NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
-               (@inits. value_init s T nsdty (a + a') inits)
+               (@inits. value_init s T T nsdty (a + a') inits)
           || SOME(nm', SOME args) -> (* direct initialisation, with args as
                                         initialiser *)
                [initA_member_call nsdty (a + a') args]
@@ -278,6 +280,41 @@ val construct_ctor_pfx_def = Define`
   in
     virtuals ++ bases ++ nsds
 `;
+
+val realise_destructor_calls_def = Define`
+  (* parameters
+      exp           : T iff we are leaving a block because of an exception
+      s0            : starting state, where there is a non-empty list
+                        of things to destroy as the first element of
+                        s.blockclasses
+     outputs
+      destcals      : list of statements with explicit destructor
+                      calls for those objects that need destroying
+      s             : resulting state, with subobj constructs added
+                      to new scope of exprclasses underneath current one
+  *)
+  realise_destructor_calls exp s0 =
+    let cloc2call (a, cnm, pth) =
+          Standalone (mExpr (DestructorCall a cnm) base_se) in
+    let destroy_these = HD s0.blockclasses in
+    let foldthis c (here, escape) =
+          case c of
+             NormalConstruct cloc -> (cloc2call cloc :: here, escape)
+          || SubObjConstruct cloc -> if exp then
+                                       (cloc2call cloc :: here, escape)
+                                     else (here, cloc :: escape) in
+    let (destcalls, escapees) = FOLDR foldthis ([],[]) destroy_these
+    in
+        (destcalls,
+         s0 with <| blockclasses := [] :: TL s0.blockclasses ;
+                    exprclasses := HD s0.exprclasses :: escapees ::
+                                   TL s0.exprclasses |>)
+`;
+
+
+
+
+
 
 val return_cont_def = Define`
   return_cont se ty = if ref_type ty then LVC LVal se
@@ -760,7 +797,12 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: new-simple-class *)
-(* handle other forms in 5.3.4 para 15 *)
+(* TODO: handle other forms in 5.3.4 para 15 *)
+(* The T F parameters to the ConstructorFVal constructor indicate
+    1. the object produced is most-derived, and
+    2. it is not a sub-object (neither base, nor member) of some other
+       object
+*)
 (!cnm s0 se s ty a sz args ptrval.
      (Class cnm = strip_const ty) /\ malloc s0 ty a /\
      sizeof T (sizeofmap s0) ty sz /\
@@ -771,14 +813,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (SOME ptrval = ptr_encode s0 a ty [cnm])
    ==>
      ^mng (mExpr (New ty (SOME args)) se) s0
-          (s, mExpr (CommaSep (FnApp (ConstructorFVal T a cnm) args)
+          (s, mExpr (CommaSep (FnApp (ConstructorFVal T F a cnm) args)
                               (ECompVal ptrval (Ptr ty)))
                     se))
 
    /\
 
 (* RULE-ID: constructor-call-sqpt *)
-(!mdp a cnm params se s.
+(!mdp subp a cnm params se s.
      EVERYi (\i e. if constructor_expects_rval s cnm params i then
                      ?v t. e = ECompVal v t
                    else
@@ -786,8 +828,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
             params /\
      is_null_se se
    ==>
-     ^mng (mExpr (FnApp (ConstructorFVal mdp a cnm) params) se) s
-          (s, ev (FnApp_sqpt (ConstructorFVal mdp a cnm) params) base_se))
+     ^mng (mExpr (FnApp (ConstructorFVal mdp subp a cnm) params) se) s
+          (s, ev (FnApp_sqpt (ConstructorFVal mdp subp a cnm) params) base_se))
 
    /\
 
@@ -850,7 +892,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: constructor-function-call *)
-(!cnm mdp pdecls a args se0 params s0 mem_inits this body cpfx.
+(!cnm mdp subp pdecls a args se0 params s0 mem_inits this body cpfx.
      find_constructor_info s0 cnm args params mem_inits body /\
      (pdecls = MAP (\ ((n,ty),a). VDecInit ty (Base n)
                                               (CopyInit (mExpr a base_se)))
@@ -858,10 +900,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (SOME this = ptr_encode s0 a (Class cnm) [cnm]) /\
      (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits)
    ==>
-     ^mng (mExpr (FnApp_sqpt (ConstructorFVal mdp a cnm) args) se0)
+     ^mng (mExpr (FnApp_sqpt (ConstructorFVal mdp subp a cnm) args) se0)
           s0
           (s0 with thisvalue := SOME (ECompVal this (Ptr (Class cnm))),
-           EStmt (Block T (pdecls ++ cpfx) [body]) (return_cont se0 Void)))
+           EStmt (Block T (pdecls ++ cpfx) [body])
+                 (RVC (\v ty. ConstructedVal subp a cnm) se0)))
 
    /\
 
@@ -897,24 +940,20 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    an mStmt, preventing this rule from firing at depth.  Note that
    class r-values can't be returned from this rule as class values are
    never represented with ECompVals. *)
-(!v t s se0 se c smap tmap vmap thisval stack'.
-     is_null_se se0 /\ (s.stack = (smap,tmap,vmap,thisval)::stack')
+(!v t s se0 se c.
+     is_null_se se0
    ==>
      ^mng (mStmt (Ret (NormE (ECompVal v t) se0)) (RVC c se)) s
-          (s with <| stack := stack'; classmap := smap; typemap := tmap;
-                     varmap := vmap; thisvalue := thisval |>,
-           mExpr (c v t) se))
+          (s, mExpr (c v t) se))
 
    /\
 
 (* RULE-ID: return-lvalue *)
-(!a t p se0 se c s cmap tmap vmap thisval stack'.
-     is_null_se se0 /\ (s.stack = (cmap,tmap,vmap,thisval)::stack')
+(!a t p se0 se c s.
+     is_null_se se0
    ==>
      ^mng (mStmt (Ret (NormE (LVal a t p) se0)) (LVC c se)) s
-          (s with <| stack := stack'; classmap := cmap; typemap := tmap;
-                     varmap := vmap; thisvalue := thisval |>,
-           mExpr (c a t p) se))
+          (s, mExpr (c a t p) se))
 
    /\
 
@@ -927,6 +966,13 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: empty-stmt-empty-ret *)
+(!s c se.
+     T
+   ==>
+     ^mng (mStmt EmptyStmt (RVC c se)) s (s, mExpr (c [] Void) se))
+
+   /\
 
 (* statements evaluate as normal under Traps *)
 (!tt st st' c s0 s.
@@ -1049,15 +1095,15 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: block-exit-destructor-call *)
-(!s c st a cnm p rest bcs.
-     (s.blockclasses = ((a,cnm,p) :: rest) :: bcs) /\ final_stmt st
+(* RULE-ID: block-exit-destructors-to-call *)
+(* normally constructed objects at this level are always destroyed here *)
+(!s0 s c st  bcs destroy_these destcalls.
+     (s0.blockclasses = destroy_these :: bcs) /\ ~(destroy_these = []) /\
+     final_stmt st /\
+     ((destcalls, s) = realise_destructor_calls (exception_stmt st) s0)
    ==>
-     ^mng (mStmt (Block T [] [st]) c) s
-          (s with blockclasses := rest :: bcs,
-           mStmt
-             (Block T [] [Standalone (mExpr (DestructorCall a cnm) base_se);
-                          st]) c))
+     ^mng (mStmt (Block T [] [st]) c) s0
+          (s, mStmt (Block T [] (destcalls ++ [st])) c))
 
    /\
 

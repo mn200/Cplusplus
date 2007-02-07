@@ -42,10 +42,6 @@ val vdeclare_preserves_fnmaps = prove(
   ``vdeclare s0 ty name s ==> (s0.fnmap = s.fnmap)``,
   SRW_TAC [][vdeclare_def] THEN SRW_TAC [][]);
 
-val update_blockclasses_preserves_fnmaps = prove(
-  ``update_blockclasses s1 a cnm s2 ==> (s1.fnmap = s2.fnmap)``,
-  SRW_TAC [][class_infoTheory.update_blockclasses_def] THEN SRW_TAC [][]);
-
 val declmng_preserves_fnmaps = prove(
   ``(!ee0 s0 see. mng ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)) /\
     (!s. (vdf s).fnmap = s.fnmap) ==>
@@ -54,8 +50,7 @@ val declmng_preserves_fnmaps = prove(
   STRIP_TAC THEN HO_MATCH_MP_TAC declmng_ind THEN
   SRW_TAC [][] THEN
   TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps,
-                  vdeclare_preserves_fnmaps,
-                  update_blockclasses_preserves_fnmaps]) THEN
+                  vdeclare_preserves_fnmaps]) THEN
   RES_TAC THEN FULL_SIMP_TAC (srw_ss()) []);
 
 val declmng_elim_preserves_fnmaps = prove(
@@ -65,12 +60,18 @@ val declmng_elim_preserves_fnmaps = prove(
     ((SND d0s0).fnmap = (SND ds).fnmap)``,
   METIS_TAC [declmng_preserves_fnmaps]);
 
+val realise_destructors_fnmap_invariant = prove(
+  ``((calls, s) = realise_destructor_calls exp s0) ==>
+    (s0.fnmap = s.fnmap)``,
+  SRW_TAC [][realise_destructor_calls_def, LET_THM, pairTheory.UNCURRY]);
+
 (* final result *)
 val fninfo_invariant = store_thm(
   "fninfo_invariant",
   ``!ee0 s0 see. meaning ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)``,
   HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
-  TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps]) THEN
+  TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps,
+                  realise_destructors_fnmap_invariant]) THEN
   IMP_RES_TAC declmng_elim_preserves_fnmaps THEN
   FULL_SIMP_TAC (srw_ss()) []);
 

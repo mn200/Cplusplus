@@ -565,14 +565,6 @@ val (corder_trav_rules, corder_trav_ind, corder_trav_cases) = Hol_reln `
      cclist_trav s a ((VirtualBase cnm, off) :: rest) (list1 ++ list2))
 `;
 
-val update_blockclasses_def = Define`
-  update_blockclasses s0 a cnm s =
-    ?list bcs rest.
-       corder_trav s T a cnm list /\
-       (s0.blockclasses = bcs::rest) /\
-       (s = s0 with blockclasses := (REVERSE list ++ bcs) :: rest)
-`;
-
 (* given derived class name C, state s, and path to (not necessarily
    immediate) base sub-class p, return the offset of the latter
    within an object of type C *)

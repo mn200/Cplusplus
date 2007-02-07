@@ -76,9 +76,16 @@ val _ = Hol_datatype
                designator position.  They don't need to encode any information
                about types and object identities because this is all
                elsewhere.  The arguments are mdp (T iff constructing a
-               most-derived object), the address where the object is
+               most-derived object), subobjp (T iff constructing a sub-object
+               within another object, NOT the inverse of mdp as members will
+               be mdp and subobjp), the address where the object is
                being constructed, and the name of the class. *)
-         | ConstructorFVal of bool => num => CPPname
+         | ConstructorFVal of bool => bool => addr => CPPname
+
+            (* this is the value "returned" from a constructor call.  The
+               boolean is true iff the class is a sub-object.
+            *)
+         | ConstructedVal of bool => addr => CPPname
 
              (* bool is mdp flag *)
          | DestructorCall of addr => CPPname
@@ -132,7 +139,10 @@ val rec_expr_P_def = Define`
     (rec_expr_P (RValreq e) P = P (RValreq e) /\ rec_expr_P e P) /\
     (rec_expr_P (ECompVal v t) P = P (ECompVal v t)) /\
     (rec_expr_P UndefinedExpr P = P UndefinedExpr) /\
-    (rec_expr_P (ConstructorFVal mdp a nm) P = P (ConstructorFVal mdp a nm)) /\
+    (rec_expr_P (ConstructorFVal mdp subobjp a nm) P =
+       P (ConstructorFVal mdp subobjp a nm)) /\
+    (rec_expr_P (ConstructedVal subp a cnm) P =
+       P (ConstructedVal subp a cnm)) /\
     (rec_expr_P (DestructorCall a nm) P = P (DestructorCall a nm)) /\
     (rec_expr_P (New ty argsopt) P = P (New ty argsopt)) /\
     (rec_exprl_P [] P = T) /\
