@@ -174,18 +174,26 @@ val is_zero_def = Define`
   (is_zero (Ptr t) v = (INT_VAL (Ptr t) v = SOME 0))
 `
 
-val final_stmt_def = Define`
-  (final_stmt EmptyStmt = T) /\
-  (final_stmt Break = T) /\
-  (final_stmt Cont = T) /\
-  (final_stmt (Ret e) =
-     ?v t se. (e = NormE (ECompVal v t) se) /\ is_null_se se) /\
-  (final_stmt _ = F)
+val final_value_def = Define`
+  (final_value (mExpr e se) =
+      is_null_se se /\
+      ((?v t. (e = ECompVal v t)) \/
+       (?a t p. (e = LVal a t p) /\ class_type (strip_const t)))) /\
+  (final_value (mStmt s c) = F)
 `;
 
-val final_value_def = Define`
-  (final_value (mExpr e se) = ?v t. (e = ECompVal v t) /\ is_null_se se) /\
-  (final_value (mStmt s c) = F)
+
+
+val final_stmt_def = Define`
+  (final_stmt EmptyStmt c = T) /\
+  (final_stmt Break c = T) /\
+  (final_stmt Cont c = T) /\
+  (final_stmt (Ret e) c =
+     case c of
+        LVC f se0 -> (?a t p se. (e = NormE (LVal a t p) se) /\ is_null_se se)
+     || RVC f se0 -> final_value e) /\
+  (final_stmt (Throw e) c = final_value e) /\
+  (final_stmt _ c = F)
 `;
 
 val copy2globals_def = Define`
@@ -317,13 +325,13 @@ val realise_destructor_calls_def = Define`
 
 
 val return_cont_def = Define`
-  return_cont se ty = if ref_type ty then LVC LVal se
-                      else RVC ECompVal se
+  return_cont se ty = if ref_type ty then LVC I se
+                      else RVC I se
 `
 
 val cont_comp_def = Define`
-  (cont_comp f (RVC rc se) = RVC (\v rt. f (rc v rt)) se) /\
-  (cont_comp f (LVC lc se) = LVC (\a t p. f (lc a t p)) se)
+  (cont_comp f (RVC rc se) = RVC (f o rc) se) /\
+  (cont_comp f (LVC lc se) = LVC (f o lc) se)
 `
 
 val RVR_def = Define`
@@ -457,10 +465,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: econtext-propagates-failure *)
-(!f se s.
-     valid_econtext f
+(!f se s e.
+     valid_econtext f /\
+     ((e = UndefinedExpr) \/ (?e0. e = ExceptionExpr e0))
    ==>
-     ^mng (mExpr (f UndefinedExpr) se) s (s, ev UndefinedExpr se))
+     ^mng (mExpr (f e) se) s (s, ev e se))
 
    /\
 
@@ -909,7 +918,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                       blockclasses updated_by stackenv_newscope ;
                       exprclasses updated_by stackenv_newscope |>,
            EStmt (Block T (pdecls ++ cpfx) [body])
-                 (RVC (\v ty. ConstructedVal subp a cnm) se0)))
+                 (RVC (\e. ConstructedVal subp a cnm) se0)))
 
    /\
 
@@ -949,7 +958,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      is_null_se se0
    ==>
      ^mng (mStmt (Ret (NormE (ECompVal v t) se0)) (RVC c se)) s
-          (s, mExpr (c v t) se))
+          (s, mExpr (c (ECompVal v t)) se))
 
    /\
 
@@ -958,7 +967,17 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      is_null_se se0
    ==>
      ^mng (mStmt (Ret (NormE (LVal a t p) se0)) (LVC c se)) s
-          (s, mExpr (c a t p) se))
+          (s, mExpr (c (LVal a t p)) se))
+
+   /\
+
+(* RULE-ID: return-exception *)
+(!e exte c f s0 se0 se.
+     (exte = mExpr e se0) /\
+     ((c = LVC f se) \/ (c = RVC f se)) /\
+     final_value exte
+   ==>
+     ^mng (mStmt (Throw exte) c) s0 (s0, mExpr (f (ExceptionExpr e)) se))
 
    /\
 
@@ -975,7 +994,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!s c se.
      T
    ==>
-     ^mng (mStmt EmptyStmt (RVC c se)) s (s, mExpr (c [] Void) se))
+     ^mng (mStmt EmptyStmt (RVC c se)) s
+          (s, mExpr (c (ECompVal [] Void)) se))
 
    /\
 
@@ -1105,7 +1125,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* normally constructed objects at this level are always destroyed here *)
 (!s0 s c st  bcs destroy_these destcalls.
      (s0.blockclasses = destroy_these :: bcs) /\ ~(destroy_these = []) /\
-     final_stmt st /\
+     final_stmt st c /\
      ((destcalls, s) = realise_destructor_calls (exception_stmt st) s0)
    ==>
      ^mng (mStmt (Block T [] [st]) c) s0
@@ -1131,7 +1151,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: block-exit *)
 (!st s c stm tym vrm stk' this bcs ecs.
-     (s.stack = (stm,tym,vrm,this) :: stk') /\ final_stmt st /\
+     (s.stack = (stm,tym,vrm,this) :: stk') /\ final_stmt st c /\
      (s.blockclasses = []::bcs) /\
      (s.exprclasses = []::ecs)
    ==>
@@ -1158,7 +1178,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: block-interrupted *)
 (!sts exstmt s c.
-     final_stmt exstmt /\ ~(exstmt = EmptyStmt) /\ ~(sts = [])
+     final_stmt exstmt c /\ ~(exstmt = EmptyStmt) /\ ~(sts = [])
    ==>
      ^mng (mStmt (Block T [] (exstmt::sts)) c) s
           (s, mStmt (Block T [] [exstmt]) c))
@@ -1180,6 +1200,15 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mStmt (Block T (d0 :: vds) sts) c) s0
           (s, mStmt (Block T (ds ++ vds) sts) c))
+
+   /\
+
+(* RULE-ID: block-declmng-exception *)
+(!d0 s0 e c sts vds.
+     declmng ^mng I (d0, s0) ([VException e], s0)
+   ==>
+     ^mng (mStmt (Block T (d0 :: vds) sts) c) s0
+          (s0, mStmt (Block T [] [Throw (mExpr e base_se)]) c))
 
    /\
 

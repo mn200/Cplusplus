@@ -91,6 +91,7 @@ val _ = Hol_datatype
          | DestructorCall of addr => CPPname
          | RValreq of CExpr
          | ECompVal of byte list => CType
+         | ExceptionExpr of CExpr
          | UndefinedExpr `;
 
 val value_type_def = Define`
@@ -145,6 +146,7 @@ val rec_expr_P_def = Define`
        P (ConstructedVal subp a cnm)) /\
     (rec_expr_P (DestructorCall a nm) P = P (DestructorCall a nm)) /\
     (rec_expr_P (New ty argsopt) P = P (New ty argsopt)) /\
+    (rec_expr_P (ExceptionExpr e) P = P (ExceptionExpr e) /\ rec_expr_P e P) /\
     (rec_exprl_P [] P = T) /\
     (rec_exprl_P (CONS e es) P = rec_expr_P e P /\ rec_exprl_P es P) /\
     (rec_expr_opt NONE P = T) /\

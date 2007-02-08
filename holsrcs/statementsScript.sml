@@ -38,8 +38,8 @@ val _ = Hol_datatype `traptype = BreakTrap | ContTrap`;
 (* sorts of continuations, depending on whether a function is to return a
    reference or not. *)
 val _ = Hol_datatype `
-  conttype = RVC of (byte list -> CPP_Type -> CExpr) => se_info
-           | LVC of (num -> CPP_Type -> CPPname list -> CExpr) => se_info
+  conttype = RVC of (CExpr -> CExpr) => se_info
+           | LVC of (CExpr -> CExpr) => se_info
 `;
 
 (* term taken from grammar, as in 12.6.2 *)
@@ -66,7 +66,9 @@ val _ = Hol_datatype`
            | Throw of ExtE ;
 
   ExtE     = NormE of CExpr => se_info
-           | EStmt of CStmt => conttype ;
+           | EStmt of CStmt => conttype
+
+  ;
 
   var_decl = VDec of CType => CPPname
            | VDecInit of CType => CPPname => initializer
@@ -79,7 +81,11 @@ val _ = Hol_datatype`
                   reference's name with an optional address for any
                   enclosing class.   *)
 
-           | VStrDec of string => class_info option ;
+           | VStrDec of string => class_info option
+
+           | VException of CExpr
+
+  ;
 
   (* TODO: classes can contain nested classes
              - resolution(?): imagine a translated language where nested
