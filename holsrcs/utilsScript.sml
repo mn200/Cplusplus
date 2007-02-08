@@ -195,6 +195,12 @@ val stackenv_extend_def = Define`
 `;
 val _ = export_rewrites ["stackenv_extend_def"]
 
+val stackenv_extendl_def = Define`
+  (stackenv_extendl l [] = [l]) /\
+  (stackenv_extendl l (h :: t) = (l ++ h) :: t)
+`;
+val _ = export_rewrites ["stackenv_extendl_def"]
+
 (* ----------------------------------------------------------------------
     stackenv_newscope : 'a list list -> 'a list list
    ---------------------------------------------------------------------- *)
