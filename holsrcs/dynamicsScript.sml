@@ -885,7 +885,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
           (s0 with <| stack updated_by
                         (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
                       thisvalue := SOME (ECompVal this (Ptr (Class cname)));
-                      blockclasses updated_by stackenv_newscope
+                      blockclasses updated_by stackenv_newscope ;
+                      exprclasses updated_by stackenv_newscope
                    |>,
            EStmt (Block T pdecls [body]) (return_cont se0 rtype)))
 
@@ -902,7 +903,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mExpr (FnApp_sqpt (ConstructorFVal mdp subp a cnm) args) se0)
           s0
-          (s0 with thisvalue := SOME (ECompVal this (Ptr (Class cnm))),
+          (s0 with <| thisvalue := SOME (ECompVal this (Ptr (Class cnm))) ;
+                      stack updated_by (CONS (s0.classmap, s0.typemap,
+                                              s0.varmap, s0.thisvalue)) ;
+                      blockclasses updated_by stackenv_newscope ;
+                      exprclasses updated_by stackenv_newscope |>,
            EStmt (Block T (pdecls ++ cpfx) [body])
                  (RVC (\v ty. ConstructedVal subp a cnm) se0)))
 
@@ -1090,7 +1095,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mStmt (Block F vds sts) c) s
           (s with <| stack updated_by
                           (CONS (s.classmap,s.typemap,s.varmap,s.thisvalue));
-                     blockclasses updated_by stackenv_newscope |>,
+                     blockclasses updated_by stackenv_newscope ;
+                     exprclasses updated_by stackenv_newscope |>,
            mStmt (Block T vds sts) c))
 
    /\
@@ -1124,9 +1130,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: block-exit *)
-(!st s c stm tym vrm stk' this bcs.
+(!st s c stm tym vrm stk' this bcs ecs.
      (s.stack = (stm,tym,vrm,this) :: stk') /\ final_stmt st /\
-     (s.blockclasses = []::bcs)
+     (s.blockclasses = []::bcs) /\
+     (s.exprclasses = []::ecs)
    ==>
      ^mng (mStmt (Block T [] [st]) c) s
           (s with <| stack := stk';
@@ -1134,7 +1141,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                      typemap := tym;
                      varmap := vrm;
                      thisvalue := this;
-                     blockclasses := bcs |>,
+                     blockclasses := bcs;
+                     exprclasses := ecs |>,
            mStmt st c))
 
    /\

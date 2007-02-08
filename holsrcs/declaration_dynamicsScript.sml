@@ -414,6 +414,36 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: decl-vdecinit-copy-becomes-direct *)
+(* corresponds to 8.5 p14, where there is a copy initialisation, and
+   "source type is the same class as, or a derived class of, the class of
+    the destination" *)
+(* NOTE: this rule precludes constructing a temporary directly into a new
+         object value, as it fires once the initializer has been fully
+         evaluated *)
+(!ty a arg argty argnm pth s0 se cnm.
+     (strip_const ty = Class cnm) /\
+     (arg = LVal a argty pth) /\
+     (strip_const argty = Class argnm) /\
+       (* note how argnm is ignored, used here just to establish that
+          the type of the argument really is of class type.  argnm gives
+          the dynamic type, and we're interested in the static type *)
+     s0 |- path (LAST pth) to cnm unique
+       (* arg is equal to or a derived class *)
+   ==>
+     declmng mng
+             vdf
+             (VDecInitA ty (ObjPlace a) (CopyInit (mExpr arg se)), s0)
+             ([VDecInitA ty
+                         (ObjPlace a)
+                         (DirectInit
+                          (mExpr
+                             (FnApp (ConstructorFVal T F a cnm) [arg])
+                             se))],
+              s0))
+
+   /\
+
 (* RULE-ID: decl-vdecinit-start-evaluate-direct-nonclass *)
 (* A direct initialisation of a non-class object is the same as a
    copy-initialisation *)
