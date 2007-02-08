@@ -49,6 +49,10 @@ val _ = Hol_datatype `varlocn = RefPlace of num option => CPPname
                               | ObjPlace of num
 `
 
+(* a catch block can omit the parameter entirely (...), or can provide
+   a lone type, or can provide a name and a type *)
+val _ = type_abbrev("exn_pdecl", ``:(string option # CPP_Type) option``)
+
 
 val _ = Hol_datatype`
   CStmt    = CLoop of ExtE => CStmt
@@ -63,7 +67,10 @@ val _ = Hol_datatype`
            | Break
            | Cont
            | Trap of traptype => CStmt
-           | Throw of ExtE ;
+           | Throw of ExtE
+           | Catch of CStmt => (exn_pdecl # CStmt) list
+
+  ;
 
   ExtE     = NormE of CExpr => se_info
            | EStmt of CStmt => conttype
