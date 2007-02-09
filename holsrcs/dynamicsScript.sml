@@ -192,7 +192,7 @@ val final_stmt_def = Define`
      case c of
         LVC f se0 -> (?a t p se. (e = NormE (LVal a t p) se) /\ is_null_se se)
      || RVC f se0 -> final_value e) /\
-  (final_stmt (Throw e) c = final_value e) /\
+  (final_stmt (Throw exn) c = ?e. (exn = SOME e) /\ final_value e) /\
   (final_stmt _ c = F)
 `;
 
@@ -289,6 +289,12 @@ val construct_ctor_pfx_def = Define`
     virtuals ++ bases ++ nsds
 `;
 
+val callterminate = ``FnApp (Var <| base := "terminate";
+                                    absolute := T;
+                                    nspaces := ["std"];
+                                    classes := [] |>)
+                            []``
+
 val realise_destructor_calls_def = Define`
   (* parameters
       exp           : T iff we are leaving a block because of an exception
@@ -302,8 +308,12 @@ val realise_destructor_calls_def = Define`
                       to new scope of exprclasses underneath current one
   *)
   realise_destructor_calls exp s0 =
+    let destwrap = if exp then
+                     (\s. Catch s [(NONE, Standalone
+                                            (mExpr ^callterminate base_se))])
+                   else (\s. s) in
     let cloc2call (a, cnm, pth) =
-          Standalone (mExpr (DestructorCall a cnm) base_se) in
+          destwrap (Standalone (mExpr (DestructorCall a cnm) base_se)) in
     let destroy_these = HD s0.blockclasses in
     let foldthis c (here, escape) =
           case c of
@@ -348,6 +358,36 @@ val valuetype_def = Define`
   (valuetype (ECompVal v t) = t) /\
   (valuetype (LVal a t p) = static_type (t,p))
 `;
+
+val unamb_public_base_def = Define`
+  (* ignore public-ness constraint for the moment (TODO) *)
+  unamb_public_base s ty1 ty2 =
+    ?c1 c2. (ty1 = Class c1) /\ (ty2 = Class c2) /\
+            s |- path c2 to c1 unique
+`;
+
+
+val exception_parameter_match_def = Define`
+  (* embodies 15.3 paras 2-3 *)
+  exception_parameter_match s paramty0 exnty =
+    let paramty = case paramty0 of (* para 2 *)
+                     Function retty argtys -> Ptr (Function retty argtys)
+                  || Array bt sz -> Ptr bt
+                  || x -> x
+    in
+        (* para 3, clause 1 *)
+        (strip_const paramty = strip_const exnty) \/
+        (strip_const paramty = Ref (strip_const exnty)) \/
+
+        (* para 3, clause 2 *)
+        (unamb_public_base s (strip_const paramty) exnty \/
+         ?pty. (strip_const paramty = Ref pty) /\
+               unamb_public_base s pty exnty) \/
+
+        (* para 3, clauses 3 - (* TODO *) *)
+        F
+`;
+
 
 
 val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
@@ -973,9 +1013,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: return-exception *)
 (!e exte c f s0 se0 se.
-     (exte = mExpr e se0) /\
+     (exte = SOME (mExpr e se0)) /\
      ((c = LVC f se) \/ (c = RVC f se)) /\
-     final_value exte
+     final_value (mExpr e se0)
    ==>
      ^mng (mStmt (Throw exte) c) s0 (s0, mExpr (f (ExceptionExpr e)) se))
 
@@ -999,6 +1039,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: trap-stmt-evaluation *)
 (* statements evaluate as normal under Traps *)
 (!tt st st' c s0 s.
      ^mng (mStmt st c) s0 (s, mStmt st' c)
@@ -1007,7 +1048,116 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* final cases for Traps.  This will need generalisation for exceptions  *)
+(* RULE-ID: catch-stmt-evaluation *)
+(* statements evaluate normally under catch *)
+(!st c s0 s st' hnds.
+     ^mng (mStmt st c) s0 (s, mStmt st' c)
+   ==>
+     ^mng (mStmt (Catch st hnds) c) s0 (s, mStmt (Catch st' hnds) c))
+
+   /\
+
+(* RULE-ID: throw-expr-evaluation *)
+(* expressions evaluate under throw *)
+(!e0 e s0 s c.
+     ^mng (RVR e0) s0 (s, RVR e)
+   ==>
+     ^mng (mStmt (Throw (SOME e0)) c) s0 (s, mStmt (Throw (SOME e)) c))
+
+   /\
+
+(* RULE-ID: bare-throw-succeeds *)
+(!s0 e c.
+     (s0.current_exn = SOME e)
+   ==>
+     ^mng (mStmt (Throw NONE) c) s0
+          (s0, mStmt (Throw (SOME (mExpr e base_se))) c))
+
+   /\
+
+(* RULE-ID: bare-throw-fails *)
+(!s0 ct c se.
+     (s0.current_exn = NONE) /\
+     ((c, se) = case ct of LVC c' se' -> (c',se') || RVC c' se' -> (c',se'))
+   ==>
+     ^mng (mStmt (Throw NONE) ct) s0 (s0, mExpr (c UndefinedExpr) se))
+
+   /\
+
+(* RULE-ID: clear-exn *)
+(!s0 c.
+     T
+   ==>
+     ^mng (mStmt ClearExn c) s0
+          (s0 with current_exn := NONE, mStmt EmptyStmt c))
+
+   /\
+
+(* RULE-ID: catch-stmt-empty-hnds *)
+(* you wouldn't expect to see this form input (in fact, it is syntactically
+   impossible), but it can arise as syntax evolves (successive handlers are
+   tried and found not to match the type of the exception value)
+*)
+(!st c s0.
+     final_stmt st c
+   ==>
+     ^mng (mStmt (Catch st []) c) s0 (s0, mStmt st c))
+
+   /\
+
+(* RULE-ID: catch-normal-stmt-passes *)
+(!st hnds c s0.
+     final_stmt st c /\
+     ~exception_stmt st
+   ==>
+     ^mng (mStmt (Catch st hnds) c) s0 (s0, mStmt st c))
+
+   /\
+
+(* RULE-ID: catch-all *)
+(* NOTE: relying on the fact that no user program can generate " no name " as
+   the name of an identifier *)
+(!exn e hnd_body rest c s0.
+     (exn = SOME (mExpr e base_se))
+   ==>
+     ^mng (mStmt (Catch (Throw exn) ((NONE, hnd_body) :: rest)) c) s0
+          (s0 with current_exn := SOME e,
+           mStmt (Block F [VDecInit (value_type e)
+                                    (Base " no name ")
+                                    (CopyInit (mExpr e base_se))]
+                          [hnd_body; ClearExn]) c))
+
+   /\
+
+(* RULE-ID: catch-specific-type-matches *)
+(!exn e hnd_body rest c s0 pty pnameopt pname.
+     (exn = SOME (mExpr e base_se)) /\
+     exception_parameter_match s0 pty (value_type e) /\
+     (pname = case pnameopt of SOME s -> Base s || NONE -> (Base " no name "))
+   ==>
+     ^mng (mStmt (Catch (Throw exn) ((SOME(pnameopt, pty), hnd_body) :: rest)) c)
+          s0
+          (s0 with current_exn := SOME e,
+           mStmt (Block F [VDecInit (value_type e)
+                                    pname
+                                    (CopyInit (mExpr e base_se))]
+                          [hnd_body; ClearExn]) c))
+
+   /\
+
+(* RULE-ID: catch-specific-type-nomatch *)
+(!exn e hnd_body rest c s0 pty pnameopt.
+     (exn = SOME (mExpr e base_se)) /\
+     ~exception_parameter_match s0 pty (value_type e)
+   ==>
+     ^mng (mStmt (Catch (Throw exn) ((SOME(pnameopt, pty), hnd_body) :: rest)) c)
+          s0
+          (s0, mStmt (Catch (Throw exn) rest) c))
+
+   /\
+
+
+(* final cases for Traps.  *)
 (* RULE-ID: trap-break-catches *)
 (!c s0.
      T
@@ -1208,7 +1358,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      declmng ^mng I (d0, s0) ([VException e], s0)
    ==>
      ^mng (mStmt (Block T (d0 :: vds) sts) c) s0
-          (s0, mStmt (Block T [] [Throw (mExpr e base_se)]) c))
+          (s0, mStmt (Block T [] [Throw (SOME (mExpr e base_se))]) c))
 
    /\
 

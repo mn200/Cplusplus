@@ -144,6 +144,10 @@ val _ = Hol_datatype
                    block-delimited lifetimes.  Second is for temporary
                    objects that need to be destroyed at the end of the
                    full enclosing expression *)
+              ;
+
+              current_exn : CExpr option
+
              |>`;
 val _ = type_abbrev("CState", ``:state``)
 

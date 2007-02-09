@@ -90,3 +90,12 @@ within holsrcs/.
         assume that the statics have prevented these scenarios, so the
         dynamics can just copy across the static member information.
 
+15. Exception handling
+
+    15.3 Handling an exception
+
+         p10 requires that accessing a non-static member or base
+         object inside a constructor's function-try-block's handler is
+         undefined.  Straightforward attempts to do this can be caught
+         statically.  To do this properly, the model should mark all
+         of the object's memory unallocated on entry into the block.

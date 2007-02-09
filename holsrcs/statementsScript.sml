@@ -67,8 +67,9 @@ val _ = Hol_datatype`
            | Break
            | Cont
            | Trap of traptype => CStmt
-           | Throw of ExtE
+           | Throw of ExtE option
            | Catch of CStmt => (exn_pdecl # CStmt) list
+           | ClearExn (* machine generated *)
 
   ;
 
@@ -187,7 +188,7 @@ val rec_stmt_P_def = Define `
   (rec_stmt_P EmptyRet = \P. P EmptyRet) /\
   (rec_stmt_P Break = \P. P Break) /\
   (rec_stmt_P Cont = \P. P Cont) /\
-  (rec_stmt_P (Throw e) = \P. P (Throw e)) /\
+  (rec_stmt_P (Throw eopt) = \P. P (Throw eopt)) /\
   (rec_stmt_P (Trap tt s) = \P. P (Trap tt s) /\ rec_stmt_P s P) /\
   (rec_stmtl_P [] = \P. T) /\
   (rec_stmtl_P (CONS x xs) = \P. rec_stmt_P x P /\ rec_stmtl_P xs P)
@@ -251,7 +252,7 @@ val intstmt_free_def = Define`
 `
 
 val exception_stmt_def = Define`
-  (exception_stmt (Throw e) = T) /\
+  (exception_stmt (Throw exn) = ?e. exn = SOME e) /\
   (exception_stmt s = F)
 `;
 
