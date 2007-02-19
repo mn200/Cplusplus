@@ -14,6 +14,7 @@ local open wordsTheory integer_wordTheory finite_mapTheory in end
 (* C++ ancestor theories  *)
 open typesTheory memoryTheory expressionsTheory staticsTheory class_infoTheory
 open aggregatesTheory declaration_dynamicsTheory
+open more_statementsTheory
 local
   open side_effectsTheory statesTheory operatorsTheory overloadingTheory
 in end
@@ -901,8 +902,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* TODO: handle return type casting *)
 (!ftype args pdecls params se s0 fnid rtype body.
      (find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body) /\
-     (pdecls = MAP (\ ((n,ty),a). VDecInit ty (Base n)
-                                              (CopyInit (mExpr a base_se)))
+     (pdecls = MAP (\ ((n,ty),a). VDecInit (CTy ty)
+                                           (Base n)
+                                           (CopyInit (mExpr a base_se)))
                    (ZIP (params, args)))
    ==>
      ^mng (mExpr (FnApp_sqpt (FVal fnid ftype NONE) args) se) s0
@@ -923,8 +925,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 *)
 (!fnid ftype a cname args rtype se0 s0 p params pdecls body this.
      (find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body) /\
-     (pdecls = MAP (\ ((n,ty),a). VDecInit ty (Base n)
-                                              (CopyInit (mExpr a base_se)))
+     (pdecls = MAP (\ ((n,ty),a). VDecInit (CTy ty)
+                                           (Base n)
+                                           (CopyInit (mExpr a base_se)))
                    (ZIP (params, args))) /\
      (SOME this = ptr_encode s0 a (Class cname) p)
    ==>
@@ -944,8 +947,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: constructor-function-call *)
 (!cnm mdp subp pdecls a args se0 params s0 mem_inits this body cpfx.
      find_constructor_info s0 cnm args params mem_inits body /\
-     (pdecls = MAP (\ ((n,ty),a). VDecInit ty (Base n)
-                                              (CopyInit (mExpr a base_se)))
+     (pdecls = MAP (\ ((n,ty),a). VDecInit (CTy ty)
+                                           (Base n)
+                                           (CopyInit (mExpr a base_se)))
                    (ZIP (params, args))) /\
      (SOME this = ptr_encode s0 a (Class cnm) [cnm]) /\
      (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits)
@@ -1122,7 +1126,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mStmt (Catch (Throw exn) ((NONE, hnd_body) :: rest)) c) s0
           (s0 with current_exn := SOME e,
-           mStmt (Block F [VDecInit (value_type e)
+           mStmt (Block F [VDecInit (CTy (value_type e))
                                     (Base " no name ")
                                     (CopyInit (mExpr e base_se))]
                           [hnd_body; ClearExn]) c))
@@ -1138,7 +1142,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mStmt (Catch (Throw exn) ((SOME(pnameopt, pty), hnd_body) :: rest)) c)
           s0
           (s0 with current_exn := SOME e,
-           mStmt (Block F [VDecInit (value_type e)
+           mStmt (Block F [VDecInit (CTy (value_type e))
                                     pname
                                     (CopyInit (mExpr e base_se))]
                           [hnd_body; ClearExn]) c))
