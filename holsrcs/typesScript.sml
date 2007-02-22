@@ -5,7 +5,7 @@
 open HolKernel boolLib Parse BasicProvers
 open simpLib bossLib arithmeticTheory pred_setTheory boolSimps
 
-local open stringTheory integerTheory namesTheory in end;
+local open stringTheory integerTheory in end;
 open listTheory
 
 val _ = new_theory "types";
@@ -21,16 +21,64 @@ val _ = Hol_datatype
                      for an existing type *)
      Unsigned of basic_integral_type |
      Signed of basic_integral_type |
-     Class of CPPname |
+     Class of (nested_name_specifier # class_name) |
      Float |
      Double |
      LDouble |
      Ptr of CPP_Type |
-     MPtr of CPPname => CPP_Type | (* member pointer *)
+     MPtr of (nested_name_specifier # class_name) => CPP_Type |
+       (* member pointer *)
      Ref of CPP_Type |
      Array of CPP_Type => num |
      Function of CPP_Type => CPP_Type list |
-     Const of CPP_Type`;
+     Const of CPP_Type
+
+  ;
+
+  class_name = CName of string
+             | TempCall of string => temp_arg list
+
+  ;
+
+  temp_arg = TType of CPP_Type
+           | TTemp of (nested_name_specifier # string)
+           | TVal of temp_value_arg
+
+  ;
+
+  temp_value_arg = TNum of int
+                 | TPName of string
+                 | TObj of (nested_name_specifier # string)
+                 | TMPtr of (nested_name_specifier # class_name) => string
+
+  ;
+
+  nested_name_specifier = <| absolute : bool ;
+                             nspaces : string list ;
+                             classes : class_name list
+                          |>
+`;
+
+val _ = type_abbrev("CPPname", ``:nested_name_specifier # string``)
+val _ = type_abbrev("class_spec", ``:nested_name_specifier # class_name``)
+
+val Base_def = Define`
+  Base n = (<| absolute := F; nspaces := []; classes := [] |>, n)
+`;
+
+val Member_def = Define`
+  Member ((nns,cnm) : class_spec) (fld : string) : CPPname =
+    (nns with classes updated_by (\cs. cs ++ [cnm]), fld)
+`;
+
+val is_class_name_def = Define`
+  is_class_name ((nns, nm) : CPPname) = ~(nns.classes = [])
+`;
+
+val class_part_def = Define`
+  class_part ((nns, nm) : CPPname) : class_spec =
+    (nns with classes updated_by FRONT, LAST nns.classes)
+`;
 
 val ptrdiff_t = Rsyntax.new_specification {
   consts = [{const_name = "ptrdiff_t", fixity = Prefix}],

@@ -208,7 +208,7 @@ val vdeclare_def = Define`
 val initA_constructor_call_def = Define`
   initA_constructor_call mdp subobjp cnm addr args =
       VDecInitA
-        (CTy (Class cnm))
+        (Class cnm)
         (ObjPlace addr)
         (DirectInit
            (mExpr (FnApp (ConstructorFVal mdp subobjp addr cnm) args) base_se))
@@ -218,7 +218,7 @@ val initA_member_call_def = Define`
   initA_member_call ty addr args =
     case ty of
        Class cnm -> initA_constructor_call T T cnm addr args
-    || _ -> VDecInitA (CTy ty)
+    || _ -> VDecInitA ty
                       (ObjPlace addr)
                       (CopyInit (mExpr (HD args) base_se))
 `;
@@ -230,7 +230,7 @@ val (zero_init_rules, zero_init_ind, zero_init_cases) = Hol_reln`
    (!s mdp ty a.
      scalar_type ty
    ==>
-     zero_init s mdp ty a [VDecInitA (CTy ty)
+     zero_init s mdp ty a [VDecInitA ty
                                      (ObjPlace a)
                                      (DirectInit (mExpr (Cnum 0) base_se))])
 
@@ -368,7 +368,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (!s0 ty name s.
      vdeclare s0 ty name s /\ object_type ty /\ (!cnm. ~(ty = Class cnm))
    ==>
-     declmng mng vdf (VDec (CTy ty) name, s0) ([], vdf s))
+     declmng mng vdf (VDec ty name, s0) ([], vdf s))
 
    /\
 
@@ -378,8 +378,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (!s0 name cnm.
      T
    ==>
-     declmng mng vdf (VDec (CTy (Class cnm)) name, s0)
-             ([VDecInit (CTy (Class cnm)) name (DirectInit0 [])], s0))
+     declmng mng vdf (VDec (Class cnm) name, s0)
+             ([VDecInit (Class cnm) name (DirectInit0 [])], s0))
 
    /\
 
@@ -399,7 +399,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (* the subobjp flag of the ConstructorFVal is F because this is a top-level
    declaration of a object. *)
 (!s0 ty cnm name args s1 a pth.
-     (ty = CTy (Class cnm)) /\
+     (ty = Class cnm) /\
      vdeclare s0 (Class cnm) name s1 /\
      ((a,pth) = s1.varmap ' name)
    ==>
@@ -435,8 +435,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
              vdf
-             (VDecInitA (CTy ty) (ObjPlace a) (CopyInit (mExpr arg se)), s0)
-             ([VDecInitA (CTy ty)
+             (VDecInitA ty (ObjPlace a) (CopyInit (mExpr arg se)), s0)
+             ([VDecInitA ty
                          (ObjPlace a)
                          (DirectInit
                           (mExpr
@@ -457,8 +457,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
              vdf
-             (VDecInit (CTy ty) name (DirectInit0 [arg]), s0)
-             ([VDecInitA (CTy ty) loc (CopyInit (mExpr arg base_se))], vdf s))
+             (VDecInit ty name (DirectInit0 [arg]), s0)
+             ([VDecInitA ty loc (CopyInit (mExpr arg base_se))], vdf s))
 
    /\
 
@@ -470,8 +470,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
              vdf
-             (VDecInit (CTy ty) name (CopyInit arg), s0)
-             ([VDecInitA (CTy ty) loc (CopyInit arg)], vdf s))
+             (VDecInit ty name (CopyInit arg), s0)
+             ([VDecInitA ty loc (CopyInit arg)], vdf s))
 
    /\
 
@@ -501,8 +501,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInitA (CTy ty) loc (f (NormE e0 se0)), s0)
-                     ([VDecInitA (CTy ty) loc (f (NormE e se))], s))
+     declmng mng vdf (VDecInitA ty loc (f (NormE e0 se0)), s0)
+                     ([VDecInitA ty loc (f (NormE e se))], s))
 
    /\
 
@@ -516,7 +516,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      (rs = range_set a (LENGTH v')) /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInitA (CTy dty)
+     declmng mng vdf (VDecInitA dty
                                 (ObjPlace a)
                                 (f (NormE (ECompVal v ty) se)), s0)
                      ([], s))
@@ -535,7 +535,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
              vdf
-             (VDecInitA (CTy (Ref ty1))
+             (VDecInitA (Ref ty1)
                         (RefPlace aopt nm)
                         (f (NormE (LVal a ty2 p) se)), s0)
              ([], s))
@@ -557,7 +557,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                      exprclasses := rest |>)
    ==>
      declmng mng vdf
-       (VDecInitA (CTy (Class cnm))
+       (VDecInitA (Class cnm)
                   (ObjPlace a)
                   (DirectInit (NormE (ConstructedVal subp a cnm) se0)), s0)
                   ([], s))

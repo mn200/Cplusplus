@@ -29,11 +29,11 @@ val fnid_def = type_abbrev("fnid", ``:CPPname``)
 val _ = disable_tyabbrev_printing "fnid"
 
 (* expressions *)
-val _ = type_abbrev ("CType", ``:CPP_Type``)
 val _ = Hol_datatype
   `CExpr = Cnum of num
          | Cchar of num
-         | Cnullptr of CType   (* BAD_ASSUMPTION: want to get rid of this *)
+         | Cnullptr of CPP_Type
+                     (* BAD_ASSUMPTION: want to get rid of this *)
          | This
          | Var of CPPname
          | COr of CExpr => CExpr
@@ -43,14 +43,14 @@ val _ = Hol_datatype
          | CApUnary of c_unops => CExpr
          | Deref of CExpr
          | Addr of CExpr
-         | MemAddr of CPPname => string
+         | MemAddr of class_spec => string
          | Assign of c_binops option => CExpr => CExpr
          | SVar of CExpr => string
          | FnApp of CExpr => CExpr list
          | CommaSep of CExpr => CExpr
-         | Cast of CType => CExpr
+         | Cast of CPP_Type => CExpr
          | PostInc of CExpr
-         | New of CType => CExpr list option
+         | New of CPP_Type => CExpr list option
 
          (* these are "fake expression constructors" *)
 
@@ -64,7 +64,7 @@ val _ = Hol_datatype
             (* this is an object lvalue, the string list is the sub-object
                path a la Wasserab et al for values of class type.  Elsewhere
                the list will be empty *)
-         | LVal of num => CType => CPPname list
+         | LVal of num => CPP_Type => class_spec list
 
             (* this is a function l-value.  The expression argument represents
                the class object if the function is a member function, the
@@ -80,19 +80,21 @@ val _ = Hol_datatype
                within another object, NOT the inverse of mdp as members will
                be mdp and subobjp), the address where the object is
                being constructed, and the name of the class. *)
-         | ConstructorFVal of bool => bool => addr => CPPname
+         | ConstructorFVal of bool => bool => addr => class_spec
 
             (* this is the value "returned" from a constructor call.  The
                boolean is true iff the class is a sub-object.
             *)
-         | ConstructedVal of bool => addr => CPPname
+         | ConstructedVal of bool => addr => class_spec
 
              (* bool is mdp flag *)
-         | DestructorCall of addr => CPPname
+         | DestructorCall of addr => class_spec
          | RValreq of CExpr
-         | ECompVal of byte list => CType
+         | ECompVal of byte list => CPP_Type
          | ExceptionExpr of CExpr
-         | UndefinedExpr `;
+         | UndefinedExpr
+
+`;
 
 val value_type_def = Define`
   (value_type (ECompVal v t) = t) /\

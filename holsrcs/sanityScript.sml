@@ -134,7 +134,10 @@ val clvalue_safe_invariant = store_thm(
 
 *)
 
-
+val valid_this_def = Define`
+  (valid_this (ECompVal bytes (Ptr (Class cspec))) = T) /\
+  (valid_this x = F)
+`;
 
 val _ = export_theory();
 

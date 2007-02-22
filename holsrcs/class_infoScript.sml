@@ -30,7 +30,7 @@ val defined_classes_def = Define`
 
 (* similarly, direct base classes, in order of declaration *)
 val get_direct_bases_def = Define`
-  get_direct_bases s cnm : CPPname list =
+  get_direct_bases s cnm : class_spec list =
     mapPartial (\ (cnm, b, prot). if b then NONE else SOME cnm)
                (cinfo s cnm).ancestors
 `
@@ -50,7 +50,7 @@ val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
                    fixity = Infix(NONASSOC, 460) }
 
 val get_virtual_bases_def = Define`
-  get_virtual_bases s cnm : CPPname list =
+  get_virtual_bases s cnm : class_spec list =
     mapPartial (\ (cnm, b, prot). if b then SOME cnm else NONE)
                (cinfo s cnm).ancestors
 `;
@@ -510,8 +510,8 @@ val constituent_offsets_def = Define`
 
 val init_order_offsets_def = Define`
   init_order_offsets s mdp cnm =
-    let virts : CPPname list = if mdp then get_virtual_bases s cnm else [] in
-    let dbases : CPPname list  = get_direct_bases s cnm in
+    let virts = if mdp then get_virtual_bases s cnm else [] in
+    let dbases  = get_direct_bases s cnm in
     let nsds = THE (nsdmembers s cnm) in
     let all = MAP VirtualBase virts ++ MAP DBase dbases ++
               MAP (UNCURRY NSD) nsds in

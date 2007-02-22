@@ -5,10 +5,12 @@ open aggregatesTheory memoryTheory
 
 val _ = new_theory "concrete_tests"
 
+val cname_def = Define`cname = Base (CName "c")`;
+
 val state1_def = Define`
   state1 =
     ARB with classmap updated_by
-      (\fm. fm |+ (Base "c",
+      (\fm. fm |+ (cname,
                    SOME (<| fields := [(FldDecl "foo" (Signed Char),F, Public);
                                       (FldDecl "bar" (Signed Int), F, Public)];
                            ancestors := [] |>, {})))
@@ -19,30 +21,30 @@ val simp = SIMP_CONV (srw_ss()) [state1_def]
 
 val state1_applied_base = save_thm(
   "state1_applied_base",
-  CONJ (simp ``state1.classmap ' (Base "c")``)
-       (simp ``deNONE state1.classmap ' (Base "c")``))
+  CONJ (simp ``state1.classmap ' cname``)
+       (simp ``deNONE state1.classmap ' cname``))
 val _ = export_rewrites ["state1_applied_base"]
 
 val base_in_classmap = store_thm(
   "base_in_classmap",
-  ``Base "c" IN FDOM (deNONE state1.classmap) /\
-    Base "c" IN FDOM state1.classmap``,
+  ``cname IN FDOM (deNONE state1.classmap) /\
+    cname IN FDOM state1.classmap``,
   SRW_TAC [][state1_def]);
 val _ = export_rewrites ["base_in_classmap"]
 
 val defined_classes = store_thm(
   "defined_classes",
-  ``Base "c" IN defined_classes state1``,
+  ``cname IN defined_classes state1``,
   SRW_TAC [][defined_classes_def]);
 val _ = export_rewrites ["defined_classes"]
 
 val cinfo_state1_c = save_thm(
   "cinfo_state1_c",
-  SIMP_CONV (srw_ss()) [cinfo_def] ``cinfo state1 (Base "c")``);
+  SIMP_CONV (srw_ss()) [cinfo_def] ``cinfo state1 cname``);
 val _ = export_rewrites ["cinfo_state1_c"]
 
 val nsdmembers_state1 = SIMP_CONV (srw_ss()) [nsdmembers_def]
-                           ``nsdmembers state1 (Base "c")``
+                           ``nsdmembers state1 cname``
 
 val fmap_lemma = prove(
   ``!f. { c | ?v. c IN FDOM f /\ (f ' c = SOME v) } = FDOM (deNONE f)``,
@@ -58,10 +60,10 @@ val fmap_lemma = prove(
 
 val gcc = store_thm(
   "gcc",
-  ``get_class_constituents state1 mdp (Base "c") =
+  ``get_class_constituents state1 mdp cname =
       [NSD "foo" (Signed Char); NSD "bar" (Signed Int)]``,
   SRW_TAC [][get_class_constituents_def] THEN
-  Q.SPECL_THEN [`state1`, `Base "c"`] MP_TAC
+  Q.SPECL_THEN [`state1`, `cname`] MP_TAC
                get_class_constituents0_def THEN
   SIMP_TAC (srw_ss()) [nsdmembers_state1, get_direct_bases_def,
                        get_virtual_bases_def] THEN
@@ -77,7 +79,7 @@ val sizeofmap = save_thm(
     SIMP_CONV (srw_ss()) [sizeofmap_def, nsdmembers_state1,
                           fmap_lemma, LET_THM, base_in_classmap,
                           finite_mapTheory.FUN_FMAP_DEF, gcc]
-              ``sizeofmap state1 mdp ' (Base "c")``)
+              ``sizeofmap state1 mdp ' cname``)
 
 val FDOM_sizeofmap = store_thm(
   "FDOM_sizeofmap",
@@ -86,7 +88,7 @@ val FDOM_sizeofmap = store_thm(
 
 val base_not_empty = store_thm(
   "base_not_empty",
-  ``~empty_class (sizeofmap state1) mdp (Base "c")``,
+  ``~empty_class (sizeofmap state1) mdp cname``,
   ONCE_REWRITE_TAC [empty_class_cases] THEN
   SRW_TAC [][sizeofmap]);
 
@@ -102,7 +104,8 @@ val sizeof_char = prove(``sizeof mdp m (Signed Char) sz = (sz = 1)``,
                         SRW_TAC [][bit_size_def])
 
 val align_lemma = prove(
-  ``align (sizeofmap state1) mdp (Class (Base "c")) a = (a = int_align)``,
+  ``align (sizeofmap state1) mdp (Class cname) a =
+    (a = int_align)``,
   ONCE_REWRITE_TAC [align_cases] THEN
   SIMP_TAC (srw_ss() ++ DNF_ss)
            [sizeofmap, FDOM_sizeofmap, base_in_classmap,
@@ -132,7 +135,7 @@ val offset_1 = prove(
 
 val sizeof_c = store_thm(
   "sizeof_c",
-  ``sizeof mdp (sizeofmap state1) (Class (Base "c")) sz =
+  ``sizeof mdp (sizeofmap state1) (Class cname) sz =
         (sz = roundup int_align (int_align + int_size))``,
   ONCE_REWRITE_TAC [sizeof_cases] THEN
   SRW_TAC [][sizeofmap, base_not_empty, FDOM_sizeofmap, align_lemma,

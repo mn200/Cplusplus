@@ -42,19 +42,18 @@ val _ = Hol_datatype `
            | LVC of (CExpr -> CExpr) => se_info
 `;
 
-(* term taken from grammar, as in 12.6.2 *)
-val _ = type_abbrev("mem_initializer", ``:CPPname # CExpr list option``)
+(* terms taken from grammar, as in 12.6.2 *)
+val _ = Hol_datatype`mem_initializer_id = MI_C of class_spec
+                                        | MI_fld of string
+`;
+
+val _ = type_abbrev("mem_initializer",
+                    ``:mem_initializer_id # CExpr list option``)
 
 val _ = Hol_datatype `varlocn = RefPlace of num option => CPPname
                               | ObjPlace of num
 `
 
-val _ = Hol_datatype `TempArg = Template of CPPname
-                              | TypeName of CPPname
-                              | ExprArg of CExpr`;
-
-val _ = Hol_datatype `decl_type = CTy of CType
-                                | TempCall of CPPname => TempArg list`
 
 (* a catch block can omit the parameter entirely (...), or can provide
    a lone type, or can provide a name and a type *)
@@ -85,10 +84,10 @@ val _ = Hol_datatype`
 
   ;
 
-  var_decl = VDec of decl_type => CPPname
-           | VDecInit of decl_type => CPPname => initializer
+  var_decl = VDec of CPP_Type => CPPname
+           | VDecInit of CPP_Type => CPPname => initializer
                (* init is the initial form of the initialising declarator *)
-           | VDecInitA of decl_type => varlocn => initializer
+           | VDecInitA of CPP_Type => varlocn => initializer
                (* when space has been allocated, the form becomes the
                   VDecInitA, where the name is replaced by the location
                   of the start of the object in memory.  If the object is
@@ -96,7 +95,7 @@ val _ = Hol_datatype`
                   reference's name with an optional address for any
                   enclosing class.   *)
 
-           | VStrDec of string => class_info option
+           | VStrDec of class_spec => class_info option
 
            | VException of CExpr
 
@@ -127,13 +126,12 @@ val _ = Hol_datatype`
                             mem_initializer list =>
                             CStmt option
            | Destructor of CStmt option;
-                            (* bool = user-defined or not *)
 
   class_info =
              <| fields : (class_entry # bool # protection) list ;
                    (* bool in fields is true for static members *)
 
-                ancestors : (CPPname # bool # protection) list
+                ancestors : (class_spec # bool # protection) list
                    (* bool indicates virtuality *)
              |> ;
 
@@ -262,15 +260,22 @@ val exception_stmt_def = Define`
   (exception_stmt s = F)
 `;
 
+val _ = Hol_datatype`
+  template_parameter = TempType of string
+                     | TempParam of CPP_Type => string
+                     | TempTemp of string => template_parameter list
+`;
+
 (* external declarations can appear at the top level of a translation unit *)
 val _ = Hol_datatype`
-  ext_decl = FnDefn of CPP_Type => CPPname => (string # CPP_Type) list => CStmt
+  ext_decl = FnDefn of CPP_Type => CPPname => (string # CPP_Type) list =>
+                       CStmt
            | Decl of var_decl
            | ClassConDef of CPPname => (string # CPP_Type) list =>
                             mem_initializer list =>
                             CStmt
            | ClassDestDef of CPPname => CStmt
-           | TemplateDef of (CPP_Type # string) list => ext_decl
+           | TemplateDef of template_parameter list => ext_decl
 `;
 
 

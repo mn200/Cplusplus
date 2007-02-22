@@ -63,7 +63,8 @@ val _ = type_abbrev("state_class_info",
                     ``:(class_info # implicitly_definable set) option``)
 
 
-val _ = type_abbrev("construction_locn", ``:addr # CPPname # CPPname list``)
+val _ = type_abbrev("construction_locn",
+                    ``:addr # class_spec # class_spec list``)
 
 val _ = Hol_datatype`
   constructed = NormalConstruct of construction_locn
@@ -93,7 +94,7 @@ val _ = Hol_datatype
               fndecode : byte list |-> fnid ;
                          (* map inverting fnencode *)
 
-              gclassmap: CPPname |-> state_class_info ;
+              gclassmap: class_spec |-> state_class_info ;
                          (* the global map from class names to class info;
                             can be dynamically overridden by local class
                             declarations *)
@@ -102,7 +103,7 @@ val _ = Hol_datatype
                          (* global map giving types to global variables.
                             Can be dynamically overridden by local variables *)
 
-              gvarmap  : CPPname |-> (num # CPPname list) ;
+              gvarmap  : CPPname |-> (num # class_spec list) ;
                          (* global map giving adddresses and paths for
                             global vars; can be dynamically overridden.  See
                             varmap for explanation of why paths are necessary
@@ -114,20 +115,20 @@ val _ = Hol_datatype
               locmap   : addr -> byte ;
                          (* memory.  Domain should be ( void * ) words *)
 
-              stack    : ((CPPname |-> state_class_info) #
+              stack    : ((class_spec |-> state_class_info) #
                           (CPPname |-> CPP_Type) #
-                          (CPPname |-> (addr # CPPname list)) #
+                          (CPPname |-> (addr # class_spec list)) #
                           CExpr option) list ;
                          (* stack of class, type and var info.  Updated
                             as blocks are entered and left *)
 
-              classmap : CPPname |-> state_class_info;
+              classmap : class_spec |-> state_class_info;
                          (* local, dynamically changing class map *)
 
               typemap  : CPPname |-> CPP_Type ;
                          (* local information about types of variables *)
 
-              varmap   : CPPname |-> (num # CPPname list) ;
+              varmap   : CPPname |-> (num # class_spec list) ;
                          (* address and path information for local variables.
                             The path information has to be present because
                             variables can be references, and these can be
@@ -215,7 +216,7 @@ val install_global_maps_def = Define`
 (* argument to ptr_encode are same as those to LVal *)
 val _ = new_constant(
   "ptr_encode",
-  ``:state -> num -> CPP_Type -> CPPname list -> byte list option``)
+  ``:state -> num -> CPP_Type -> class_spec list -> byte list option``)
 
 val default_path_def = Define`
   (default_path (Class cn) = [cn]) /\

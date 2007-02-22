@@ -21,8 +21,8 @@ val _ = new_theory "aggregates";
 
 val _ = Hol_datatype`
   class_constituent = NSD of string => CPP_Type
-                    | DBase of CPPname
-                    | VirtualBase of CPPname
+                    | DBase of class_spec
+                    | VirtualBase of class_spec
 `;
 
 val cc_case_MONO = store_thm(

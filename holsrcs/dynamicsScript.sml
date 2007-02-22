@@ -260,7 +260,7 @@ val construct_ctor_pfx_def = Define`
       let nm = LAST pth
       in
          (* F T records, no, not most-derived, yes, a subobject *)
-         case lookup nm of
+         case lookup (MI_C nm) of
            NONE -> (* 12.6.2 p4 - default initialisation *)
              [initA_constructor_call F T nm (a + a') []]
         || SOME (nm',NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
@@ -275,7 +275,7 @@ val construct_ctor_pfx_def = Define`
       let (c,a') = THE (FINDL (\ (c, off). c = NSD nsdname nsdty) allccs)
       in
           (* T T pairs below record: yes, most-derived, yes, a subobject *)
-          case lookup (Base nsdname) of
+          case lookup (MI_fld nsdname) of
              NONE -> (* 12.6.2 p4 - default initialisation *)
                (@inits. default_init s T T nsdty (a + a') inits)
           || SOME(nm', NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
@@ -289,10 +289,9 @@ val construct_ctor_pfx_def = Define`
     virtuals ++ bases ++ nsds
 `;
 
-val callterminate = ``FnApp (Var <| base := "terminate";
-                                    absolute := T;
-                                    nspaces := ["std"];
-                                    classes := [] |>)
+val callterminate = ``FnApp (Var  (<| absolute := T;
+                                      nspaces := ["std"];
+                                      classes := [] |>, "terminate"))
                             []``
 
 val realise_destructor_calls_def = Define`
@@ -901,7 +900,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* TODO: handle return type casting *)
 (!ftype args pdecls params se s0 fnid rtype body.
      (find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body) /\
-     (pdecls = MAP (\ ((n,ty),a). VDecInit (CTy ty)
+     (pdecls = MAP (\ ((n,ty),a). VDecInit ty
                                            (Base n)
                                            (CopyInit (mExpr a base_se)))
                    (ZIP (params, args)))
@@ -924,7 +923,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 *)
 (!fnid ftype a cname args rtype se0 s0 p params pdecls body this.
      (find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body) /\
-     (pdecls = MAP (\ ((n,ty),a). VDecInit (CTy ty)
+     (pdecls = MAP (\ ((n,ty),a). VDecInit ty
                                            (Base n)
                                            (CopyInit (mExpr a base_se)))
                    (ZIP (params, args))) /\
@@ -946,7 +945,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: constructor-function-call *)
 (!cnm mdp subp pdecls a args se0 params s0 mem_inits this body cpfx.
      find_constructor_info s0 cnm args params mem_inits body /\
-     (pdecls = MAP (\ ((n,ty),a). VDecInit (CTy ty)
+     (pdecls = MAP (\ ((n,ty),a). VDecInit ty
                                            (Base n)
                                            (CopyInit (mExpr a base_se)))
                    (ZIP (params, args))) /\
@@ -1125,7 +1124,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mStmt (Catch (Throw exn) ((NONE, hnd_body) :: rest)) c) s0
           (s0 with current_exn := SOME e,
-           mStmt (Block F [VDecInit (CTy (value_type e))
+           mStmt (Block F [VDecInit (value_type e)
                                     (Base " no name ")
                                     (CopyInit (mExpr e base_se))]
                           [hnd_body; ClearExn]) c))
@@ -1141,7 +1140,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mStmt (Catch (Throw exn) ((SOME(pnameopt, pty), hnd_body) :: rest)) c)
           s0
           (s0 with current_exn := SOME e,
-           mStmt (Block F [VDecInit (CTy (value_type e))
+           mStmt (Block F [VDecInit (value_type e)
                                     pname
                                     (CopyInit (mExpr e base_se))]
                           [hnd_body; ClearExn]) c))
@@ -1367,12 +1366,13 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: block-vstrdec *)
 (* TODO: handle local classes *)
-(!name info s vds sts c.
-     T
+(!name nns b info s vds sts c.
+     (name = (nns, CName b))
+          (* i.e., this can't be a template specialisation *)
    ==>
      ^mng (mStmt (Block T (VStrDec name info :: vds) sts) c) s
           (s with classmap
-           updated_by (\sm. sm |+ (Base name,
+           updated_by (\sm. sm |+ (name,
                                    case info of NONE -> NONE
                                              || SOME i -> SOME (i,{}))),
            mStmt (Block T vds sts) c))
@@ -1409,18 +1409,19 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
       if the duplication occurred within a single translation unit, or by
       the linker if it occurred across multiple units)
 *)
-(!rettype userdefs name params body edecls s0 s cinfo staticp prot.
+(!rettype userdefs name params body edecls s0 s cinfo staticp prot base.
      is_class_name name /\
+     (base = SND name) /\
      (SOME (cinfo, userdefs) = s0.classmap ' (class_part name)) /\
-     MEM (FldDecl name.base (Function rettype (MAP SND params)),
+     MEM (FldDecl base (Function rettype (MAP SND params)),
           staticp, prot)
          cinfo.fields /\
      (!bdy' rettype' statp prot pms'.
-         MEM (CFnDefn rettype' name.base pms' bdy', statp, prot) cinfo.fields
+         MEM (CFnDefn rettype' base pms' bdy', statp, prot) cinfo.fields
            ==>
          ~(MAP SND pms' = MAP SND params)) /\
      install_member_functions (class_part name) s0
-                              [(CFnDefn rettype name.base params body,
+                              [(CFnDefn rettype base params body,
                                 staticp, prot)]
                               s
    ==>
@@ -1447,7 +1448,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
      emeaning
         (Decl (VStrDec name NONE) :: edecls) s0
         (copy2globals
-           (s0 with classmap updated_by (\sm. sm |+ (Base name, NONE))),
+           (s0 with classmap updated_by (\sm. sm |+ (name, NONE))),
          edecls))
 
    /\
@@ -1455,12 +1456,12 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 (* RULE-ID: global-class-definition *)
 (!s0 s name info0 userdefs info edecls.
      ((info,userdefs) = define_default_specials info0) /\
-     install_member_functions (Base name) s0 info.fields s
+     install_member_functions name s0 info.fields s
    ==>
      emeaning (Decl (VStrDec name (SOME info0)) :: edecls) s0
               (copy2globals
                   (s with <| classmap updated_by
-                                      (\sm. sm |+ (Base name,
+                                      (\sm. sm |+ (name,
                                                    SOME (info, userdefs))) |>),
                edecls))
 `;
