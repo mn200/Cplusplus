@@ -71,7 +71,6 @@ val _ = Hol_datatype`
               | SubObjConstruct of construction_locn
 `;
 
-
 val _ = Hol_datatype
   `state = <| allocmap : addr -> bool ;
                          (* the set of stack-allocated addresses *)
@@ -94,7 +93,7 @@ val _ = Hol_datatype
               fndecode : byte list |-> fnid ;
                          (* map inverting fnencode *)
 
-              gclassmap: class_spec |-> state_class_info ;
+              gclassmap: CPPname |-> state_class_info ;
                          (* the global map from class names to class info;
                             can be dynamically overridden by local class
                             declarations *)
@@ -122,8 +121,11 @@ val _ = Hol_datatype
                          (* stack of class, type and var info.  Updated
                             as blocks are entered and left *)
 
-              classmap : class_spec |-> state_class_info;
+              classmap : CPPname |-> state_class_info;
                          (* local, dynamically changing class map *)
+
+              class_templates : CPPname |->
+                                (template_parameter list # state_class_info) ;
 
               typemap  : CPPname |-> CPP_Type ;
                          (* local information about types of variables *)

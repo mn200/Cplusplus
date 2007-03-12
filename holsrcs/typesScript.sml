@@ -12,8 +12,39 @@ val _ = new_theory "types";
 
 val _ = Hol_datatype `basic_integral_type = Char | Short | Int | Long`;
 
-val _ = Hol_datatype
-  `CPP_Type =
+val _ = type_abbrev ("TopName", ``:bool # string list # string``)
+
+val _ = Hol_datatype `
+
+   (* a CPP_ID may denote a type or an object *)
+   CPP_ID = IDVar of string
+          | IDFld of CPP_ID => string
+          | TempCall of TemplateID => TemplateArg list
+          | IDConstant of TopName
+
+   ;
+
+   TemplateID = TemplateConstant of TopName
+              | TemplateVar of string
+
+   ;
+
+   TemplateArg = TType of CPP_Type
+               | TTemp of TemplateID
+               | TVal of TemplateValueArg
+
+   ;
+
+   TemplateValueArg = TNum of int
+                    | TObj of CPP_ID
+                        (* string is name of suitable global (one that has
+                           linkage etc).  It might be nested inside name-
+                           spaces, or enclosing classes. *)
+                    | TMPtr of CPP_ID => CPP_Type
+
+   ;
+
+   CPP_Type =
      Void |
      BChar (* "Basic char" *) |
      Bool |
@@ -21,63 +52,31 @@ val _ = Hol_datatype
                      for an existing type *)
      Unsigned of basic_integral_type |
      Signed of basic_integral_type |
-     Class of (nested_name_specifier # class_name) |
+     Class of CPP_ID  (* no variables inside! *)|
      Float |
      Double |
      LDouble |
      Ptr of CPP_Type |
-     MPtr of (nested_name_specifier # class_name) => CPP_Type |
+     MPtr of CPP_ID => CPP_Type |
        (* member pointer *)
      Ref of CPP_Type |
      Array of CPP_Type => num |
      Function of CPP_Type => CPP_Type list |
-     Const of CPP_Type
-
-  ;
-
-  class_name = CName of string
-             | TempCall of string => temp_arg list
-
-  ;
-
-  temp_arg = TType of CPP_Type
-           | TTemp of (nested_name_specifier # string)
-           | TVal of temp_value_arg
-
-  ;
-
-  temp_value_arg = TNum of int
-                 | TPName of string
-                 | TObj of (nested_name_specifier # string)
-                 | TMPtr of (nested_name_specifier # class_name) => string
-
-  ;
-
-  nested_name_specifier = <| absolute : bool ;
-                             nspaces : string list ;
-                             classes : class_name list
-                          |>
+     Const of CPP_Type |
+     TypeID of CPP_ID
 `;
 
-val _ = type_abbrev("CPPname", ``:nested_name_specifier # string``)
-val _ = type_abbrev("class_spec", ``:nested_name_specifier # class_name``)
+val _ = type_abbrev("CPPname", ``:CPP_ID``)
+val _ = type_abbrev("class_spec", ``:CPP_ID``)
 
 val Base_def = Define`
-  Base n = (<| absolute := F; nspaces := []; classes := [] |>, n)
+  Base n = IDConstant (F, [], n)
 `;
 
-val Member_def = Define`
-  Member ((nns,cnm) : class_spec) (fld : string) : CPPname =
-    (nns with classes updated_by (\cs. cs ++ [cnm]), fld)
-`;
-
-val is_class_name_def = Define`
-  is_class_name ((nns, nm) : CPPname) = ~(nns.classes = [])
-`;
+val _ = overload_on ("Member", ``IDFld``)
 
 val class_part_def = Define`
-  class_part ((nns, nm) : CPPname) : class_spec =
-    (nns with classes updated_by FRONT, LAST nns.classes)
+  class_part (Member tyid fld) = tyid
 `;
 
 val ptrdiff_t = Rsyntax.new_specification {
@@ -452,7 +451,7 @@ val wf_type_defn = Hol_defn "wf_type" `
 val (wf_type_def, wf_type_ind) = Defn.tprove(wf_type_defn,
   WF_REL_TAC `measure (CPP_Type_size o SND)` THEN
   SRW_TAC [ARITH_ss][] THEN Induct_on `a` THEN
-  SRW_TAC [][definition "CPP_Type_size_def"] THEN
+  SRW_TAC [][definition "CPP_ID_size_def"] THEN
   FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []);
 
 val _ = save_thm("wf_type_def", wf_type_def)

@@ -108,7 +108,7 @@ val _ = Hol_datatype`
   (* TODO: allow declaration of friends *)
   class_entry =
 
-             CFnDefn of CPP_Type => string => (string # CPP_Type) list =>
+             CFnDefn of CPP_Type => CPP_ID => (string # CPP_Type) list =>
                         CStmt
                (* function definitions within a class must be of member
                   function for that class, it is not legit to write
@@ -116,10 +116,17 @@ val _ = Hol_datatype`
                         class B { int f(void); };
                         int B::f(void) { ... }
                      }
-                  so the first string below has to be string and not
-                  CPPname.   See 9.3 p2 : "a member function definition that
-                  occurs outside of the class definition shall appear in a
-                  namespace scope enclosing the class definition".  *)
+
+                  so the first name above has to be a "simple" name
+                  and not a structured CPPname (no namespaces, no
+                  enclosing classes).  See 9.3 p2 : "a member function
+                  definition that occurs outside of the class
+                  definition shall appear in a namespace scope
+                  enclosing the class definition".
+
+                  On the other hand, the name can be a template, which is
+                  why there is a CPP_ID there.
+                *)
 
            | FldDecl of string => CPP_Type
            | Constructor of (string # CPP_Type) list =>
@@ -261,9 +268,17 @@ val exception_stmt_def = Define`
 `;
 
 val _ = Hol_datatype`
+  template_type = ClassTT
+                | ValueParam of CPP_Type
+                | TemplateTemp of template_type list
+                   (* the "return type" for a template template is always
+                      a class *)
+`;
+
+val _ = Hol_datatype`
   template_parameter = TempType of string
                      | TempParam of CPP_Type => string
-                     | TempTemp of string => template_parameter list
+                     | TempTemp of string => template_type list
 `;
 
 (* external declarations can appear at the top level of a translation unit *)
@@ -275,7 +290,8 @@ val _ = Hol_datatype`
                             mem_initializer list =>
                             CStmt
            | ClassDestDef of CPPname => CStmt
-           | TemplateDef of template_parameter list => ext_decl
+           | TemplateDef of (template_parameter # TemplateArg option) list =>
+                            ext_decl
 `;
 
 

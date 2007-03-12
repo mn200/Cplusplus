@@ -19,8 +19,156 @@ open statesTheory aggregatesTheory
 
 val _ = new_theory "class_info";
 
+val is_class_name_def = Define`
+  is_class_name st (nns, nm) =
+    ~(nns.idents = []) /\
+    case LAST nns.idents of
+       CName s -> (nns with idents updated_by FRONT, s) IN FDOM st.classmap
+    || _ -> F
+`;
+
+(* instantiate a type with template arguments *)
+val type_inst_def = Define`
+  (type_inst sigma (TypeName cspec) = cspec_inst sigma cspec) /\
+  (type_inst sigma (Ptr ty) = Ptr (type_inst sigma ty)) /\
+  (type_inst sigma (MPtr nm ty) =
+      MPtr (dest_class (cspec_inst sigma nm)) (type_inst sigma ty)) /\
+  (type_inst sigma (Ref ty) = Ref (type_inst sigma ta)) /\
+  (type_inst sigma (Array ty n) = Array (type_inst sigma ty) n) /\
+  (type_inst sigma (Function ty tylist) =
+      Function (type_inst sigma ty) (MAP (type_inst sigma) tylist)) /\
+  (type_inst sigma (Const ty) = Const (type_inst sigma ty)) /\
+  (type_inst sigma ty = ty)
+
+    /\
+
+  (* instantiates what is really a name, but returns it as a class type *)
+  (cspec_inst sigma (nns, cnm) =
+     if nns.absolute then
+       Class (nns_inst sigma nns, cnm_temparg_only_inst sigma cnm)
+     else if nns.idents = [] then
+       Class (nns, SND (dest_class (cname_inst sigma cnm)))
+     else let outer = HD nns.idents in
+          let rest0 = TL nns.idents in
+          let rest = MAP (cnm_temparg_only_inst sigma) rest0
+          in
+            Class
+              (<| idents := SND (dest_class (cname_inst sigma outer)) :: rest;
+                  absolute := F |>,
+               cnm_temparg_only_inst sigma cnm))
+
+     /\
+
+  (* likewise, returns an instantiated name as a type *)
+  (cname_inst sigma (CName s) =
+     case FINDL (\ (p,a). p = TempType s) sigma of
+        NONE -> Class (Base (CName s))
+     || SOME (p, a) -> (case a of TType ty -> ty || x2 -> ARB)) /\
+  (cname_inst sigma (TempCall temp args0) =
+     let args = MAP (temparg_inst sigma) args0
+     in
+         Class (Base (TempCall (tempname_inst sigma temp) args)))
+
+     /\
+
+  (tempname_inst sigma (nns, tempnm) =
+       (* don't need to instantiate nns here because it can't include
+          any template applications: templates can't return templates, and
+          the name we're looking at is a template call *)
+       if nns.absolute \/ ~(nns.idents = []) then (nns,tempnm)
+       else
+         case FINDL (\ (p,a). ?argtys. p = TempTemp tempnm argtys) sigma of
+          NONE -> (nns,tempnm)
+       || SOME (p, a) -> case a of TTemp tynm -> tynm || x3 -> ARB)
+
+     /\
+
+   (cnm_temparg_only_inst sigma (CName s) = CName s) /\
+   (cnm_temparg_only_inst sigma (TempCall temp args) =
+      TempCall temp (MAP (temparg_inst sigma) args))
+
+     /\
+
+   (* only template arguments *)
+   (nns_inst sigma nns =
+     nns with idents updated_by MAP (cnm_temparg_only_inst sigma))
+
+     /\
+
+   (temparg_inst sigma (TType ty) = TType (type_inst sigma ty)) /\
+   (temparg_inst sigma (TTemp tnm) = TTemp (tempname_inst sigma tnm)) /\
+   (temparg_inst sigma (TVal tva) = TVal (tempval_inst sigma tva))
+
+     /\
+
+   (tempval_inst sigma (TNum i) = TNum i) /\
+   (tempval_inst sigma (TPName s) =
+      case FINDL (\ (p,a). temp_param_name p = s) of
+         NONE -> TPName s
+      || SOME (p,a) -> a) /\
+   (tempval_inst sigma (TObj (nns, objname)) =
+`;
+
+(* instantiate a state_class_info value using a parameters-argument list *)
+val cinfo_inst_def = Define`
+
+  (cinfo_inst sigma ci = <| fields updated_by
+                             MAP (\ (ce,b,p). (centry_inst sigma ce, b, p));
+                            ancestors updated_by
+                             MAP (\ (cs,b,p). (cspec_inst sigma cs, b, p)) |>)
+
+    /\
+
+  (centry_inst sigma (CFnDefn retty nm params body) =
+     CFnDefn (type_inst sigma retty)
+             nm
+             (MAP (\ (nm,ty). (nm, type_inst sigma ty)) params)
+             (stmt_inst sigma body))  /\
+  (centry_inst sigma (FldDecl nm ty) = FldDecl nm (type_inst sigma ty)) /\
+  (centry_inst sigma (Constructor params meminits bodyopt) =
+     Constructor (MAP (\ (nm,ty). (nm, type_inst sigma ty)) params)
+                 (MAP (mem_init_inst sigma) meminits)
+                 (OPTION_MAP (stmt_inst sigma) bodyopt)) /\
+  (centry_inst sigma (Destructor bodyopt) =
+     Destructor (OPTION_MAP (stmt_inst sigma) bodyopt))
+
+    /\
+
+`;
+
+val mk_inst_def = Define`
+  (mk_inst [] args = []) /\ (* args will always be empty at this point *)
+  (mk_inst ((p, dflt) :: prest) (a::args) =
+     (p, a) :: mk_inst (inst_inst p a prest) args)  /\
+  (mk_inst ((p,dflt) :: prest) [] =
+     (p, THE dflt) :: mk_inst (inst_inst [(p,THE dflt)] prest) []) /\
+
+  (inst_inst p a [] = []) /\
+  (inst_inst p a (pm::pms) = inst_inst1 p a pm :: inst_inst p a pms) /\
+
+  (inst_inst1 (TempType p) (TType ty) (TempType p', NONE) =
+     (TempType p', NONE)) /\
+  (inst_inst1 (TempType p) (TType ty) (TempType p', SOME (TType ty')) =
+     (TempType p', SOME (TType (type_inst [(TempType p, TType ty)] ty')))) /\
+  (inst_inst1 (TempType p) (TType ty) (TempParam ty' n, NONE) =
+     (TempParam (type_inst [(TempType p, TType ty)] ty') n, NONE)) /\
+  (inst_inst1 (TempType p) (TType ty) (TempParam ty' n, SOME (TVal tval)) =
+     (TempParam (type_inst [(TypeType p, TType ty)] ty') n,
+      SOME (TVal (inst_tval
+
+`;
+
+
 val cinfo_def = Define`
-  cinfo s cnm : class_info = FST (THE (s.classmap ' cnm))
+  cinfo s ((ns, nm) : class_spec) : class_info =
+     case nm of
+        CName s -> FST (THE (s.classmap ' (ns,nm)))
+     || TempCall s args ->
+          let (params,info0) = s.class_templates ' (ns,s) in
+          let info1 = FST (THE info0) in
+          let inst = inst_inst params args in
+          in
+              cinfo_inst inst info1
 `;
 
 (* set of a state's fully defined class *)

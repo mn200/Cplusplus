@@ -13,7 +13,7 @@ val LENGTH_GENLIST = rich_listTheory.LENGTH_GENLIST
 val slice_upd = new_definition (
   "slice_upd",
   ``slice_upd lmp loc v x =
-      (loc <= x /\ x < loc + LENGTH v => EL (x - loc) v | lmp x)``)
+      (if loc <= x /\ x < loc + LENGTH v then EL (x - loc) v else lmp x)``)
 val pull_slice = new_definition (
   "pull_slice",
   ``pull_slice lmp loc sz = GENLIST (\n. lmp (loc + n)) sz``);
@@ -138,7 +138,7 @@ val append_genlist = store_thm(
   "append_genlist",
   ``!l2 l1.
        APPEND l1 l2 =
-       GENLIST (\n. n < LENGTH l1 => EL n l1 | EL (n - LENGTH l1) l2)
+       GENLIST (\n. if n < LENGTH l1 then EL n l1 else EL (n - LENGTH l1) l2)
                (LENGTH l1 + LENGTH l2)``,
   SingleStep.Induct THENL [
     SIMP_TAC hol_ss [] THEN GEN_TAC THEN

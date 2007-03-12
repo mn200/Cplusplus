@@ -1391,7 +1391,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
 (* RULE-ID: global-fndefn *)
 (!s0 s fval name rettype params body ftype edecls.
      installfn s0 Ptr rettype name params body fval s /\
-     ~(name IN FDOM s.typemap) /\ ~is_class_name name /\
+     ~(name IN FDOM s.typemap) /\ ~is_class_name s0 name /\
      (ftype = Function rettype (MAP SND params))
    ==>
      emeaning
@@ -1410,7 +1410,7 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
       the linker if it occurred across multiple units)
 *)
 (!rettype userdefs name params body edecls s0 s cinfo staticp prot base.
-     is_class_name name /\
+     is_class_name s0 name /\
      (base = SND name) /\
      (SOME (cinfo, userdefs) = s0.classmap ' (class_part name)) /\
      MEM (FldDecl base (Function rettype (MAP SND params)),
