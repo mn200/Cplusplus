@@ -138,8 +138,8 @@ val installfn_def = Define`
    taken. *)
 val imemfn_def = Define`
   (imemfn cnm s0 [] s = (s0 = s)) /\
-  (imemfn cnm s0 ((FldDecl nm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
-  (imemfn cnm s0 ((CFnDefn retty nm params body, statp, p) :: rest) s =
+  (imemfn cnm s0 ((FldDecl flnm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
+  (imemfn cnm s0 ((CFnDefn retty nm params (SOME body), statp, p) :: rest) s =
      if statp then
        ?s' fval. installfn s0 Ptr retty (Member cnm nm) params body fval s' /\
                  imemfn cnm s' rest s
@@ -148,6 +148,8 @@ val imemfn_def = Define`
                            fval
                            s' /\
                  imemfn cnm s' rest s) /\
+  (imemfn cnm s0 ((CFnDefn retty nm params NONE, statp, p) :: rest) s =
+     imemfn cnm s0 rest s) /\
   (imemfn cnm s0 ((Constructor _ _ _, _, _) :: rest) s =
      imemfn cnm s0 rest s) /\
   (imemfn cnm s0 ((Destructor _, b, p) :: rest) s = imemfn cnm s0 rest s)
@@ -289,9 +291,7 @@ val construct_ctor_pfx_def = Define`
     virtuals ++ bases ++ nsds
 `;
 
-val callterminate = ``FnApp (Var  (<| absolute := T;
-                                      nspaces := ["std"];
-                                      classes := [] |>, "terminate"))
+val callterminate = ``FnApp (Var  (IDConstant (T, ["std"], "terminate")))
                             []``
 
 val realise_destructor_calls_def = Define`
@@ -396,7 +396,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      ^mng (mExpr (Cnum n) se) s
-          (s, ev (ECompVal (signed_int (&n)) (Signed Int)) se))
+          (s, ev (ECompVal (signed_int n) (Signed Int)) se))
 
    /\
 
@@ -405,7 +405,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      ^mng (mExpr (Cchar n) se) s
-          (s, ev (ECompVal (signed_int (&n)) BChar) se))
+          (s, ev (ECompVal (signed_int n) BChar) se))
 
    /\
 
@@ -702,13 +702,13 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* 5.3.1 p2 if the address is taken of a qualified-ident that is actually a
    static member, then a normal address is generated *)
 (!cname fldname se s addr ty cinfo prot pth ptrval userdefs.
-     cname IN FDOM s.classmap /\
+     cname IN FDOM s.classmap /\ object_type ty /\
      (s.classmap ' cname = SOME (cinfo, userdefs)) /\
      MEM (FldDecl fldname ty, T, prot) cinfo.fields /\
-     (s.varmap ' (Member cname fldname) = (addr, pth)) /\
+     (s.varmap ' (IDFld cname (SFName fldname)) = (addr, pth)) /\
      (SOME ptrval = ptr_encode s addr ty pth)
    ==>
-     ^mng (mExpr (MemAddr cname fldname) se) s
+     ^mng (mExpr (MemAddr cname (SFName fldname)) se) s
           (s, ev (ECompVal ptrval (Ptr ty)) se))
 
    /\
@@ -787,7 +787,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      s |- LAST p has least fld -: ftype via p' /\
      (Cflds = THE (nsdmembers s (LAST p'))) /\
      object_type ftype /\
-     lookup_field_info Cflds fld (i,ftype) /\
+     lookup_field_info (MAP (\ (n,ty). (SFName n, ty)) Cflds) fld (i,ftype) /\
      offset (sizeofmap s) (MAP (UNCURRY NSD) Cflds) i offn
    ==>
      ^mng (mExpr (SVar (LVal a (Class cnm) p) fld) se) s
@@ -1366,9 +1366,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: block-vstrdec *)
 (* TODO: handle local classes *)
-(!name nns b info s vds sts c.
-     (name = (nns, CName b))
-          (* i.e., this can't be a template specialisation *)
+(!name info s vds sts c.
+     T
    ==>
      ^mng (mStmt (Block T (VStrDec name info :: vds) sts) c) s
           (s with classmap
@@ -1383,6 +1382,12 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* ----------------------------------------------------------------------
     how to evaluate a sequence of external declarations
    ---------------------------------------------------------------------- *)
+
+(* split a name into a class::fld part *)
+val class_fld_split_def = Define`
+  class_fld_split (IDFld id fld) = (id, fld)
+`;
+
 
 (* if the evaluation can't get the list of external declarations to the
    empty list, this is (implicitly) an occurrence of undefined behaviour *)
@@ -1409,19 +1414,20 @@ val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
       if the duplication occurred within a single translation unit, or by
       the linker if it occurred across multiple units)
 *)
-(!rettype userdefs name params body edecls s0 s cinfo staticp prot base.
+(!rettype userdefs name params body edecls s0 s cinfo staticp prot cpart base.
      is_class_name s0 name /\
-     (base = SND name) /\
-     (SOME (cinfo, userdefs) = s0.classmap ' (class_part name)) /\
-     MEM (FldDecl base (Function rettype (MAP SND params)),
-          staticp, prot)
-         cinfo.fields /\
+     ((cpart, base) = class_fld_split name) /\
+     (SOME (cinfo, userdefs) = s0.classmap ' cpart) /\
+     (?pms'.
+         MEM (CFnDefn rettype base pms' NONE, staticp, prot)
+             cinfo.fields /\
+         (MAP SND pms' = MAP SND params)) /\
      (!bdy' rettype' statp prot pms'.
          MEM (CFnDefn rettype' base pms' bdy', statp, prot) cinfo.fields
            ==>
          ~(MAP SND pms' = MAP SND params)) /\
-     install_member_functions (class_part name) s0
-                              [(CFnDefn rettype base params body,
+     install_member_functions cpart s0
+                              [(CFnDefn rettype base params (SOME body),
                                 staticp, prot)]
                               s
    ==>

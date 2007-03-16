@@ -14,18 +14,24 @@ val _ = Hol_datatype `basic_integral_type = Char | Short | Int | Long`;
 
 val _ = type_abbrev ("TopName", ``:bool # string list # string``)
 
+val _ = Hol_datatype`
+  TemplateID = TemplateConstant of TopName
+             | TemplateVar of string (* can have a template name (a TopName)
+                                        substituted for this *)
+`;
+
 val _ = Hol_datatype `
 
    (* a CPP_ID may denote a type or an object *)
-   CPP_ID = IDVar of string
-          | IDFld of CPP_ID => string
-          | TempCall of TemplateID => TemplateArg list
+   CPP_ID = IDVar of string (* can have a type substituted for this *)
+          | IDFld of CPP_ID => StaticField
+          | IDTempCall of TemplateID => TemplateArg list
           | IDConstant of TopName
 
    ;
 
-   TemplateID = TemplateConstant of TopName
-              | TemplateVar of string
+   StaticField = SFTempCall of string => TemplateArg list
+               | SFName of string
 
    ;
 
@@ -41,6 +47,10 @@ val _ = Hol_datatype `
                            linkage etc).  It might be nested inside name-
                            spaces, or enclosing classes. *)
                     | TMPtr of CPP_ID => CPP_Type
+                    | TVAVar of string (* => CPP_Type *)
+                        (* can have a value (of the given type)
+                           substituted for this *)
+
 
    ;
 
@@ -78,6 +88,99 @@ val _ = overload_on ("Member", ``IDFld``)
 val class_part_def = Define`
   class_part (Member tyid fld) = tyid
 `;
+
+val tid_namespaces_def = Define`
+  (tid_namespaces (TemplateVar tv) = (F, [])) /\
+  (tid_namespaces (TemplateConstant (b, list, n)) = (b, list))
+`;
+
+val namespaces_def = Define`
+  (id_namespaces (IDConstant (b, list, n)) = (b, list)) /\
+  (id_namespaces (IDVar s) = (F, [])) /\
+  (id_namespaces (IDTempCall tid targs) = tid_namespaces tid) /\
+  (id_namespaces (IDFld id fld) = id_namespaces id)
+`;
+
+val _ = Hol_datatype `tvar_sort = TempV of string
+                                | TypeV of string
+                                | ObjV of string`
+
+val tid_free_vars_def = Define`
+  (tid_free_vars (TemplateVar tv) = {TempV tv}) /\
+  (tid_free_vars (TemplateConstant trip) = {})
+`;
+
+val type_free_vars_defn = Hol_defn "type_free_vars" `
+  (id_free_vars (IDConstant trip) = {}) /\
+  (id_free_vars (IDVar s) = {TypeV s}) /\
+  (id_free_vars (IDTempCall tid targs) =
+     tid_free_vars tid UNION
+     FOLDL (\acc targ. acc UNION targ_free_vars targ) {} targs) /\
+  (id_free_vars (IDFld id fld) = id_free_vars id UNION sfld_free_vars fld)
+
+     /\
+
+  (sfld_free_vars (SFTempCall tname targs) =
+     FOLDL (\acc targ. acc UNION targ_free_vars targ) {} targs) /\
+  (sfld_free_vars (SFName nm) = {})
+
+     /\
+
+  (targ_free_vars (TType ty) = type_free_vars ty) /\
+  (targ_free_vars (TTemp tid) = tid_free_vars tid) /\
+  (targ_free_vars (TVal tva) = tva_free_vars tva)
+
+     /\
+
+  (tva_free_vars (TNum i) = {}) /\
+  (tva_free_vars (TObj id) = id_free_vars id) /\
+  (tva_free_vars (TMPtr id ty) = id_free_vars id UNION type_free_vars ty) /\
+  (tva_free_vars (TVAVar s) = {ObjV s})
+
+     /\
+
+  (type_free_vars Void = {}) /\
+  (type_free_vars BChar = {}) /\
+  (type_free_vars Bool = {}) /\
+  (type_free_vars (Unsigned bit) = {}) /\
+  (type_free_vars (Signed bit) = {}) /\
+  (type_free_vars (Class id) = {}) /\ (* well-formedness assumption *)
+  (type_free_vars Float = {}) /\
+  (type_free_vars Double = {}) /\
+  (type_free_vars LDouble = {}) /\
+  (type_free_vars (Ptr ty) = type_free_vars ty) /\
+  (type_free_vars (MPtr id ty) = id_free_vars id UNION type_free_vars ty) /\
+  (type_free_vars (Ref ty) = type_free_vars ty) /\
+  (type_free_vars (Array ty n) = type_free_vars ty) /\ (* TODO: const-expr *)
+  (type_free_vars (Function ret args) =
+     type_free_vars ret UNION
+     FOLDL (\acc ty. acc UNION type_free_vars ty) {} args) /\
+  (type_free_vars (Const ty) = type_free_vars ty) /\
+  (type_free_vars (TypeID id) = id_free_vars id)
+`;
+
+val _ = export_rewrites [ "CPP_ID_size_def" ]
+val (type_free_vars_def, type_free_vars_ind) = Defn.tprove(
+  type_free_vars_defn,
+  WF_REL_TAC
+    `measure
+      (\sum.
+       case sum of
+          INL id -> CPP_ID_size id
+       || INR (INL sfld) -> StaticField_size sfld
+       || INR (INR (INL targ)) -> TemplateArg_size targ
+       || INR (INR (INR (INL tva))) -> TemplateValueArg_size tva
+       || INR (INR (INR (INR ty))) -> CPP_Type_size ty)` THEN
+  SRW_TAC [ARITH_ss][] THENL [
+    Induct_on `args` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
+    RES_TAC THEN DECIDE_TAC,
+    Induct_on `targs` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
+    RES_TAC THEN DECIDE_TAC,
+    Induct_on `targs` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
+    RES_TAC THEN DECIDE_TAC
+  ]);
+val _ = save_thm("type_free_vars_def", type_free_vars_def)
+val _ = export_rewrites ["type_free_vars_def"]
 
 val ptrdiff_t = Rsyntax.new_specification {
   consts = [{const_name = "ptrdiff_t", fixity = Prefix}],
@@ -451,8 +554,7 @@ val wf_type_defn = Hol_defn "wf_type" `
 val (wf_type_def, wf_type_ind) = Defn.tprove(wf_type_defn,
   WF_REL_TAC `measure (CPP_Type_size o SND)` THEN
   SRW_TAC [ARITH_ss][] THEN Induct_on `a` THEN
-  SRW_TAC [][definition "CPP_ID_size_def"] THEN
-  FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []);
+  SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []);
 
 val _ = save_thm("wf_type_def", wf_type_def)
 val _ = save_thm("wf_type_ind", wf_type_ind)

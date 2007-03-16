@@ -30,8 +30,8 @@ val _ = disable_tyabbrev_printing "fnid"
 
 (* expressions *)
 val _ = Hol_datatype
-  `CExpr = Cnum of num
-         | Cchar of num
+  `CExpr = Cnum of int
+         | Cchar of int
          | Cnullptr of CPP_Type
                      (* BAD_ASSUMPTION: want to get rid of this *)
          | This
@@ -43,9 +43,9 @@ val _ = Hol_datatype
          | CApUnary of c_unops => CExpr
          | Deref of CExpr
          | Addr of CExpr
-         | MemAddr of class_spec => string
+         | MemAddr of class_spec => StaticField
          | Assign of c_binops option => CExpr => CExpr
-         | SVar of CExpr => string
+         | SVar of CExpr => StaticField
          | FnApp of CExpr => CExpr list
          | CommaSep of CExpr => CExpr
          | Cast of CPP_Type => CExpr
@@ -121,7 +121,7 @@ val rec_expr_P_def = Define`
       P (CApUnary f' e) /\ rec_expr_P e P) /\
     (rec_expr_P (Deref e) P = P (Deref e) /\ rec_expr_P e P) /\
     (rec_expr_P (Addr e) P = P (Addr e) /\ rec_expr_P e P) /\
-    (rec_expr_P (MemAddr cname fldname) P = P (MemAddr cname fldname)) /\
+    (rec_expr_P (MemAddr cname fld) P = P (MemAddr cname fld)) /\
     (rec_expr_P (Assign fo e1 e2) P =
       P (Assign fo e1 e2) /\ rec_expr_P e1 P /\ rec_expr_P e2 P) /\
     (rec_expr_P (SVar e fld) P =

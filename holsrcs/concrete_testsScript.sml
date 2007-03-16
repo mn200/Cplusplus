@@ -5,7 +5,7 @@ open aggregatesTheory memoryTheory
 
 val _ = new_theory "concrete_tests"
 
-val cname_def = Define`cname = Base (CName "c")`;
+val cname_def = Define`cname = Base "c"`;
 
 val state1_def = Define`
   state1 =
@@ -25,11 +25,15 @@ val state1_applied_base = save_thm(
        (simp ``deNONE state1.classmap ' cname``))
 val _ = export_rewrites ["state1_applied_base"]
 
-val base_in_classmap = store_thm(
-  "base_in_classmap",
+val base_in_classmap0 = prove(
   ``cname IN FDOM (deNONE state1.classmap) /\
     cname IN FDOM state1.classmap``,
   SRW_TAC [][state1_def]);
+
+val base_in_classmap = save_thm(
+  "base_in_classmap",
+  SIMP_RULE (srw_ss()) [] base_in_classmap0)
+
 val _ = export_rewrites ["base_in_classmap"]
 
 val defined_classes = store_thm(

@@ -124,8 +124,9 @@ val _ = Hol_datatype
               classmap : CPPname |-> state_class_info;
                          (* local, dynamically changing class map *)
 
-              class_templates : CPPname |->
-                                (template_parameter list # state_class_info) ;
+              class_templates : CPPname |-> state_class_info ;
+                         (* the name will have variables free at the top
+                            level *)
 
               typemap  : CPPname |-> CPP_Type ;
                          (* local information about types of variables *)

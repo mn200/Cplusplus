@@ -108,8 +108,8 @@ val _ = Hol_datatype`
   (* TODO: allow declaration of friends *)
   class_entry =
 
-             CFnDefn of CPP_Type => CPP_ID => (string # CPP_Type) list =>
-                        CStmt
+             CFnDefn of CPP_Type => StaticField => (string # CPP_Type) list =>
+                        CStmt option
                (* function definitions within a class must be of member
                   function for that class, it is not legit to write
                      class A {
@@ -125,7 +125,7 @@ val _ = Hol_datatype`
                   enclosing the class definition".
 
                   On the other hand, the name can be a template, which is
-                  why there is a CPP_ID there.
+                  why there is a StaticField there.
                 *)
 
            | FldDecl of string => CPP_Type
@@ -267,20 +267,6 @@ val exception_stmt_def = Define`
   (exception_stmt s = F)
 `;
 
-val _ = Hol_datatype`
-  template_type = ClassTT
-                | ValueParam of CPP_Type
-                | TemplateTemp of template_type list
-                   (* the "return type" for a template template is always
-                      a class *)
-`;
-
-val _ = Hol_datatype`
-  template_parameter = TempType of string
-                     | TempParam of CPP_Type => string
-                     | TempTemp of string => template_type list
-`;
-
 (* external declarations can appear at the top level of a translation unit *)
 val _ = Hol_datatype`
   ext_decl = FnDefn of CPP_Type => CPPname => (string # CPP_Type) list =>
@@ -290,8 +276,6 @@ val _ = Hol_datatype`
                             mem_initializer list =>
                             CStmt
            | ClassDestDef of CPPname => CStmt
-           | TemplateDef of (template_parameter # TemplateArg option) list =>
-                            ext_decl
 `;
 
 
