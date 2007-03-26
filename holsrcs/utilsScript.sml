@@ -132,6 +132,7 @@ val FINDL_def = Define`
   (FINDL P [] = NONE) /\
   (FINDL P (h :: t) = if P h then SOME h else FINDL P t)
 `;
+val _ = export_rewrites ["FINDL_def"]
 
 (* ----------------------------------------------------------------------
     NUMBER : num -> 'a list -> (num # 'a) list
@@ -209,6 +210,30 @@ val stackenv_newscope_def = Define`
   stackenv_newscope env = []::env
 `;
 
+
+(* ----------------------------------------------------------------------
+    olmap : ('a -> 'b option) -> 'a list -> 'b list option
+   ---------------------------------------------------------------------- *)
+
+val olmap_def = Define`
+  (olmap f [] = SOME []) /\
+  (olmap f (h::t) =
+     case f h of
+        NONE -> NONE
+     || SOME h -> OPTION_MAP (CONS h) (olmap f t))
+`;
+val _ = export_rewrites ["olmap_def"]
+
+val olmap_CONG = store_thm(
+  "olmap_CONG",
+  ``!l1 l2 f1 f2.
+      (l1 = l2) /\ (!x. MEM x l2 ==> (f1 x = f2 x)) ==>
+      (olmap f1 l1 = olmap f2 l2)``,
+  Induct THEN SRW_TAC [][] THEN SRW_TAC [][] THEN
+  FULL_SIMP_TAC (srw_ss()) [DISJ_IMP_THM, FORALL_AND_THM] THEN
+  RES_TAC THEN SRW_TAC [][]);
+
+val _ = DefnBase.export_cong "olmap_CONG"
 
 
 
