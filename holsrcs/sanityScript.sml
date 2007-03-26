@@ -27,22 +27,24 @@ val _ = new_theory "sanity";
    ---------------------------------------------------------------------- *)
 
 open side_effectsTheory
-val val2mem_fnmap0 = prove(
+val prove = fn (t,tac) => SIMP_RULE (srw_ss()) [] (prove(t,tac))
+val store_thm = fn (s,t,tac) => let val th = prove(t,tac) 
+				in save_thm(s,th) end
+
+val val2mem_fnmap = store_thm(
+  "val2mem_fnmap",
   ``(val2mem s a v).fnmap = s.fnmap``,
   SRW_TAC [][statesTheory.val2mem_def]);
-val val2mem_fnmap = save_thm(
-  "val2mem_fnmap",
-  SIMP_RULE (srw_ss()) [] val2mem_fnmap0)
 val _ = export_rewrites ["val2mem_fnmap"]
-val apply_se_preserves_fnmaps = SIMP_RULE (srw_ss()) [] (prove(
+val apply_se_preserves_fnmaps = prove(
   ``apply_se (se0,s0) (se,s) ==> (s0.fnmap = s.fnmap)``,
     SRW_TAC [][apply_se_def, apply_lse_def] THEN
     Cases_on `ise` THEN
-    FULL_SIMP_TAC (srw_ss()) [se_on_state_def]))
+    FULL_SIMP_TAC (srw_ss()) [se_on_state_def])
 
-val vdeclare_preserves_fnmaps = SIMP_RULE (srw_ss()) [] (prove(
+val vdeclare_preserves_fnmaps = prove(
   ``vdeclare s0 ty name s ==> (s0.fnmap = s.fnmap)``,
-  SRW_TAC [][vdeclare_def] THEN SRW_TAC [][]));
+  SRW_TAC [][vdeclare_def] THEN SRW_TAC [][]);
 
 val declmng_preserves_fnmaps = prove(
   ``(!ee0 s0 see. mng ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)) /\
@@ -60,7 +62,7 @@ val declmng_elim_preserves_fnmaps = prove(
     (!ee0 s0 see. mng ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)) ==>
     (!s. (vdf s).fnmap = s.fnmap) ==>
     ((SND d0s0).fnmap = (SND ds).fnmap)``,
-  METIS_TAC [declmng_preserves_fnmaps]);
+  SRW_TAC [][] THEN METIS_TAC [declmng_preserves_fnmaps]);
 
 val realise_destructors_fnmap_invariant = prove(
   ``((calls, s) = realise_destructor_calls exp s0) ==>
@@ -72,10 +74,10 @@ val fninfo_invariant = store_thm(
   "fninfo_invariant",
   ``!ee0 s0 see. meaning ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)``,
   HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
-  TRY (METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps,
-                  realise_destructors_fnmap_invariant]) THEN
-  IMP_RES_TAC declmng_elim_preserves_fnmaps THEN
-  FULL_SIMP_TAC (srw_ss()) []);
+  TRY (IMP_RES_TAC declmng_elim_preserves_fnmaps THEN
+       FULL_SIMP_TAC (srw_ss()) []  THEN NO_TAC) THEN 
+  METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps,
+             realise_destructors_fnmap_invariant]);
 
 (* ----------------------------------------------------------------------
     class_lvalue_safe

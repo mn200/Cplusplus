@@ -272,7 +272,8 @@ val inst_comp_thm = store_thm(
 
     SRW_TAC [][],
 
-
+    Cases_on `cppid_inst s1 id1` THEN FULL_SIMP_TAC (srw_ss()) [] THEN 
+    SRW_TAC [][] THEN SRW_TAC [][inst_comp_def]
 
 
 
