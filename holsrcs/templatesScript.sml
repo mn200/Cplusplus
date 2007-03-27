@@ -47,59 +47,55 @@ val NIL_tempid_inst = store_thm(
   Induct THEN SRW_TAC [][empty_inst_def]);
 val _ = export_rewrites ["NIL_tempid_inst"]
 
+val is_var_type_def = Define`
+  (is_var_type (TypeID cid) = T) /\
+  (is_var_type _ = F)
+`;
+
+val dest_var_type_def = Define`
+  (dest_var_type (TypeID cid) = cid)
+`;
+
+val typeid_def = Define`
+  (typeid (TypeID cid) = SOME cid) /\
+  (typeid _ = NONE)
+`;
+val _ = export_rewrites ["typeid_def"]
+
+
 (* instantiate a type with template arguments *)
 val type_inst_defn = Hol_defn "type_inst" `
-  (type_inst sigma (TypeID cid) =
-     case cppid_inst sigma cid of
-        IDResult cid' -> SOME (TypeID cid')
-     || TypeResult ty -> SOME ty
-     || BadResult -> NONE) /\
+  (type_inst sigma (TypeID cid) = cppid_inst sigma cid) /\
   (type_inst sigma (Ptr ty) = OPTION_MAP Ptr (type_inst sigma ty)) /\
   (type_inst sigma (MPtr nm ty) =
-     let tyopt = type_inst sigma ty
-     in
-       case cppid_inst sigma nm of
-          IDResult cid' -> OPTION_MAP (MPtr cid') tyopt
-       || TypeResult (Class cid') ->
-              OPTION_MAP (MPtr cid') tyopt
-       || TypeResult (TypeID cid') -> OPTION_MAP (MPtr cid') tyopt
-       || id1 -> NONE) /\
+     OP2CMB MPtr
+            (case cppid_inst sigma nm of NONE -> NONE || SOME ty -> typeid ty)
+            (type_inst sigma ty)) /\
   (type_inst sigma (Ref ty) = OPTION_MAP Ref (type_inst sigma ty)) /\
   (type_inst sigma (Array ty n) =
      OPTION_MAP (\ty. Array ty n) (type_inst sigma ty)) /\
   (type_inst sigma (Function ty tylist) =
-     case type_inst sigma ty of
-        NONE -> NONE
-     || SOME ty' -> OPTION_MAP (Function ty')
-                               (olmap (type_inst sigma) tylist)) /\
+     OP2CMB Function (type_inst sigma ty) (olmap (type_inst sigma) tylist)) /\
   (type_inst sigma (Const ty) = OPTION_MAP Const (type_inst sigma ty)) /\
-  (type_inst sigma (Class cid) =
-      case cppid_inst sigma cid of
-         IDResult cid' -> SOME (Class cid')
-      || TypeResult ty -> NONE
-      || BadResult -> NONE) /\
+  (type_inst sigma (Class cid) = SOME (Class cid)) /\
   (type_inst sigma ty = SOME ty)
 
     /\
 
-  (cppid_inst sigma (IDVar s) =
-     case sigma.typemap s of
-        TypeID id -> IDResult id
-     || Class id -> IDResult id
-     || ty -> TypeResult ty) /\
+  (* id instantiation returns a type.  The type may just be a TypeID,
+     possibly representing no change, or a "real" type. *)
+  (cppid_inst sigma (IDVar s) = SOME (sigma.typemap s)) /\
   (cppid_inst sigma (IDFld cid fld) =
-     case cppid_inst sigma cid of
-        IDResult cid' ->
-           (case sfld_inst sigma fld of
-               NONE -> BadResult
-            || SOME fld' -> IDResult (IDFld cid' fld'))
-     || id1 -> BadResult) /\
+     OPTION_MAP TypeID
+                (OP2CMB IDFld
+                        (case cppid_inst sigma cid of
+                            NONE -> NONE
+                         || SOME ty -> typeid ty)
+                        (sfld_inst sigma fld))) /\
   (cppid_inst sigma (IDTempCall tempid tempargs) =
-     case olmap (temparg_inst sigma) tempargs of
-        NONE -> BadResult
-     || SOME tempargs' ->
-          IDResult (IDTempCall (tempid_inst sigma tempid) tempargs')) /\
-  (cppid_inst sigma (IDConstant tnm) = IDResult (IDConstant tnm))
+     OPTION_MAP (TypeID o IDTempCall (tempid_inst sigma tempid))
+                (olmap (temparg_inst sigma) tempargs)) /\
+  (cppid_inst sigma (IDConstant tnm) = SOME (TypeID (IDConstant tnm)))
 
     /\
 
@@ -112,13 +108,13 @@ val type_inst_defn = Hol_defn "type_inst" `
 
   (temp_valarg_inst sigma (TNum i) = SOME (TNum i)) /\
   (temp_valarg_inst sigma (TObj id) =
-      case cppid_inst sigma id of
-         IDResult id' -> SOME (TObj id')
-      || id1 -> NONE) /\
+      OPTION_MAP TObj (case cppid_inst sigma id of
+                          NONE -> NONE
+                       || SOME ty -> typeid ty)) /\
   (temp_valarg_inst sigma (TMPtr id ty) =
-      case cppid_inst sigma id of
-         IDResult id' -> OPTION_MAP (TMPtr id') (type_inst sigma ty)
-      || id1 -> NONE) /\
+      OP2CMB TMPtr
+             (case cppid_inst sigma id of NONE-> NONE || SOME ty -> typeid ty)
+             (type_inst sigma ty)) /\
   (temp_valarg_inst sigma (TVAVar s) = SOME (sigma.valmap s))
 
     /\
@@ -140,10 +136,10 @@ val (type_inst_def, type_inst_ind) = Defn.tprove(type_inst_defn,
           || INR (INR (INR (INR (_, sfld)))) -> StaticField_size sfld)`
      THEN
   SRW_TAC [ARITH_ss][] THENL [
-    Induct_on `tempargs` THEN SRW_TAC [][] THEN
-    SRW_TAC [ARITH_ss][] THEN RES_TAC THEN DECIDE_TAC,
     Induct_on `tylist` THEN SRW_TAC [][] THEN
     SRW_TAC [ARITH_ss][] THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `tempargs` THEN SRW_TAC [][] THEN
+    SRW_TAC [ARITH_ss][] THEN RES_TAC THEN DECIDE_TAC,
     Induct_on `targs` THEN SRW_TAC [][] THEN
     SRW_TAC [ARITH_ss][] THEN RES_TAC THEN DECIDE_TAC
   ]);
@@ -161,24 +157,24 @@ val _ = overload_on ("<=", ``type_match``);
 val type_inst_empty = store_thm(
   "type_inst_empty",
   ``(!ty. type_inst empty_inst ty = SOME ty) /\
-    (!id. cppid_inst empty_inst id = IDResult id) /\
+    (!id. cppid_inst empty_inst id = SOME (TypeID id)) /\
     (!ta. temparg_inst empty_inst ta = SOME ta) /\
     (!tva. temp_valarg_inst empty_inst tva = SOME tva) /\
     (!sfld. sfld_inst empty_inst sfld = SOME sfld)``,
   Q_TAC SUFF_TAC
    `(!s ty. (s = empty_inst) ==> (type_inst s ty = SOME ty)) /\
-    (!s id. (s = empty_inst) ==> (cppid_inst s id = IDResult id)) /\
+    (!s id. (s = empty_inst) ==> (cppid_inst s id = SOME (TypeID id))) /\
     (!s ta. (s = empty_inst) ==> (temparg_inst s ta = SOME ta)) /\
     (!s tva. (s = empty_inst) ==> (temp_valarg_inst s tva = SOME tva)) /\
     (!s sfld. (s = empty_inst) ==> (sfld_inst s sfld = SOME sfld))`
    THEN1 METIS_TAC [] THEN
   HO_MATCH_MP_TAC type_inst_ind THEN
   SRW_TAC [][] THEN SRW_TAC [][] THENL [
-    RES_TAC THEN Induct_on `tylist` THEN SRW_TAC [][],
-    SRW_TAC [][empty_inst_def],
-    `olmap (\a. temparg_inst empty_inst a) tempargs = SOME tempargs`
-       by (Induct_on `tempargs` THEN SRW_TAC [][empty_inst_def]) THEN
+    `olmap (\a. type_inst empty_inst a) tylist = SOME tylist`
+       by (Induct_on `tylist` THEN SRW_TAC [][empty_inst_def]) THEN
     SRW_TAC [][],
+    SRW_TAC [][empty_inst_def],
+    SRW_TAC [ETA_ss] [] THEN Induct_on `tempargs` THEN SRW_TAC [][],
     SRW_TAC [][empty_inst_def],
     SRW_TAC [ETA_ss] [] THEN Induct_on `targs` THEN SRW_TAC [][]
   ]);
@@ -201,260 +197,727 @@ val tempid_inst_comp = store_thm(
   Cases_on `tid` THEN SRW_TAC [][inst_comp_def]);
 val _ = export_rewrites ["tempid_inst_comp"]
 
+fun FTRY tac = TRY (tac THEN NO_TAC)
+
+
+
+val cppid_non_typeid = store_thm(
+  "cppid_non_typeid",
+  ``(cppid_inst s id = SOME ty) /\ (typeid ty = NONE) ==>
+    ?nm. (id = IDVar nm) /\ (s.typemap nm = ty)``,
+  Cases_on `id` THEN SRW_TAC [][] THENL [
+    Cases_on `typeid ty = NONE` THEN SRW_TAC [][] THEN
+    Cases_on `ty = TypeID z` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss()) [],
+
+    Cases_on `typeid ty = NONE` THEN SRW_TAC [][] THEN
+    DISJ2_TAC THEN STRIP_TAC THEN FULL_SIMP_TAC (srw_ss()) [],
+
+    Cases_on `typeid ty = NONE` THEN SRW_TAC [][] THEN
+    STRIP_TAC THEN SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) []
+  ]);
+
+val option_case_EQ_SOME = store_thm(
+  "option_case_EQ_SOME",
+  ``(option_case NONE f v = SOME v0) =
+        ?v0'. (v = SOME v0') /\ (f v0' = SOME v0)``,
+  Cases_on `v` THEN SRW_TAC [][]);
+val _ = export_rewrites ["option_case_EQ_SOME"]
+
+
 val inst_comp_thm = store_thm(
   "inst_comp_thm",
-  ``(!id1 s1 s2.
-       (!id2 id3. (cppid_inst s1 id1 = IDResult id2) /\
-                  (cppid_inst s2 id2 = IDResult id3) ==>
-                  (cppid_inst (inst_comp s2 s1) id1 = IDResult id3))
-(*       (!ty.  (cppid_inst s1 id1 = TypeResult ty) ==>
-              (cppid_inst (inst_comp s2 s1) id1 =
-                 case type_inst s2 ty of
-                    NONE -> BadResult
-                 || SOME ty' -> TypeResult ty')) *)) /\
-    (!sfld1 sfld2 s1 s2.
-        (sfld_inst s1 sfld1 = SOME sfld2) ==>
-        (sfld_inst (inst_comp s2 s1) sfld1 = sfld_inst s2 sfld2)) /\
-    (!ta1 ta2 s1 s2.
-        (temparg_inst s1 ta1 = SOME ta2) ==>
-        (temparg_inst (inst_comp s2 s1) ta1 = temparg_inst s2 ta2)) /\
-    (!tva1 tva2 s1 s2.
-        (temp_valarg_inst s1 tva1 = SOME tva2) ==>
-        (temp_valarg_inst (inst_comp s2 s1) tva1 =
-           temp_valarg_inst s2 tva2)) /\
-    (!ty1 ty2 s1 s2.
-        (type_inst s1 ty1 = SOME ty2) ==>
-        (type_inst (inst_comp s2 s1) ty1 = type_inst s2 ty2)) /\
-    (!tal1 tal2 s1 s2.
-        (olmap (temparg_inst s1) tal1 = SOME tal2) ==>
-        (olmap (temparg_inst (inst_comp s2 s1)) tal1 =
-           olmap (temparg_inst s2) tal2)) /\
-    (!tyl1 tyl2 s1 s2.
-        (olmap (type_inst s1) tyl1 = SOME tyl2) ==>
-        (olmap (type_inst (inst_comp s2 s1)) tyl1 =
-           olmap (type_inst s2) tyl2))``,
-  Induct THEN SRW_TAC [][] THENL [
+  ``(!id1 s1 s2 ty2 id3 ty4.
+        (cppid_inst s1 id1 = SOME ty2) /\
+        (typeid ty2 = SOME id3) /\
+        (cppid_inst s2 id3 = SOME ty4) ==>
+        (cppid_inst (inst_comp s2 s1) id1 = SOME ty4)) /\
+    (!sfld1 sfld2 sfld3 s1 s2.
+        (sfld_inst s1 sfld1 = SOME sfld2) /\
+        (sfld_inst s2 sfld2 = SOME sfld3) ==>
+        (sfld_inst (inst_comp s2 s1) sfld1 = SOME sfld3)) /\
+    (!ta1 ta2 ta3 s1 s2.
+        (temparg_inst s1 ta1 = SOME ta2) /\
+        (temparg_inst s2 ta2 = SOME ta3) ==>
+        (temparg_inst (inst_comp s2 s1) ta1 = SOME ta3)) /\
+    (!tva1 tva2 tva3 s1 s2.
+        (temp_valarg_inst s1 tva1 = SOME tva2) /\
+        (temp_valarg_inst s2 tva2 = SOME tva3) ==>
+        (temp_valarg_inst (inst_comp s2 s1) tva1 = SOME tva3)) /\
+    (!ty1 ty2 ty3 s1 s2.
+        (type_inst s1 ty1 = SOME ty2) /\
+        (type_inst s2 ty2 = SOME ty3) ==>
+        (type_inst (inst_comp s2 s1) ty1 = SOME ty3)) /\
+    (!tal1 tal2 tal3 s1 s2.
+        (olmap (temparg_inst s1) tal1 = SOME tal2) /\
+        (olmap (temparg_inst s2) tal2 = SOME tal3) ==>
+        (olmap (temparg_inst (inst_comp s2 s1)) tal1 = SOME tal3)) /\
+    (!tyl1 tyl2 tyl3 s1 s2.
+        (olmap (type_inst s1) tyl1 = SOME tyl2) /\
+        (olmap (type_inst s2) tyl2 = SOME tyl3) ==>
+        (olmap (type_inst (inst_comp s2 s1)) tyl1 = SOME tyl3))``,
+  Induct THEN SRW_TAC [][] THEN
+  FTRY (SRW_TAC[][]) THEN FTRY (FULL_SIMP_TAC (srw_ss()) []) THEN
+  FTRY (RES_TAC THEN SRW_TAC [][]) THENL [
+    (* IDVar case *)
     Cases_on `s1.typemap s` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
     SRW_TAC [][inst_comp_def],
 
-    Cases_on `cppid_inst s1 id1` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    Cases_on `sfld_inst s1 sfld1` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    Cases_on `cppid_inst s2 C'` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    Cases_on `sfld_inst s2 x` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    SRW_TAC [][] THEN
-    `cppid_inst (inst_comp s2 s1) id1 = IDResult C''` by SRW_TAC [][] THEN
-    SRW_TAC [][] THEN
-    `sfld_inst (inst_comp s2 s1) sfld1 = sfld_inst s2 x` by SRW_TAC [][] THEN
-    SRW_TAC [][],
+    (* IDFld case *)
+    SRW_TAC [DNF_ss][] THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+    SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
+    PROVE_TAC [],
 
-    Cases_on `olmap (\a. temparg_inst s1 a) tal1` THEN
-    FULL_SIMP_TAC (srw_ss()) [] THEN
-    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN RES_TAC THEN
-    SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    Cases_on `olmap (\a. temparg_inst s2 a) x` THEN
-    FULL_SIMP_TAC (srw_ss()) [] THEN
-    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN
-    SRW_TAC [][],
+    (* IDTempCall *)
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [],
 
+    (* IDConstant *)
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
     FULL_SIMP_TAC (srw_ss()) [],
 
-    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN RES_TAC THEN
-    SRW_TAC [][],
+    (* SFTempCall *)
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [],
 
-    SRW_TAC [][],
+    (* TObj *)
+    FULL_SIMP_TAC (srw_ss()) [] THEN PROVE_TAC [],
 
-    RES_TAC THEN SRW_TAC [][],
+    (* TMPtr *)
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN PROVE_TAC [],
 
-    SRW_TAC [][],
+    (* TVAVar *)
+    SRW_TAC [][inst_comp_def],
 
-    RES_TAC THEN SRW_TAC [][],
+    (* MPtr *)
+    FULL_SIMP_TAC (srw_ss()) [] THEN PROVE_TAC [],
 
-    SRW_TAC [][],
+    (* Function (type) case *)
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [],
 
-    Cases_on `cppid_inst s1 id1` THEN FULL_SIMP_TAC (srw_ss()) [] THEN 
-    SRW_TAC [][] THEN SRW_TAC [][inst_comp_def]
+    (* typeid case (?) *)
+    Cases_on `typeid ty2` THENL [
+      `?nm. (id1 = IDVar nm) /\ (s1.typemap nm = ty2)`
+          by METIS_TAC [cppid_non_typeid] THEN
+      SRW_TAC [][inst_comp_def],
+      `ty2 = TypeID x`
+         by (Cases_on `ty2` THEN FULL_SIMP_TAC (srw_ss()) []) THEN
+      FULL_SIMP_TAC (srw_ss()) []
+    ]
+  ]);
 
-
-
-(* this would be a nice SANITY theorem, but it's hard to prove, because
-   it's hard to come up with the appropriate induction hypothesis.  *)
-(*
+(* SANITY theorem = comment under definition 2 to the effect <= is
+   transitive *)
 val type_match_trans = store_thm(
   "type_match_trans",
   ``!(ty1:CPP_Type) ty2 ty3. ty1 <= ty2 /\ ty2 <= ty3 ==> ty1 <= ty3``,
   SRW_TAC [][type_match_def] THEN Q.EXISTS_TAC `inst_comp s' s` THEN
-*)
+  SRW_TAC [][inst_comp_thm]);
 
+val is_renaming_def = Define`
+  is_renaming s = (!v. ?nm. s.typemap v = TypeID (IDVar nm)) /\
+                  (!v. ?nm. s.tempmap v = TemplateVar nm) /\
+                  (!v. ?nm. s.valmap v = TVAVar nm)
+`;
+
+val empty_inst_is_renaming = store_thm(
+  "empty_inst_is_renaming",
+  ``is_renaming empty_inst``,
+  SRW_TAC [][empty_inst_def, is_renaming_def]);
+
+val tidinst_sz_def = Define`
+  (tidinst_sz (TemplateConstant n) = 1n) /\
+  (tidinst_sz (TemplateVar s) = 0)
+`;
+val _ = export_rewrites ["tidinst_sz_def"]
+
+val tempid_inst_size = store_thm(
+  "tempid_inst_size",
+  ``tidinst_sz tid <= tidinst_sz (tempid_inst s tid)``,
+  Cases_on `tid` THEN SRW_TAC [][]);
+
+val tyinst_sz_def = Define`
+  (tyinst_sz (Class cid) = 2) /\
+  (tyinst_sz (Ptr ty) = 1 + tyinst_sz ty) /\
+  (tyinst_sz (MPtr id ty) = 1 + cppidinst_sz id + tyinst_sz ty) /\
+  (tyinst_sz (Ref ty) = 1 + tyinst_sz ty) /\
+  (tyinst_sz (Array ty n) = 1 + tyinst_sz ty) /\
+  (tyinst_sz (Function ty tyl) = 1 + tyinst_sz ty + tylinst_sz tyl) /\
+  (tyinst_sz (Const ty) = 1 + tyinst_sz ty) /\
+  (tyinst_sz (TypeID id) = 1 + cppidinst_sz id) /\
+  (tyinst_sz Void = 2) /\
+  (tyinst_sz BChar = 2) /\
+  (tyinst_sz Bool = 2) /\
+  (tyinst_sz (Unsigned _) = 2) /\
+  (tyinst_sz (Signed _) = 2) /\
+  (tyinst_sz Float = 2) /\
+  (tyinst_sz Double = 2) /\
+  (tyinst_sz LDouble = 2)
+
+     /\
+
+  (cppidinst_sz (IDVar s) = 0) /\
+  (cppidinst_sz (IDFld id sfld) = cppidinst_sz id + sfldinst_sz sfld + 1) /\
+  (cppidinst_sz (IDTempCall tid tal) =
+     tidinst_sz tid + talinst_sz tal + 1) /\
+  (cppidinst_sz (IDConstant tn) = 1)
+
+     /\
+
+  (sfldinst_sz (SFTempCall s tal) = 1 + talinst_sz tal) /\
+  (sfldinst_sz (SFName s) = 1)
+
+     /\
+
+  (tainst_sz (TType ty) = 1 + tyinst_sz ty) /\
+  (tainst_sz (TTemp tid) = 1 + tidinst_sz tid) /\
+  (tainst_sz (TVal tva) = 1 + tvainst_sz tva)
+
+     /\
+
+  (tvainst_sz (TNum i) = 1) /\
+  (tvainst_sz (TObj id) = 1 + cppidinst_sz id) /\
+  (tvainst_sz (TMPtr id ty) = 1 + cppidinst_sz id + tyinst_sz ty) /\
+  (tvainst_sz (TVAVar s) = 0)
+
+     /\
+
+  (talinst_sz [] = 0) /\
+  (talinst_sz (ta::tal) = 1 + tainst_sz ta + talinst_sz tal)
+
+     /\
+
+  (tylinst_sz [] = 0) /\
+  (tylinst_sz (ty::tyl) = 1 + tyinst_sz ty + tylinst_sz tyl)
+`
+val _ = export_rewrites ["tyinst_sz_def"]
+
+val typeid_size = store_thm(
+  "typeid_size",
+  ``(typeid ty = SOME id) ==> (tyinst_sz ty = 1 + cppidinst_sz id)``,
+  Cases_on `ty` THEN SRW_TAC [][]);
+
+val zero_lt_tysize = store_thm(
+  "zero_lt_tysize",
+  ``0 < tyinst_sz ty``,
+  Cases_on `ty` THEN SRW_TAC [ARITH_ss][]);
+
+val cppidinst_sz_EQ_0 = store_thm(
+  "cppidinst_sz_EQ_0",
+  ``(cppidinst_sz id = 0) = ?nm. id = IDVar nm``,
+  Cases_on `id` THEN SRW_TAC [][]);
+val _ = export_rewrites ["cppidinst_sz_EQ_0"]
+
+val tyinst_sz_EQ_1 = store_thm(
+  "tyinst_sz_EQ_1",
+  ``(tyinst_sz ty = 1) = ?nm. ty = TypeID (IDVar nm)``,
+  Cases_on `ty` THEN SRW_TAC [][] THEN
+  MP_TAC (Q.INST [`ty` |-> `C''`] zero_lt_tysize) THEN
+  TRY DECIDE_TAC THEN
+  MP_TAC (Q.INST [`ty` |-> `C0`] zero_lt_tysize) THEN DECIDE_TAC);
+val _ = export_rewrites ["tyinst_sz_EQ_1"]
+
+val tvainst_sz_EQ_0 = store_thm(
+  "tvainst_sz_EQ_0",
+  ``!tva. (tvainst_sz tva = 0) = ?nm. tva = TVAVar nm``,
+  Cases THEN SRW_TAC [][]);
+val _ = export_rewrites ["tvainst_sz_EQ_0"]
+
+val type_match_size_increase = store_thm(
+  "type_match_size_increase",
+  ``(!id1 s ty2. (cppid_inst s id1 = SOME ty2) ==>
+                 cppidinst_sz id1 < tyinst_sz ty2) /\
+    (!sfld1 s sfld2. (sfld_inst s sfld1 = SOME sfld2) ==>
+                     sfldinst_sz sfld1 <= sfldinst_sz sfld2) /\
+    (!ta1 s ta2. (temparg_inst s ta1 = SOME ta2) ==>
+                 tainst_sz ta1 <= tainst_sz ta2) /\
+    (!tva1 s tva2. (temp_valarg_inst s tva1 = SOME tva2) ==>
+                   tvainst_sz tva1 <= tvainst_sz tva2) /\
+    (!ty1 s ty2. (type_inst s ty1 = SOME ty2) ==>
+                 tyinst_sz ty1 <= tyinst_sz ty2) /\
+    (!tal1 s tal2. (olmap (temparg_inst s) tal1 = SOME tal2) ==>
+                   talinst_sz tal1 <= talinst_sz tal2) /\
+    (!tyl1 s tyl2. (olmap (type_inst s) tyl1 = SOME tyl2) ==>
+                   (tylinst_sz tyl1 <= tylinst_sz tyl2))``,
+  Induct THEN SRW_TAC [][] THEN SRW_TAC [][] THEN
+  FTRY (RES_TAC THEN DECIDE_TAC) THEN
+  FTRY (IMP_RES_TAC typeid_size THEN RES_TAC THEN DECIDE_TAC) THENL [
+    MATCH_ACCEPT_TAC (GEN_ALL zero_lt_tysize),
+
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN RES_TAC THEN
+    MP_TAC (Q.INST [`tid` |-> `T'`] tempid_inst_size) THEN
+    DECIDE_TAC,
+
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN RES_TAC THEN DECIDE_TAC,
+
+    SRW_TAC [][tempid_inst_size],
+
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN RES_TAC THEN DECIDE_TAC
+  ]);
+
+val _ = Hol_datatype`frees_record = <| tyfvs : string set ;
+                                       tempfvs : string set ;
+                                       valfvs : string set |>`
+val empty_freerec_def = Define`
+  empty_freerec = <| tyfvs := {}; tempfvs := {}; valfvs := {} |>
+`;
+
+val _ = overload_on ("EMPTY", ``empty_freerec``)
+
+val freerec_UNION_def = Define`
+  freerec_UNION fr1 fr2 = <| tyfvs := fr1.tyfvs UNION fr2.tyfvs ;
+                             tempfvs := fr1.tempfvs UNION fr2.tempfvs;
+                             valfvs := fr1.valfvs UNION fr2.valfvs |>
+`;
+val _ = overload_on ("UNION", ``freerec_UNION``)
+
+val tyfree_sing_def = Define`
+  tyfree_sing s = <| tyfvs := {s}; tempfvs := {}; valfvs := {} |>
+`;
+val tempfree_sing_def = Define`
+  tempfree_sing s = <| tyfvs := {}; tempfvs := {s}; valfvs := {} |>
+`
+val valfree_sing_def = Define`
+  valfree_sing s = <| tyfvs := {}; tempfvs := {}; valfvs := {s} |>
+`
+
+val renaming_upto_def = Define`
+  renaming_upto frees s = (!v. v IN frees.tyfvs ==>
+                               ?nm. s.typemap v = TypeID (IDVar nm)) /\
+                          (!v. v IN frees.tempfvs ==>
+                               ?nm. s.tempmap v = TemplateVar nm) /\
+                          (!v. v IN frees.valfvs ==>
+                               ?nm. s.valmap v = TVAVar nm)
+`;
+
+val renaming_upto_empty = store_thm(
+  "renaming_upto_empty",
+  ``renaming_upto {} s``,
+  SRW_TAC [][renaming_upto_def, empty_freerec_def]);
+val _ = export_rewrites ["renaming_upto_empty"]
+
+val renaming_upto_UNION = store_thm(
+  "renaming_upto_UNION",
+  ``renaming_upto (s1 UNION s2) s = renaming_upto s1 s /\ renaming_upto s2 s``,
+  SRW_TAC [DNF_ss][freerec_UNION_def, renaming_upto_def] THEN
+  METIS_TAC []);
+val _ = export_rewrites ["renaming_upto_UNION"]
+
+val tidfrees_def = Define`
+  (tidfrees (TemplateConstant tn) = {}) /\
+  (tidfrees (TemplateVar s) = tempfree_sing s)
+`;
+val _ = export_rewrites ["tidfrees_def"]
+
+
+val tyfrees_def = Define`
+  (tyfrees (Class cid) = {}) /\
+  (tyfrees (Ptr ty) = tyfrees ty) /\
+  (tyfrees (MPtr id ty) = cppidfrees id UNION tyfrees ty) /\
+  (tyfrees (Ref ty) = tyfrees ty) /\
+  (tyfrees (Array ty n) = tyfrees ty) /\
+  (tyfrees (Function ty tyl) = tyfrees ty UNION tylfrees tyl) /\
+  (tyfrees (Const ty) = tyfrees ty) /\
+  (tyfrees (TypeID id) = cppidfrees id) /\
+  (tyfrees Void = {}) /\
+  (tyfrees BChar = {}) /\
+  (tyfrees Bool = {}) /\
+  (tyfrees (Unsigned _) = {}) /\
+  (tyfrees (Signed _) = {}) /\
+  (tyfrees Float = {}) /\
+  (tyfrees Double = {}) /\
+  (tyfrees LDouble = {})
+
+     /\
+
+  (cppidfrees (IDVar s) = tyfree_sing s) /\
+  (cppidfrees (IDFld id sfld) = cppidfrees id UNION sfldfrees sfld) /\
+  (cppidfrees (IDTempCall tid tal) = tidfrees tid UNION talfrees tal) /\
+  (cppidfrees (IDConstant tn) = {})
+
+     /\
+
+  (sfldfrees (SFTempCall s tal) = talfrees tal) /\
+  (sfldfrees (SFName s) = {})
+
+     /\
+
+  (tafrees (TType ty) = tyfrees ty) /\
+  (tafrees (TTemp tid) = tidfrees tid) /\
+  (tafrees (TVal tva) = tvalfrees tva)
+
+     /\
+
+  (tvalfrees (TNum i) = {}) /\
+  (tvalfrees (TObj id) = cppidfrees id) /\
+  (tvalfrees (TMPtr id ty) = cppidfrees id UNION tyfrees ty) /\
+  (tvalfrees (TVAVar s) = valfree_sing s)
+
+     /\
+
+  (talfrees [] = {}) /\
+  (talfrees (ta::tal) = tafrees ta UNION talfrees tal)
+
+     /\
+
+  (tylfrees [] = {}) /\
+  (tylfrees (ty::tyl) = tyfrees ty UNION tylfrees tyl)
+`
+val _ = export_rewrites ["tyfrees_def"]
+
+val inst_size_tidrenaming = store_thm(
+  "inst_size_tidrenaming",
+  ``(tidinst_sz (tempid_inst s tid) = tidinst_sz tid) ==>
+    renaming_upto (tidfrees tid) s``,
+  Cases_on `tid` THEN SRW_TAC [][tempfree_sing_def] THEN
+  Cases_on `s.tempmap s'` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  SRW_TAC [][renaming_upto_def]);
+
+val type_match_size_eq_renaming = store_thm(
+  "type_match_size_eq_renaming",
+  ``(!id1 s ty2. (cppid_inst s id1 = SOME ty2) /\
+                 (tyinst_sz ty2 = 1 + cppidinst_sz id1) ==>
+                 renaming_upto (cppidfrees id1) s) /\
+    (!sfld1 s sfld2. (sfld_inst s sfld1 = SOME sfld2) /\
+                     (sfldinst_sz sfld2 = sfldinst_sz sfld1) ==>
+                     renaming_upto (sfldfrees sfld1) s) /\
+    (!ta1 s ta2. (temparg_inst s ta1 = SOME ta2) /\
+                 (tainst_sz ta2 = tainst_sz ta1) ==>
+                 renaming_upto (tafrees ta1) s) /\
+    (!tva1 s tva2. (temp_valarg_inst s tva1 = SOME tva2) /\
+                   (tvainst_sz tva2 = tvainst_sz tva1) ==>
+                   renaming_upto (tvalfrees tva1) s) /\
+    (!ty1 s ty2. (type_inst s ty1 = SOME ty2) /\
+                 (tyinst_sz ty2 = tyinst_sz ty1) ==>
+                 renaming_upto (tyfrees ty1) s) /\
+    (!tal1 s tal2. (olmap (temparg_inst s) tal1 = SOME tal2) /\
+                   (talinst_sz tal2 = talinst_sz tal1) ==>
+                   renaming_upto (talfrees tal1) s) /\
+    (!tyl1 s tyl2. (olmap (type_inst s) tyl1 = SOME tyl2) /\
+                   (tylinst_sz tyl2 = tylinst_sz tyl1) ==>
+                   renaming_upto (tylfrees tyl1) s)``,
+  Induct THEN SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THENL [
+    SRW_TAC [][renaming_upto_def, tyfree_sing_def],
+
+    `sfldinst_sz sfld1 <= sfldinst_sz y0 /\
+     cppidinst_sz id1 < tyinst_sz ty`
+       by METIS_TAC [type_match_size_increase] THEN
+    IMP_RES_TAC typeid_size THEN
+    `tyinst_sz ty = 1 + cppidinst_sz id1` by DECIDE_TAC THEN
+    METIS_TAC [],
+
+    `sfldinst_sz sfld1 <= sfldinst_sz y0 /\
+     cppidinst_sz id1 < tyinst_sz ty`
+       by METIS_TAC [type_match_size_increase] THEN
+    IMP_RES_TAC typeid_size THEN
+    `sfldinst_sz y0 = sfldinst_sz sfld1` by DECIDE_TAC THEN
+    METIS_TAC [],
+
+    `tidinst_sz T' <= tidinst_sz (tempid_inst s T') /\
+     talinst_sz tal1 <= talinst_sz z`
+       by METIS_TAC [tempid_inst_size, type_match_size_increase] THEN
+    `tidinst_sz (tempid_inst s T') = tidinst_sz T'` by DECIDE_TAC THEN
+    METIS_TAC [inst_size_tidrenaming],
+
+    `tidinst_sz T' <= tidinst_sz (tempid_inst s T') /\
+     talinst_sz tal1 <= talinst_sz z`
+       by METIS_TAC [tempid_inst_size, type_match_size_increase] THEN
+    `talinst_sz z = talinst_sz tal1` by DECIDE_TAC THEN
+    METIS_TAC [],
+
+    METIS_TAC [inst_size_tidrenaming],
+
+    METIS_TAC [typeid_size],
+
+    `tyinst_sz ty1 <= tyinst_sz y0 /\ cppidinst_sz id1 < tyinst_sz ty`
+       by METIS_TAC [type_match_size_increase] THEN
+    IMP_RES_TAC typeid_size THEN
+    `tyinst_sz ty = 1 + cppidinst_sz id1` by DECIDE_TAC THEN
+    METIS_TAC [],
+
+    `cppidinst_sz id1 < tyinst_sz ty /\ tyinst_sz ty1 <= tyinst_sz y0`
+       by METIS_TAC [type_match_size_increase] THEN
+    IMP_RES_TAC typeid_size THEN
+    `tyinst_sz y0 = tyinst_sz ty1` by DECIDE_TAC THEN
+    METIS_TAC [],
+
+    SRW_TAC [][renaming_upto_def, valfree_sing_def],
+
+    `cppidinst_sz id1 < tyinst_sz ty /\ tyinst_sz ty1 <= tyinst_sz y0`
+       by METIS_TAC [type_match_size_increase] THEN
+    IMP_RES_TAC typeid_size THEN
+    `tyinst_sz ty = 1 + cppidinst_sz id1` by DECIDE_TAC THEN
+    METIS_TAC [],
+
+    `cppidinst_sz id1 < tyinst_sz ty /\ tyinst_sz ty1 <= tyinst_sz y0`
+       by METIS_TAC [type_match_size_increase] THEN
+    IMP_RES_TAC typeid_size THEN
+    `tyinst_sz y0 = tyinst_sz ty1` by DECIDE_TAC THEN METIS_TAC [],
+
+    IMP_RES_TAC type_match_size_increase THEN
+    `tyinst_sz x0 = tyinst_sz ty1` by DECIDE_TAC THEN METIS_TAC [],
+
+    IMP_RES_TAC type_match_size_increase THEN
+    `tylinst_sz y0 = tylinst_sz tyl1` by DECIDE_TAC THEN METIS_TAC [],
+
+    IMP_RES_TAC type_match_size_increase THEN
+    `tainst_sz h = tainst_sz ta1` by DECIDE_TAC THEN METIS_TAC [],
+
+    IMP_RES_TAC type_match_size_increase THEN
+    `talinst_sz z = talinst_sz tal1` by DECIDE_TAC THEN METIS_TAC [],
+
+    IMP_RES_TAC type_match_size_increase THEN
+    `tyinst_sz h = tyinst_sz ty1` by DECIDE_TAC THEN METIS_TAC [],
+
+    IMP_RES_TAC type_match_size_increase THEN
+    `tylinst_sz z = tylinst_sz tyl1` by DECIDE_TAC THEN METIS_TAC []
+  ]);
+
+val type_match_antisym = store_thm(
+  "type_match_antisym",
+  ``ty1 <= ty2 /\ ty2 <= ty1 ==>
+       ?s. (type_inst s ty1 = SOME ty2) /\
+           renaming_upto (tyfrees ty1) s``,
+  SRW_TAC [][type_match_def] THEN
+  `tyinst_sz ty1 <= tyinst_sz ty2 /\ tyinst_sz ty2 <= tyinst_sz ty1`
+     by METIS_TAC [type_match_size_increase] THEN
+  `tyinst_sz ty1 = tyinst_sz ty2` by DECIDE_TAC THEN
+  METIS_TAC [type_match_size_eq_renaming]);
+
+val cppID_inst_def = Define`
+  cppID_inst s id =
+    case cppid_inst s id of NONE -> NONE || SOME ty -> typeid ty
+`;
 
 (* instantiate an expression *)
 val expr_inst_def = Define`
-  (expr_inst sigma (Cnum n) = Cnum n) /\
-  (expr_inst sigma (Cchar n) = Cchar n) /\
-  (expr_inst sigma (Cnullptr ty) = Cnullptr (type_inst sigma ty)) /\
-  (expr_inst sigma This = This) /\
+  (expr_inst sigma (Cnum n) = SOME (Cnum n)) /\
+  (expr_inst sigma (Cchar n) = SOME (Cchar n)) /\
+  (expr_inst sigma (Cnullptr ty) = OPTION_MAP Cnullptr (type_inst sigma ty)) /\
+  (expr_inst sigma This = SOME This) /\
   (expr_inst sigma (Var id) =
      case id of
         IDConstant (F,[],s) ->
-           (case FINDL (\ (p,a). p = TVal (TVAVar s)) sigma of
-               NONE -> Var id
-            || SOME (p, a) ->
-                 (case a of
-                     TVal (TNum i) -> Cnum i
-                  || TVal (TObj id') -> Var id'
-                  || TVal (TMPtr cid ty) ->
+           (case sigma.valmap s of
+              TNum i -> SOME (Cnum i)
+           || TObj id' -> SOME (Var id')
+           || TMPtr cid ty ->
                         (case cid of
-                            IDFld cnm fldname -> MemAddr cnm fldname)))
-     || x -> Var id) /\
+                            IDFld cnm fldname -> SOME (MemAddr cnm fldname))
+           || TVAVar s' -> SOME (Var (IDConstant (F, [], s'))))
+     || x -> SOME (Var id)) /\
   (expr_inst sigma (COr e1 e2) =
-     COr (expr_inst sigma e1) (expr_inst sigma e2)) /\
+     OP2CMB COr (expr_inst sigma e1) (expr_inst sigma e2)) /\
   (expr_inst sigma (CAnd e1 e2) =
-     CAnd (expr_inst sigma e1) (expr_inst sigma e2)) /\
+     OP2CMB CAnd (expr_inst sigma e1) (expr_inst sigma e2)) /\
   (expr_inst sigma (CCond e1 e2 e3) =
-     CCond (expr_inst sigma e1) (expr_inst sigma e2) (expr_inst sigma e3)) /\
+     case expr_inst sigma e1 of
+        NONE -> NONE
+     || SOME e1' -> OP2CMB (CCond e1')
+                           (expr_inst sigma e2)
+                           (expr_inst sigma e3)) /\
   (expr_inst sigma (CApBinary cbop e1 e2) =
-     CApBinary cbop (expr_inst sigma e1) (expr_inst sigma e2)) /\
-  (expr_inst sigma (CApUnary cuop e) = CApUnary cuop (expr_inst sigma e)) /\
-  (expr_inst sigma (Addr e) = Addr (expr_inst sigma e)) /\
-  (expr_inst sigma (Deref e) = Deref (expr_inst sigma e)) /\
+     OP2CMB (CApBinary cbop) (expr_inst sigma e1) (expr_inst sigma e2)) /\
+  (expr_inst sigma (CApUnary cuop e) =
+     OPTION_MAP (CApUnary cuop) (expr_inst sigma e)) /\
+  (expr_inst sigma (Addr e) = OPTION_MAP Addr (expr_inst sigma e)) /\
+  (expr_inst sigma (Deref e) = OPTION_MAP Deref (expr_inst sigma e)) /\
   (expr_inst sigma (MemAddr cid fld) =
-     MemAddr (cppid_inst sigma cid) (sfld_inst sigma fld)) /\
+     OP2CMB MemAddr (cppID_inst sigma cid) (sfld_inst sigma fld)) /\
   (expr_inst sigma (Assign bopopt e1 e2) =
-     Assign bopopt (expr_inst sigma e1) (expr_inst sigma e2)) /\
-  (expr_inst sigma (SVar e fld) = SVar (expr_inst sigma e)
-                                       (sfld_inst sigma fld)) /\
+     OP2CMB (Assign bopopt) (expr_inst sigma e1) (expr_inst sigma e2)) /\
+  (expr_inst sigma (SVar e fld) =
+     OP2CMB SVar (expr_inst sigma e) (sfld_inst sigma fld)) /\
   (expr_inst sigma (FnApp e args) =
-     FnApp (expr_inst sigma e) (exprl_inst sigma args)) /\
+     OP2CMB FnApp (expr_inst sigma e) (exprl_inst sigma args)) /\
   (expr_inst sigma (CommaSep e1 e2) =
-     CommaSep (expr_inst sigma e1) (expr_inst sigma e2)) /\
+     OP2CMB CommaSep (expr_inst sigma e1) (expr_inst sigma e2)) /\
   (expr_inst sigma (Cast ty e) =
-     Cast (type_inst sigma ty) (expr_inst sigma e)) /\
-  (expr_inst sigma (PostInc e) = PostInc (expr_inst sigma e)) /\
+     OP2CMB Cast (type_inst sigma ty) (expr_inst sigma e)) /\
+  (expr_inst sigma (PostInc e) = OPTION_MAP PostInc (expr_inst sigma e)) /\
   (expr_inst sigma (New ty args_opt) =
-     New (type_inst sigma ty) (exprlop_inst sigma args_opt)) /\
-  (expr_inst sigma (CAndOr_sqpt e) = CAndOr_sqpt (expr_inst sigma e)) /\
+     OP2CMB New (type_inst sigma ty) (exprlop_inst sigma args_opt)) /\
+  (expr_inst sigma (CAndOr_sqpt e) =
+     OPTION_MAP CAndOr_sqpt (expr_inst sigma e)) /\
   (expr_inst sigma (FnApp_sqpt e args) =
-     FnApp_sqpt (expr_inst sigma e) (exprl_inst sigma args)) /\
+     OP2CMB FnApp_sqpt (expr_inst sigma e) (exprl_inst sigma args)) /\
   (expr_inst sigma (LVal ad ty nms) =
-     LVal ad (type_inst sigma ty) (MAP (cppid_inst sigma) nms)) /\
+     OP2CMB (LVal ad) (type_inst sigma ty) (olmap (cppID_inst sigma) nms)) /\
   (expr_inst sigma (FVal fnid ty eopt) =
-     FVal fnid (type_inst sigma ty) (expropt_inst sigma eopt)) /\
+     OP2CMB (FVal fnid) (type_inst sigma ty) (expropt_inst sigma eopt)) /\
   (expr_inst sigma (ConstructorFVal b1 b2 ad nm) =
-     ConstructorFVal b1 b2 ad (cppid_inst sigma nm)) /\
+     OPTION_MAP (ConstructorFVal b1 b2 ad) (cppID_inst sigma nm)) /\
   (expr_inst sigma (ConstructedVal b ad nm) =
-     ConstructedVal b ad (cppid_inst sigma nm)) /\
+     OPTION_MAP (ConstructedVal b ad) (cppID_inst sigma nm)) /\
   (expr_inst sigma (DestructorCall ad nm) =
-     DestructorCall ad (cppid_inst sigma nm)) /\
-  (expr_inst sigma (RValreq e) = RValreq (expr_inst sigma e)) /\
+     OPTION_MAP (DestructorCall ad) (cppID_inst sigma nm)) /\
+  (expr_inst sigma (RValreq e) = OPTION_MAP RValreq (expr_inst sigma e)) /\
   (expr_inst sigma (ECompVal bytes ty) =
-     ECompVal bytes (type_inst sigma ty)) /\
-  (expr_inst sigma (ExceptionExpr e) = ExceptionExpr (expr_inst sigma e)) /\
+     OPTION_MAP (ECompVal bytes) (type_inst sigma ty)) /\
+  (expr_inst sigma (ExceptionExpr e) =
+     OPTION_MAP ExceptionExpr (expr_inst sigma e)) /\
 
-  (exprl_inst sigma [] = []) /\
-  (exprl_inst sigma (e::es) = expr_inst sigma e :: exprl_inst sigma es) /\
+  (exprl_inst sigma [] = SOME []) /\
+  (exprl_inst sigma (e::es) =
+     OP2CMB CONS (expr_inst sigma e) (exprl_inst sigma es)) /\
 
-  (exprlop_inst sigma NONE = NONE) /\
-  (exprlop_inst sigma (SOME elist) = SOME (exprl_inst sigma elist)) /\
+  (exprlop_inst sigma NONE = SOME NONE) /\
+  (exprlop_inst sigma (SOME elist) =
+     case exprl_inst sigma elist of
+        NONE -> NONE
+     || SOME elist' -> SOME (SOME elist')) /\
 
-  (expropt_inst sigma NONE = NONE) /\
-  (expropt_inst sigma (SOME e) = SOME (expr_inst sigma e))
+  (expropt_inst sigma NONE = SOME NONE) /\
+  (expropt_inst sigma (SOME e) =
+     case expr_inst sigma e of
+        NONE -> NONE
+     || SOME e' -> SOME (SOME e'))
 `
 
 (* this shouldn't ever actually be called, because instantiation shouldn't
    ever see programs with dynamic helper syntax (such as this) in place *)
 val varlocn_inst_def = Define`
   (varlocn_inst sigma (RefPlace nopt nm) =
-     RefPlace nopt (cppid_inst sigma nm)) /\
-  (varlocn_inst sigma (ObjPlace n) = ObjPlace n)
+     OPTION_MAP (RefPlace nopt) (cppID_inst sigma nm)) /\
+  (varlocn_inst sigma (ObjPlace n) = SOME (ObjPlace n))
 `;
 
 (* fields that are initialised can't be member functions, so there is no
    chance the MI_fld could be a template call *)
 val meminitid_inst_def = Define`
-  (meminitid_inst sigma (MI_C id) = MI_C (cppid_inst sigma id)) /\
-  (meminitid_inst sigma (MI_fld nm) = MI_fld nm)
+  (meminitid_inst sigma (MI_C id) = OPTION_MAP MI_C (cppID_inst sigma id)) /\
+  (meminitid_inst sigma (MI_fld nm) = SOME (MI_fld nm))
 `;
 
 val stmt_inst_defn = Hol_defn "stmt_inst" `
-  (stmt_inst sigma EmptyStmt = EmptyStmt) /\
+  (stmt_inst sigma EmptyStmt = SOME EmptyStmt) /\
   (stmt_inst sigma (CLoop ee st) =
-     CLoop (eexpr_inst sigma ee) (stmt_inst sigma st)) /\
+     OP2CMB CLoop (eexpr_inst sigma ee) (stmt_inst sigma st)) /\
   (stmt_inst sigma (CIf ee st1 st2) =
-     CIf (eexpr_inst sigma ee) (stmt_inst sigma st1) (stmt_inst sigma st2)) /\
-  (stmt_inst sigma (Standalone ee) = Standalone (eexpr_inst sigma ee)) /\
+     case eexpr_inst sigma ee of
+        NONE -> NONE
+     || SOME ee' ->
+          OP2CMB (CIf ee') (stmt_inst sigma st1) (stmt_inst sigma st2)) /\
+  (stmt_inst sigma (Standalone ee) =
+     OPTION_MAP Standalone (eexpr_inst sigma ee)) /\
   (stmt_inst sigma (Block b vdl stl) =
-     Block b (MAP (vdec_inst sigma) vdl) (MAP (stmt_inst sigma) stl)) /\
-  (stmt_inst sigma (Ret ee) = Ret (eexpr_inst sigma ee)) /\
-  (stmt_inst sigma EmptyRet = EmptyRet) /\
-  (stmt_inst sigma Break = Break) /\
-  (stmt_inst sigma Cont = Cont) /\
-  (stmt_inst sigma (Trap tt st) = Trap tt (stmt_inst sigma st)) /\
+     OP2CMB (Block b)
+            (olmap (vdec_inst sigma) vdl)
+            (olmap (stmt_inst sigma) stl)) /\
+  (stmt_inst sigma (Ret ee) = OPTION_MAP Ret (eexpr_inst sigma ee)) /\
+  (stmt_inst sigma EmptyRet = SOME EmptyRet) /\
+  (stmt_inst sigma Break = SOME Break) /\
+  (stmt_inst sigma Cont = SOME Cont) /\
+  (stmt_inst sigma (Trap tt st) = OPTION_MAP (Trap tt) (stmt_inst sigma st)) /\
   (stmt_inst sigma (Throw eeopt) =
-     Throw (OPTION_MAP (eexpr_inst sigma) eeopt)) /\
+     case eeopt of
+        NONE -> SOME (Throw NONE)
+     || SOME ee -> (case eexpr_inst sigma ee of
+                       NONE -> NONE
+                    || SOME ee' -> SOME (Throw (SOME ee')))) /\
   (stmt_inst sigma (Catch st handlers) =
-     Catch (stmt_inst sigma st)
-           (MAP (\ (exnpd, st).
-                   ((case exnpd of
-                        NONE -> NONE
-                     || SOME (sopt,ty) -> SOME (sopt, type_inst sigma ty)),
-                    stmt_inst sigma st))
-                handlers)) /\
-  (stmt_inst sigma ClearExn = ClearExn)
+     OP2CMB Catch
+            (stmt_inst sigma st)
+            (olmap (\ (exnpd, st).
+                      (OP2CMB (,)
+                              (case exnpd of
+                                  NONE -> SOME NONE
+                               || SOME (sopt,ty) ->
+                                   (case type_inst sigma ty of
+                                       NONE -> NONE
+                                    || SOME ty' -> SOME (SOME (sopt, ty'))))
+                              (stmt_inst sigma st)))
+                   handlers)) /\
+  (stmt_inst sigma ClearExn = SOME ClearExn)
 
      /\
 
-  (eexpr_inst sigma (NormE e se) = NormE (expr_inst sigma e) se) /\
-  (eexpr_inst sigma (EStmt st c) = EStmt (stmt_inst sigma st) c)
+  (eexpr_inst sigma (NormE e se) =
+     OPTION_MAP (\e. NormE e se) (expr_inst sigma e)) /\
+  (eexpr_inst sigma (EStmt st c) =
+     OPTION_MAP (\s. EStmt s c) (stmt_inst sigma st))
 
      /\
 
   (vdec_inst sigma (VDec ty nm) =
-     VDec (type_inst sigma ty) (cppid_inst sigma nm)) /\
+     OP2CMB VDec (type_inst sigma ty) (cppID_inst sigma nm)) /\
   (vdec_inst sigma (VDecInit ty nm init) =
-     VDecInit (type_inst sigma ty)
-              (cppid_inst sigma nm)
-              (initialiser_inst sigma init)) /\
+     case type_inst sigma ty of
+        NONE -> NONE
+     || SOME ty' -> OP2CMB (VDecInit ty')
+                           (cppID_inst sigma nm)
+                           (initialiser_inst sigma init)) /\
   (vdec_inst sigma (VDecInitA ty vlocn init) =
-     VDecInitA (type_inst sigma ty)
-               (varlocn_inst sigma vlocn)
-               (initialiser_inst sigma init)) /\
+     case type_inst sigma ty of
+        NONE -> NONE
+     || SOME ty' -> OP2CMB (VDecInitA ty')
+                           (varlocn_inst sigma vlocn)
+                           (initialiser_inst sigma init)) /\
   (vdec_inst sigma (VStrDec id infoopt) =
-     VStrDec (cppid_inst sigma id) (OPTION_MAP (cinfo_inst sigma) infoopt)) /\
-  (vdec_inst sigma (VException e) = VException (expr_inst sigma e))
+     case infoopt of
+        NONE -> OPTION_MAP (\i. VStrDec i NONE) (cppID_inst sigma id)
+     || SOME info ->
+          (case cinfo_inst sigma info of
+              NONE -> NONE
+           || SOME info' -> OPTION_MAP (\i. VStrDec i (SOME info'))
+                                       (cppID_inst sigma id))) /\
+  (vdec_inst sigma (VException e) = OPTION_MAP VException (expr_inst sigma e))
 
      /\
 
   (centry_inst sigma (CFnDefn ty fld params body) =
-     CFnDefn (type_inst sigma ty)
-             (sfld_inst sigma fld)
-             (MAP (\ (n,ty). (n, type_inst sigma ty)) params)
-             (OPTION_MAP (stmt_inst sigma) body)) /\
+     case type_inst sigma ty of
+        NONE -> NONE
+     || SOME ty' ->
+          (case sfld_inst sigma fld of
+              NONE -> NONE
+           || SOME sfld' -> OP2CMB (CFnDefn ty' sfld')
+                                   (olmap (\ (n,ty).
+                                             OPTION_MAP ((,) n)
+                                                        (type_inst sigma ty))
+                                          params)
+                                   (OPTION_MAP (stmt_inst sigma) body))) /\
   (centry_inst sigma (FldDecl fldnm ty) =
-     FldDecl fldnm (type_inst sigma ty)) /\
+     OPTION_MAP (FldDecl fldnm) (type_inst sigma ty)) /\
   (centry_inst sigma (Constructor params meminits bodyopt) =
-     Constructor (MAP (\ (n,ty). (n, type_inst sigma ty)) params)
-                 (MAP (\ (mid,optargs). (meminitid_inst sigma mid,
-                                         OPTION_MAP (MAP (expr_inst sigma))
-                                                    optargs))
-                      meminits)
+     case olmap (\ (n,ty). OPTION_MAP ((,)n) (type_inst sigma ty)) params of
+        NONE -> NONE
+     || SOME params' ->
+          OP2CMB (Constructor params')
+                 (olmap (\ (mid,optargs).
+                           OP2CMB (,)
+                                  (meminitid_inst sigma mid)
+                                  (OPTION_MAP (olmap (expr_inst sigma))
+                                              optargs))
+                        meminits)
                  (OPTION_MAP (stmt_inst sigma) bodyopt)) /\
   (centry_inst sigma (Destructor bodyopt) =
-     Destructor (OPTION_MAP (stmt_inst sigma) bodyopt))
+     OPTION_MAP Destructor (OPTION_MAP (stmt_inst sigma) bodyopt))
 
      /\
 
   (cinfo_inst sigma ci =
-     <| fields := MAP (\ (ce,b,p). (centry_inst sigma ce, b, p)) ci.fields;
-        ancestors := MAP (\ (cs,b,p). (cppid_inst sigma cs, b, p))
-                         ci.ancestors |>)
+     case
+       olmap (\ (ce,b,p). OPTION_MAP (\ce. (ce,b,p)) (centry_inst sigma ce))
+             ci.fields
+     of
+        NONE -> NONE
+     || SOME fields' ->
+          case olmap (\ (cs,b,p). OPTION_MAP (\i. (i,b,p))
+                                             (cppID_inst sigma cs))
+                     ci.ancestors
+          of
+             NONE -> NONE
+          || SOME ancestors' -> SOME <| fields := fields';
+                                        ancestors := ancestors' |>)
 
      /\
 
   (initialiser_inst sigma (DirectInit0 elist) =
-     DirectInit0 (MAP (expr_inst sigma) elist)) /\
+     OPTION_MAP DirectInit0 (olmap (expr_inst sigma) elist)) /\
   (initialiser_inst sigma (DirectInit ee) =
-     DirectInit (eexpr_inst sigma ee)) /\
-  (initialiser_inst sigma (CopyInit ee) = CopyInit (eexpr_inst sigma ee))
+     OPTION_MAP DirectInit (eexpr_inst sigma ee)) /\
+  (initialiser_inst sigma (CopyInit ee) =
+     OPTION_MAP CopyInit (eexpr_inst sigma ee))
 `;
 
 val size_def = DB.fetch "statements" "CStmt_size_def"
@@ -475,12 +938,15 @@ val (stmt_inst_def, stmt_inst_ind) = Defn.tprove(
   SRW_TAC [ARITH_ss][] THENL [
     Induct_on `handlers` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
     RES_TAC THEN DECIDE_TAC,
-    Induct_on `vdl` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
-    RES_TAC THEN DECIDE_TAC,
     Cases_on `ci` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
     Induct_on `l` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
+    RES_TAC THEN DECIDE_TAC,
+    Induct_on `vdl` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
     RES_TAC THEN DECIDE_TAC,
     Induct_on `stl` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
     RES_TAC THEN DECIDE_TAC
   ]);
+
+val _ = export_theory();
+
 

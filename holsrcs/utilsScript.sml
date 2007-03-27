@@ -235,6 +235,45 @@ val olmap_CONG = store_thm(
 
 val _ = DefnBase.export_cong "olmap_CONG"
 
+(* ----------------------------------------------------------------------
+    OP2CMB : ('a -> 'b -> 'c) -> 'a option -> 'b option -> 'c option
+   ---------------------------------------------------------------------- *)
+val OP2CMB_def = Define`
+  (OP2CMB f (SOME x) (SOME y) = SOME (f x y)) /\
+  (OP2CMB f _ _ = NONE)
+`;
+val _ = export_rewrites ["OP2CMB_def"]
+
+val OP2CMB_CONG = store_thm(
+  "OP2CMB_CONG",
+  ``!x1 x2 y1 y2 f1 f2.
+       (x1 = x2) /\ (y1 = y2) /\
+       (!x y. (x2 = SOME x) /\ (y2 = SOME y) ==> (f1 x y = f2 x y)) ==>
+       (OP2CMB f1 x1 y1 = OP2CMB f2 x2 y2)``,
+  SRW_TAC [][] THEN Cases_on `x1` THEN Cases_on `y1` THEN
+  SRW_TAC [][]);
+val _ = DefnBase.export_cong "OP2CMB_CONG"
+
+val OP2CMB_NONE2 = store_thm(
+  "OP2CMB_NONE2",
+  ``(OP2CMB f x NONE = NONE)``,
+  Cases_on `x` THEN SRW_TAC [][]);
+val _ = export_rewrites ["OP2CMB_NONE2"]
+
+val OP2CMB_EQ_SOME_E = store_thm(
+  "OP2CMB_EQ_SOME_E",
+  ``(OP2CMB f x y = SOME v) ==> ?x0 y0. (v = f x0 y0) /\ (x = SOME x0) /\
+                                        (y = SOME y0)``,
+  MAP_EVERY Cases_on [`x`,`y`] THEN SRW_TAC [][]);
+
+val INJECTIVE_OP2CMB_EQ_SOME_I = store_thm(
+  "INJECTIVE_OP2CMB_EQ_SOME_I",
+  ``(!x1 y1 x2 y2. (f x1 y1 = f x2 y2) = (x1 = x2) /\ (y1 = y2)) ==>
+    ((OP2CMB f x y = SOME v) =
+       ?x0 y0. (v = f x0 y0) /\ (x = SOME x0) /\ (y = SOME y0))``,
+  STRIP_TAC THEN MAP_EVERY Cases_on [`x`,`y`] THEN SRW_TAC [][] THEN
+  METIS_TAC []);
+val _ = export_rewrites ["INJECTIVE_OP2CMB_EQ_SOME_I"]
 
 
 val _ = export_theory()
