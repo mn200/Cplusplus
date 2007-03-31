@@ -275,6 +275,48 @@ val INJECTIVE_OP2CMB_EQ_SOME_I = store_thm(
   METIS_TAC []);
 val _ = export_rewrites ["INJECTIVE_OP2CMB_EQ_SOME_I"]
 
+(* ----------------------------------------------------------------------
+    optimage : ('a -> 'b option) -> 'a set -> ('b set, 'a set)
+   ---------------------------------------------------------------------- *)
+
+val optimage_def = Define`
+  optimage (f : 'a -> 'b option) (s : 'a set) =
+     ({ b | ?a. a IN s /\ (SOME b = f a) },
+      { a | f a = NONE })
+`;
+
+val optimage_image = store_thm(
+  "optimage_image",
+  ``optimage f s = (IMAGE THE (IMAGE f s DELETE NONE),
+                    { a | f a = NONE })``,
+  SRW_TAC [DNF_ss][optimage_def, EXTENSION, EQ_IMP_THM] THENL [
+    Q.EXISTS_TAC `a` THEN POP_ASSUM (fn th => SRW_TAC [][SYM th]),
+    Q.EXISTS_TAC `x''` THEN Cases_on `f x''` THEN
+    FULL_SIMP_TAC (srw_ss()) []
+  ]);
+
+(* ----------------------------------------------------------------------
+    THEOPT : ('a -> bool) -> 'a option
+   ---------------------------------------------------------------------- *)
+
+val THEOPT_def = Define`
+  (THEOPT) P = if (?)P then SOME ((@)P) else NONE
+`
+val _ = add_binder("THEOPT", 0)
+
+val THEOPT_I = store_thm(
+  "THEOPT_I",
+  ``P x ==> P (THE ((THEOPT) P))``,
+  `P = (\x. P x)` by SRW_TAC [][FUN_EQ_THM] THEN 
+  POP_ASSUM SUBST_ALL_TAC THEN SRW_TAC [][THEOPT_def] THENL [
+    SELECT_ELIM_TAC THEN METIS_TAC [],
+    METIS_TAC []
+  ]);
+
+val THEOPT_EQ_NONE = store_thm(
+  "THEOPT_EQ_NONE",
+  ``(!x. ~P x) ==> ((THEOPT x. P x) = NONE)``,
+  SRW_TAC [][THEOPT_def]);
 
 val _ = export_theory()
 

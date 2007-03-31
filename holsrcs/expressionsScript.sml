@@ -94,6 +94,8 @@ val _ = Hol_datatype
 
 `;
 
+val _ = export_rewrites ["CExpr_size_def"]
+
 val value_type_def = Define`
   (value_type (ECompVal v t) = t) /\
   (value_type (LVal a t p) = t)

@@ -165,6 +165,8 @@ val _ = Hol_datatype`
    i.e., an incomplete declaration of a struct type
 *)
 
+val _ = export_rewrites ["CStmt_size_def"]
+
 
 (* derived loop forms *)
 val forloop_def = Define`

@@ -75,6 +75,7 @@ val _ = Hol_datatype `
      Const of CPP_Type |
      TypeID of CPP_ID
 `;
+val _ = export_rewrites [ "CPP_ID_size_def" ]
 
 val _ = type_abbrev("CPPname", ``:CPP_ID``)
 val _ = type_abbrev("class_spec", ``:CPP_ID``)
@@ -99,6 +100,19 @@ val namespaces_def = Define`
   (id_namespaces (IDVar s) = (F, [])) /\
   (id_namespaces (IDTempCall tid targs) = tid_namespaces tid) /\
   (id_namespaces (IDFld id fld) = id_namespaces id)
+`;
+
+val sfld_basename_def = Define`
+  (sfld_basename (SFName s) = s) /\
+  (sfld_basename (SFTempCall s args) = s)
+`;
+
+val id_basename_def = Define`
+  (id_basename (IDVar s) = NONE) /\
+  (id_basename (IDFld cid sfld) = NONE) /\
+  (id_basename (IDTempCall (TemplateConstant tn) targs) = SOME tn) /\
+  (id_basename (IDTempCall (TemplateVar s) targs) = NONE) /\
+  (id_basename (IDConstant tn) = SOME tn)
 `;
 
 val _ = Hol_datatype `tvar_sort = TempV of string
@@ -159,7 +173,6 @@ val type_free_vars_defn = Hol_defn "type_free_vars" `
   (type_free_vars (TypeID id) = id_free_vars id)
 `;
 
-val _ = export_rewrites [ "CPP_ID_size_def" ]
 val (type_free_vars_def, type_free_vars_ind) = Defn.tprove(
   type_free_vars_defn,
   WF_REL_TAC
