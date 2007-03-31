@@ -54,8 +54,6 @@ val _ = Hol_datatype
 
          (* these are "fake expression constructors" *)
 
-            (* this to be replaced by !!e *)
-         | CAndOr_sqpt of CExpr
 
             (* this represents the point where all arguments and function
                have been evaluated *)
@@ -132,8 +130,6 @@ val rec_expr_P_def = Define`
       P (CommaSep e1 e2) /\ rec_expr_P e1 P /\ rec_expr_P e2 P) /\
     (rec_expr_P (Cast t e) P = P (Cast t e) /\ rec_expr_P e P) /\
     (rec_expr_P (PostInc e) P = P (PostInc e) /\ rec_expr_P e P) /\
-    (rec_expr_P (CAndOr_sqpt e) P =
-      P (CAndOr_sqpt e) /\ rec_expr_P e P) /\
     (rec_expr_P (FnApp_sqpt e args) P =
       P (FnApp_sqpt e args) /\ rec_expr_P e P /\ rec_exprl_P args P) /\
     (rec_expr_P (LVal a t p) P = P (LVal a t p)) /\

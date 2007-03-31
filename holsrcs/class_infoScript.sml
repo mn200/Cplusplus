@@ -592,13 +592,14 @@ val subobj_offset_def = Define`
 (* type-checking requires a variety of pieces of information, which we derive
    from a state with this function *)
 val expr_type_comps_def = Define`
-  expr_type_comps s =
+  expr_type_comps s thisty =
     <| class_fields :=
           FUN_FMAP (\c. MAP (\ (n,ty). (SFName n, ty)) (THE (nsdmembers s c)))
                    { c | ?v. c IN FDOM s.classmap /\
                              (s.classmap ' c = SOME v) };
        var_types := s.typemap ;
-       abs_classes := {} |>
+       abs_classes := {} ;
+       this_type := thisty |>
 `;
 
 val MEM_splits = prove(

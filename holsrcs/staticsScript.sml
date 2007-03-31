@@ -1,8 +1,6 @@
 (* Typing of C(++) expressions *)
 
-(* BAD_ASSUMPTION: most of this is bogus and will remain so until it
-     deals with sub-typing etc.  When that happens, the expr_type_det lemma
-     will need to be replaced with unique most-derived type or some such. *)
+(* It is a basic premise that every C++ expression has a unique static type. *)
 
 (* Michael Norrish *)
 
@@ -189,7 +187,8 @@ val _ = Hol_datatype `
   static_info = <|
     class_fields : class_spec |-> (StaticField # CPP_Type) list ;
     var_types    : CPPname |-> CPP_Type ;
-    abs_classes  : class_spec set
+    abs_classes  : class_spec set ;
+    this_type    : CPP_Type option
   |>
 `
 
@@ -206,6 +205,11 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
   (!s n. expr_type s RValue (Cnum n) (Signed Int)) /\
 
   (!s c. expr_type s RValue (Cchar c) (Signed Int)) /\
+
+  (!s ty.
+       (s.this_type = SOME ty)
+  ==>
+       expr_type s RValue This (Ptr ty)) /\
 
   (!si t.
       wf_type si.abs_classes t ==>
@@ -279,9 +283,6 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
        scalar_type t1 /\ scalar_type t2
          ==>
        expr_type s RValue (COr e1 e2) (Signed Int)) /\
-
-  (!s e t. expr_type s RValue e t /\ scalar_type t ==>
-           expr_type s RValue (CAndOr_sqpt e) (Signed Int)) /\
 
   (!s e1 gty e2 t2 e3 t3 restype.
        expr_type s RValue e1 gty /\

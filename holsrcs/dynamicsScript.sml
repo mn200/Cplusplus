@@ -34,7 +34,7 @@ val valid_econtext_def = Define`
                f' IN {COr; CAnd; CommaSep}) \/
       (?e2 e3. (f = \e1. CCond e1 e2 e3)) \/
       (?f'. f = CApUnary f') \/
-      (f IN  {Addr; Deref; CAndOr_sqpt; PostInc; RValreq}) \/
+      (f IN  {Addr; Deref; PostInc; RValreq}) \/
       (?fld. f = \e. SVar e fld) \/
       (?args. f = \e. FnApp e args) \/
       (?f' pre post.
@@ -65,7 +65,7 @@ val valid_lvcontext_def = Define`
                  f' IN {COr; CAnd; CommaSep}) \/
         (?e2 e3. (f = \e1. CCond e1 e2 e3)) \/
         (?f'. f = CApUnary f') \/
-        (f IN  {Deref; CAndOr_sqpt; RValreq}) \/
+        (f IN  {Deref; RValreq}) \/
         (?e1 opt. (f = Assign opt e1)) \/
         (?args. f = \e. FnApp e args) \/
         (?t. f = Cast t)
@@ -207,10 +207,11 @@ val copy2globals_def = Define`
 (* true if the nth argument of f is not a reference type *)
 (* TODO: deal with overloading *)
 val fn_expects_rval_def = Define`
-  fn_expects_rval s f n =
+  fn_expects_rval s thisty f n =
     ?retty args.
-      (expr_type (expr_type_comps s) RValue f (Function retty args) \/
-       expr_type (expr_type_comps s) RValue f (Ptr (Function retty args))) /\
+      (expr_type (expr_type_comps s thisty) RValue f (Function retty args) \/
+       expr_type (expr_type_comps s thisty) RValue f
+                 (Ptr (Function retty args))) /\
       ~ref_type (EL n args)
 `;
 
@@ -622,11 +623,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: cond-false *)
-(!v t e2 t2 e3 t3 resexpr result_type se s sn.
+(!v t e2 t2 e3 t3 thisty resexpr result_type se s sn.
      is_null_se se /\ scalar_type t /\
-     expr_type (expr_type_comps s) RValue e2 t2 /\
-     expr_type (expr_type_comps s) RValue e3 t3 /\
-     expr_type (expr_type_comps s) RValue
+     (thisty = case s.thisvalue of
+                  SOME (ECompVal bytes (Ptr ty)) -> SOME ty
+               || _ -> NONE) /\
+     expr_type (expr_type_comps s thisty) RValue e2 t2 /\
+     expr_type (expr_type_comps s thisty) RValue e3 t3 /\
+     expr_type (expr_type_comps s thisty) RValue
                (CCond (ECompVal v t) e2 e3)
                result_type /\
      is_zero t v  /\
@@ -638,11 +642,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: cond-true *)
-(!v t e2 t2 e3 t3 resexpr result_type se s sn.
+(!v t e2 t2 e3 t3 thisty resexpr result_type se s sn.
      is_null_se se /\ scalar_type t /\
-     expr_type (expr_type_comps s) RValue e2 t2 /\
-     expr_type (expr_type_comps s) RValue e3 t3 /\
-     expr_type (expr_type_comps s) RValue
+     (thisty = case s.thisvalue of
+                  SOME (ECompVal bytes (Ptr ty)) -> SOME ty
+               || _ -> NONE) /\
+     expr_type (expr_type_comps s thisty) RValue e2 t2 /\
+     expr_type (expr_type_comps s thisty) RValue e3 t3 /\
+     expr_type (expr_type_comps s thisty) RValue
                (CCond (ECompVal v t) e2 e3)
                result_type /\
      ~is_zero t v /\
@@ -831,7 +838,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ~class_type (strip_array ty) /\ malloc s0 ty a /\
      (result_ty = case strip_const ty of
                      Array bty n -> bty
-                  || _ -> ty) /\
+                  || somety -> ty) /\
      sizeof T (sizeofmap s0) ty sz /\
      (s = s0 with <| hallocmap updated_by (UNION) (range_set a sz) ;
                      constmap := if const_type ty then
@@ -967,7 +974,12 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: function-application-lval2rval *)
 (!f pfx e0 e sfx se0 se s0 s.
      lval2rval (s0,e0,se0) (s,e,se) /\
-     fn_expects_rval s0 f (LENGTH pfx)
+     fn_expects_rval s0
+                     (case s0.thisvalue of
+                         SOME (ECompVal bytes (Ptr ty)) -> SOME ty
+                      || _ -> NONE)
+                     f
+                     (LENGTH pfx)
    ==>
      ^mng (mExpr (FnApp f (pfx ++ (e0 :: sfx))) se0) s0
           (s, mExpr (FnApp f (pfx ++ (e :: sfx))) se))

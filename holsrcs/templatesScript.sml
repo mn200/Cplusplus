@@ -736,8 +736,6 @@ val expr_inst_def = Define`
   (expr_inst sigma (PostInc e) = OPTION_MAP PostInc (expr_inst sigma e)) /\
   (expr_inst sigma (New ty args_opt) =
      OP2CMB New (type_inst sigma ty) (exprlop_inst sigma args_opt)) /\
-  (expr_inst sigma (CAndOr_sqpt e) =
-     OPTION_MAP CAndOr_sqpt (expr_inst sigma e)) /\
   (expr_inst sigma (FnApp_sqpt e args) =
      OP2CMB FnApp_sqpt (expr_inst sigma e) (exprl_inst sigma args)) /\
   (expr_inst sigma (LVal ad ty nms) =
@@ -946,6 +944,806 @@ val (stmt_inst_def, stmt_inst_ind) = Defn.tprove(
     Induct_on `stl` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
     RES_TAC THEN DECIDE_TAC
   ]);
+
+
+(* ----------------------------------------------------------------------
+    process "stuff"
+      = 'process member function' and 'process definitions' in Siek and
+        Taha, but we have lots more than just member functions to deal
+        with.
+
+    The basic behaviour is
+                             stuff
+      templates * functions --------> templates * functions
+
+    where the templates and functions are template classes and
+    template functions in any state of instantiation.  When stuff is
+    encountered, we look at the types inside it and make sure that the
+    templates on the left can instantiate those types.  This gives rise
+    to more template definitions, and these are added to the "output"
+    templates of the relation.
+   ---------------------------------------------------------------------- *)
+
+(* the template calls occurring within a concrete type *)
+val ttypes_def = Define`
+  (ttypes Void = {}) /\
+  (ttypes BChar = {}) /\
+  (ttypes Bool = {}) /\
+  (ttypes (Unsigned _) = {}) /\
+  (ttypes (Signed _) = {}) /\
+  (ttypes (Class cid) = cidttypes cid) /\
+  (ttypes Float = {}) /\
+  (ttypes Double = {}) /\
+  (ttypes LDouble = {}) /\
+  (ttypes (Ptr ty) = ttypes ty) /\
+  (ttypes (MPtr cid ty) = cidttypes cid UNION ttypes ty) /\
+  (ttypes (Ref ty) = ttypes ty) /\
+  (ttypes (Array ty n) = ttypes ty) /\
+  (ttypes (Function ty tylist) = ttypes ty UNION ttypesl tylist) /\
+  (ttypes (Const ty) = ttypes ty) /\
+  (ttypes (TypeID cid) = cidttypes cid)
+
+    /\
+
+  (ttypesl [] = {}) /\
+  (ttypesl (ty::tyl) = ttypes ty UNION ttypesl tyl) /\
+
+  (cidttypes (IDVar s) = {}) /\
+  (cidttypes (IDFld cid sfld) = cidttypes cid UNION sfld_ttypes sfld) /\
+  (cidttypes (IDTempCall tid targs) = {(tid,targs)} UNION talttypes targs) /\
+  (cidttypes (IDConstant _) = {}) /\
+
+  (sfld_ttypes (SFTempCall s tal) = talttypes tal) /\
+  (sfld_ttypes (SFName s) = {}) /\
+
+  (tattypes (TType ty) = ttypes ty) /\
+  (tattypes (TTemp tid) = {}) /\
+  (tattypes (TVal tva) = tvattypes tva) /\
+
+  (talttypes [] = {}) /\
+  (talttypes (ta::tal) = tattypes ta UNION talttypes tal) /\
+
+  (tvattypes (TNum i) = {}) /\
+  (tvattypes (TObj cid) = cidttypes cid) /\
+  (tvattypes (TMPtr cid ty) = cidttypes cid UNION ttypes ty) /\
+  (tvattypes (TVAVar s) = {})
+`;
+
+val expr_ttypes_def = Define`
+  (expr_ttypes (Cnum i) = {}) /\
+  (expr_ttypes (Cchar i) = {}) /\
+  (expr_ttypes (Cnullptr ty) = ttypes ty) /\
+  (expr_ttypes This = {}) /\
+  (expr_ttypes (Var cid) = cidttypes cid) /\
+  (expr_ttypes (COr e1 e2) = expr_ttypes e1 UNION expr_ttypes e2) /\
+  (expr_ttypes (CAnd e1 e2) = expr_ttypes e1 UNION expr_ttypes e2) /\
+  (expr_ttypes (CCond e1 e2 e3) = expr_ttypes e1 UNION expr_ttypes e2 UNION
+                                  expr_ttypes e3) /\
+  (expr_ttypes (CApBinary bop e1 e2) = expr_ttypes e1 UNION expr_ttypes e2) /\
+  (expr_ttypes (CApUnary uop e) = expr_ttypes e) /\
+  (expr_ttypes (Deref e) = expr_ttypes e) /\
+  (expr_ttypes (Addr e) = expr_ttypes e) /\
+  (expr_ttypes (MemAddr cid sfld) = cidttypes cid) /\
+  (expr_ttypes (Assign bopt e1 e2) = expr_ttypes e1 UNION expr_ttypes e2) /\
+  (expr_ttypes (SVar e sfld) = expr_ttypes e UNION sfld_ttypes sfld) /\
+  (expr_ttypes (FnApp e elist) = expr_ttypes e UNION exprl_ttypes elist) /\
+  (expr_ttypes (CommaSep e1 e2) = expr_ttypes e1 UNION expr_ttypes e2) /\
+  (expr_ttypes (Cast ty e) = ttypes ty UNION expr_ttypes e) /\
+  (expr_ttypes (PostInc e) = expr_ttypes e) /\
+  (expr_ttypes (New ty elopt) = ttypes ty UNION exprlopt_ttypes elopt) /\
+  (expr_ttypes (FnApp_sqpt e elist) =
+     expr_ttypes e UNION exprl_ttypes elist) /\
+  (expr_ttypes (LVal _ _ _) = {}) /\
+  (expr_ttypes (FVal _ _ _) = {}) /\
+  (expr_ttypes (ConstructorFVal _ _ _ _) = {}) /\
+  (expr_ttypes (ConstructedVal _ _ _) = {}) /\
+  (expr_ttypes (DestructorCall _ _) = {}) /\
+  (expr_ttypes (RValreq e) = expr_ttypes e) /\
+  (expr_ttypes (ECompVal _ _) = {}) /\
+  (expr_ttypes (ExceptionExpr _) = {}) /\
+  (expr_ttypes UndefinedExpr = {}) /\
+
+  (exprl_ttypes [] = {}) /\
+  (exprl_ttypes (e::elist) = expr_ttypes e UNION exprl_ttypes elist) /\
+
+  (exprlopt_ttypes NONE = {}) /\
+  (exprlopt_ttypes (SOME elist) = exprl_ttypes elist)
+`;
+
+val mem_init_id_ttypes_def = Define`
+  (mem_init_id_ttypes (MI_C cnm) = cidttypes cnm) /\
+  (mem_init_id_ttypes (MI_fld s) = {})
+`;
+
+val stmt_ttypes_defn = Defn.Hol_defn "stmt_ttypes" `
+  (stmt_ttypes (CLoop ee body) = eexpr_ttypes ee UNION stmt_ttypes body) /\
+  (stmt_ttypes (CIf ee s1 s2) =
+     eexpr_ttypes ee UNION stmt_ttypes s1 UNION stmt_ttypes s2) /\
+  (stmt_ttypes (Standalone ee) = eexpr_ttypes ee) /\
+  (stmt_ttypes (Block b vdl stl) =
+     FOLDL (\a vd. a UNION vd_ttypes vd) {} vdl UNION
+     FOLDL (\a st. a UNION stmt_ttypes st) {} stl) /\
+  (stmt_ttypes (Ret ee) = eexpr_ttypes ee) /\
+  (stmt_ttypes (Trap tt s) = stmt_ttypes s) /\
+  (stmt_ttypes (Throw NONE) = {}) /\
+  (stmt_ttypes (Throw (SOME ee)) = eexpr_ttypes ee) /\
+  (stmt_ttypes (Catch s handlers) =
+     stmt_ttypes s UNION
+     FOLDL (\a (ep,st). a UNION stmt_ttypes st UNION
+                        (case ep of
+                            NONE -> {}
+                         || SOME (_1, ty) -> ttypes ty))
+           {} handlers) /\
+  (stmt_ttypes _ = {}) /\
+
+  (eexpr_ttypes (NormE e se) = expr_ttypes e) /\
+  (eexpr_ttypes (EStmt s c) = stmt_ttypes s) /\
+
+  (vd_ttypes (VDec ty nm) =
+     if cppidfrees nm = {} then
+       ttypes ty UNION cidttypes nm
+     else {}) /\
+  (vd_ttypes (VDecInit ty nm init) =
+     if cppidfrees nm = {} then
+       ttypes ty UNION cidttypes nm UNION init_ttypes init
+     else {}) /\
+  (vd_ttypes (VDecInitA ty vl init) = {}) /\ (* dynamic value only *)
+  (vd_ttypes (VStrDec cspec cinfo_opt) =
+     if cppidfrees cspec = {} then
+       cidttypes cspec UNION
+       (case cinfo_opt of
+           NONE -> {}
+        || SOME cinfo -> cinfo_ttypes cinfo)
+     else {}) /\
+  (vd_ttypes (VException _) = {})  /\ (* dynamic value only *)
+
+  (centry_ttypes (CFnDefn retty sfld params bodyopt) =
+     if sfldfrees sfld = {} then
+       ttypes retty UNION sfld_ttypes sfld UNION
+       FOLDL (\a (nm,ty). a UNION ttypes ty) {} params UNION
+       (case bodyopt of NONE -> {} || SOME st -> stmt_ttypes st)
+     else {}) /\
+  (centry_ttypes (FldDecl string ty) = ttypes ty) /\
+  (centry_ttypes (Constructor params meminits bodyopt) =
+     FOLDL (\a (nm,ty). a UNION ttypes ty) {} params UNION
+     (case bodyopt of NONE -> {} || SOME st -> stmt_ttypes st) UNION
+     FOLDL (\a (memid, argsopt).
+              a UNION mem_init_id_ttypes memid UNION
+              exprlopt_ttypes argsopt)
+           {} meminits) /\
+  (centry_ttypes (Destructor bodyopt) =
+     case bodyopt of NONE -> {} || SOME s -> stmt_ttypes s) /\
+
+  (cinfo_ttypes ci =
+     FOLDL (\a (ce,b,p). a UNION centry_ttypes ce) {} ci.fields UNION
+     FOLDL (\a (cs,b,p). a UNION cidttypes cs) {} ci.ancestors) /\
+
+  (init_ttypes (DirectInit0 elist) = exprl_ttypes elist) /\
+  (init_ttypes (DirectInit ee) = eexpr_ttypes ee) /\
+  (init_ttypes (CopyInit ee) = eexpr_ttypes ee)
+`;
+
+val (stmt_ttypes_def, stmt_ttypes_ind) = Defn.tprove(stmt_ttypes_defn,
+  WF_REL_TAC `^(last (TotalDefn.guessR stmt_ttypes_defn))` THEN
+  SRW_TAC [ARITH_ss][] THENL [
+    Induct_on `handlers` THEN SRW_TAC [][] THEN
+    RES_TAC THEN SRW_TAC [ARITH_ss][],
+
+    Cases_on `ci` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+    Induct_on `l` THEN SRW_TAC [ARITH_ss][] THEN RES_TAC THEN
+    SRW_TAC [ARITH_ss][],
+
+    Induct_on `vdl` THEN
+    ASM_SIMP_TAC (srw_ss() ++ ARITH_ss) [DISJ_IMP_THM, FORALL_AND_THM] THEN
+    REPEAT STRIP_TAC THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+
+    Induct_on `stl` THEN ASM_SIMP_TAC (srw_ss() ++ DNF_ss ++ ARITH_ss) [] THEN
+    REPEAT STRIP_TAC THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []
+  ]);
+
+val _ = save_thm("stmt_ttypes_def", stmt_ttypes_def)
+val _ = save_thm("stmt_ttypes_ind", stmt_ttypes_ind)
+val _ = export_rewrites ["stmt_ttypes_def"]
+
+val extdecl_ttypes_def = Define`
+  (extdecl_ttypes (FnDefn ty nm params body) =
+     if cppidfrees nm = {} then
+       ttypes ty UNION cidttypes nm UNION
+       FOLDL (\a (n,ty). a UNION ttypes ty) {} params UNION
+       stmt_ttypes body
+     else {}) /\
+  (extdecl_ttypes (Decl d) = vd_ttypes d) /\
+  (extdecl_ttypes (ClassConDef id params meminits body) =
+     if cppidfrees id = {} then
+       centry_ttypes (Constructor params meminits (SOME body))
+     else {}) /\
+  (extdecl_ttypes (ClassDestDef id body) =
+     if cppidfrees id = {} then
+       centry_ttypes (Destructor (SOME body))
+     else {})
+`;
+
+
+(* ----------------------------------------------------------------------
+    process definitions
+      inspired by Program Instantiation (Fig. 6) of Siek and Taha
+   ---------------------------------------------------------------------- *)
+
+(* Siek and Taha have two sorts of external declaration, template
+   definitions of classes (which are patterns wrapped around a field
+   declaration), and member function definitions.
+
+   We have rather more complexity than this.  We have normal
+   functions, multiple members per class, and data field.  In
+   addition, we can have template member functions, template
+   functions, and template template parameters
+
+   This means that we need to do things slightly differently.
+
+*)
+
+val _ = Hol_datatype `inststate = Running of 'a | Done of 'b | Failed`
+val _ = Hol_datatype `instneed_type = NeedFn | NeedVr`
+
+
+val _ = Hol_datatype `
+  FunctionRef = CallConstructor of CPP_ID => CPP_Type list
+              | CallDestructor of CPP_ID
+              | FnCall of CPP_ID
+`
+
+val sfld_basename_def = Define`
+  (sfld_basename (SFName s) = s) /\
+  (sfld_basename (SFTempCall s args) = s)
+`;
+
+val id_basename_def = Define`
+  (id_basename (IDVar s) = NONE) /\
+  (id_basename (IDFld cid sfld) = NONE) /\
+  (id_basename (IDTempCall (TemplateConstant tn) targs) = SOME tn) /\
+  (id_basename (IDTempCall (TemplateVar s) targs) = NONE) /\
+  (id_basename (IDConstant tn) = SOME tn)
+`;
+
+val _ = Hol_datatype`
+   fnref_ctxt = <| classes : CPP_ID |-> class_info  ;
+                   vars    : CPP_ID |-> CPP_Type ;
+                   thisinfo: CPP_Type option |>
+`;
+val empty_ctxt_def = Define`
+  empty_ctxt = <| classes := FEMPTY ; vars := FEMPTY ; thisinfo := NONE |>
+`;
+val ctxt_typing_def = Define`
+  ctxt_typing (c:fnref_ctxt) =
+    <| class_fields :=
+          (\ci. mapPartial
+                     (\ce. case ce of
+                              (CFnDefn ret nm args bod, stat, prot) -> NONE
+                           || (FldDecl fld ty, stat, prot) ->
+                                 if stat then NONE
+                                 else SOME (SFName fld, ty)
+                           || _ -> NONE)
+                     (ci.fields)) o_f c.classes ;
+       abs_classes := {};
+       this_type := c.thisinfo;
+       var_types := c.vars
+    |>
+`;
+
+val extend_ctxt_def = Define`
+  extend_ctxt ty nm ctxt = ctxt with vars updated_by (\fm. fm |+ (nm,ty))
+`;
+
+val str_extend_ctxt_def = Define`
+  str_extend_ctxt nm ciopt ctxt =
+    case ciopt of NONE -> ctxt
+               || SOME ci -> ctxt with classes updated_by (\fm. fm |+ (nm,ci))
+`
+
+(* given a "context", checks whether or not a name is the name of a
+   function.  If so, it may need to have its declaration and definition
+   instantiated from a template *)
+val is_function_name_def = Define`
+  is_function_name ctxt id =
+    case id of
+       IDVar s -> F (* should never have variables at this stage *)
+    || IDFld classid sfld ->
+          (?ci ty nm params bopt stat prot.
+              (FLOOKUP ctxt.classes classid = SOME ci) /\
+              MEM (CFnDefn ty nm params bopt, stat, prot) ci.fields /\
+              (sfld_basename nm = sfld_basename sfld))
+    || IDTempCall tid args -> T
+    || IDConstant tname ->
+          ?ty tname'. (FLOOKUP ctxt.vars tname' = SOME ty) /\
+                      function_type ty /\
+                      (id_basename tname' = SOME tname)
+`;
+
+val expr_extract_fnrefs_defn = Hol_defn "expr_extract_fnrefs" `
+  (expr_extract_fnrefs ctxt (Var n) =
+     if is_function_name ctxt n then {FnCall n} else {}) /\
+  (expr_extract_fnrefs ctxt (COr e1 e2) =
+     expr_extract_fnrefs ctxt e1 UNION expr_extract_fnrefs ctxt e2) /\
+  (expr_extract_fnrefs ctxt (CAnd e1 e2) =
+     expr_extract_fnrefs ctxt e1 UNION expr_extract_fnrefs ctxt e2) /\
+  (expr_extract_fnrefs ctxt (CCond e1 e2 e3) =
+     expr_extract_fnrefs ctxt e1 UNION
+     expr_extract_fnrefs ctxt e2 UNION
+     expr_extract_fnrefs ctxt e3) /\
+  (expr_extract_fnrefs ctxt (CApBinary bop e1 e2) =
+     expr_extract_fnrefs ctxt e1 UNION expr_extract_fnrefs ctxt e2) /\
+  (expr_extract_fnrefs ctxt (Deref e) = expr_extract_fnrefs ctxt e) /\
+  (expr_extract_fnrefs ctxt (Addr e) = expr_extract_fnrefs ctxt e) /\
+  (expr_extract_fnrefs ctxt (MemAddr cid sfld) =
+     if is_function_name ctxt (IDFld cid sfld) then {FnCall (IDFld cid sfld)}
+     else {}) /\
+  (expr_extract_fnrefs ctxt (Assign bopt e1 e2) =
+     expr_extract_fnrefs ctxt e1 UNION expr_extract_fnrefs ctxt e2) /\
+  (expr_extract_fnrefs ctxt (SVar e sfld) =
+     expr_extract_fnrefs ctxt e UNION
+     (let cname = @cname. expr_type (ctxt_typing ctxt) RValue e (Class cname)
+      in
+          if is_function_name ctxt (IDFld cname sfld) then
+            {FnCall (IDFld cname sfld)}
+          else {})) /\
+  (expr_extract_fnrefs ctxt (FnApp e elist) =
+     FOLDL (\a e. a UNION expr_extract_fnrefs ctxt e)
+           (expr_extract_fnrefs ctxt e)
+           elist) /\
+  (expr_extract_fnrefs ctxt (CommaSep e1 e2) =
+     expr_extract_fnrefs ctxt e1 UNION expr_extract_fnrefs ctxt e2) /\
+  (expr_extract_fnrefs ctxt (Cast ty e) = expr_extract_fnrefs ctxt e) /\
+  (expr_extract_fnrefs ctxt (PostInc e) = expr_extract_fnrefs ctxt e) /\
+  (expr_extract_fnrefs ctxt (New ty NONE) =
+     case strip_const ty of
+        Class id -> {CallConstructor id []; CallDestructor id}
+     || _ -> {}) /\
+  (expr_extract_fnrefs ctxt (New ty (SOME elist)) =
+     let tylist =
+           @tylist. listRel (expr_type (ctxt_typing ctxt) RValue) elist tylist
+     in
+       FOLDL (\a e. a UNION expr_extract_fnrefs ctxt e)
+             (case ty of
+                 Class id -> {CallConstructor id tylist; CallDestructor id}
+              || _ -> {})
+             elist) /\
+   (expr_extract_fnrefs ctxt _ = {})
+`;
+
+val (expr_extract_fnrefs_def, expr_extract_fnrefs_ind) = Defn.tprove(
+  expr_extract_fnrefs_defn,
+  WF_REL_TAC `^(last (TotalDefn.guessR expr_extract_fnrefs_defn))` THEN
+  SRW_TAC [ARITH_ss][] THENL [
+    Induct_on `elist` THEN
+    ASM_SIMP_TAC (srw_ss() ++ DNF_ss ++ ARITH_ss)
+                 [DB.fetch "expressions" "CExpr_size_def"] THEN
+    REPEAT STRIP_TAC THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `elist` THEN
+    ASM_SIMP_TAC (srw_ss() ++ DNF_ss ++ ARITH_ss)
+                 [DB.fetch "expressions" "CExpr_size_def"] THEN
+    REPEAT STRIP_TAC THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []
+  ]);
+
+val alt_size_defn = Hol_defn "alt_size" `
+  (alt_size (CLoop ee s) = eealt_size ee + alt_size s + 1n) /\
+  (alt_size (CIf ee s1 s2) = eealt_size ee + alt_size s1 + alt_size s2 + 1) /\
+  (alt_size (Standalone ee) = eealt_size ee + 1) /\
+  (alt_size (Block b vdl stl) =
+     FOLDL (\a vd. a + vdalt_size vd)
+           (FOLDL (\a st. a + alt_size st) 0 stl + 1)
+           vdl) /\
+  (alt_size (Ret ee) = eealt_size ee + 1) /\
+  (alt_size (Trap tt st) = alt_size st + 1) /\
+  (alt_size (Throw (SOME ee)) = eealt_size ee + 1) /\
+  (alt_size (Catch st handlers) =
+     FOLDL (\a (e,s). a + alt_size s) (alt_size st + 1) handlers) /\
+  (alt_size _ = 0)
+
+     /\
+
+  (eealt_size (NormE e se) = 0) /\
+  (eealt_size (EStmt st c) = alt_size st + 1)
+
+     /\
+
+  (vdalt_size (VDec ty n) = 0) /\
+  (vdalt_size (VDecInit ty n init) = initalt_size init + 1) /\
+  (vdalt_size (VStrDec nm NONE) = 0) /\
+  (vdalt_size (VStrDec nm (SOME ci)) = cinfoalt_size ci + 1) /\
+  (vdalt_size _ = 0) /\
+
+  (cealt_size (CFnDefn ret snm params NONE) = 0) /\
+  (cealt_size (CFnDefn ret snm params (SOME body)) = 2 + alt_size body) /\
+  (cealt_size (FldDecl str ty) = 0) /\
+  (cealt_size (Constructor params meminits NONE) = 0) /\
+  (cealt_size (Constructor params meminits (SOME body)) =
+     2 + alt_size body) /\
+  (cealt_size (Destructor NONE) = 0) /\
+  (cealt_size (Destructor (SOME body)) = 1 + alt_size body)
+
+     /\
+
+  (cinfoalt_size ci = 1 + FOLDL (\a (ce,b,p). a + cealt_size ce) 0 ci.fields)
+
+     /\
+
+  (initalt_size (DirectInit0 _) = 0) /\
+  (initalt_size (DirectInit ee) = eealt_size ee + 1) /\
+  (initalt_size (CopyInit ee) = eealt_size ee + 1)
+`;
+
+val (alt_size_def, alt_size_ind) = Defn.tprove(
+  alt_size_defn,
+  WF_REL_TAC `^(last (TotalDefn.guessR alt_size_defn))` THEN
+  SRW_TAC [ARITH_ss][] THENL [
+    Induct_on `handlers` THEN
+    ASM_SIMP_TAC (srw_ss() ++ ARITH_ss ++ DNF_ss) [] THEN
+    REPEAT STRIP_TAC THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+
+    Cases_on `ci` THEN FULL_SIMP_TAC (srw_ss()) [] THEN Induct_on `l` THEN
+    ASM_SIMP_TAC (srw_ss() ++ ARITH_ss ++ DNF_ss) [] THEN
+    REPEAT STRIP_TAC THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+
+    Induct_on `vdl` THEN
+    ASM_SIMP_TAC (srw_ss() ++ ARITH_ss ++ DNF_ss) [] THEN
+    REPEAT STRIP_TAC THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+
+    Induct_on `stl` THEN
+    ASM_SIMP_TAC (srw_ss() ++ ARITH_ss ++ DNF_ss) [] THEN
+    REPEAT STRIP_TAC THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []
+  ]);
+val _ = save_thm("alt_size_def", alt_size_def)
+val _ = export_rewrites ["alt_size_def"]
+
+
+val extract_fnrefs_defn = Hol_defn "extract_fnrefs" `
+  (extract_fnrefs ctxt (CLoop ee s) =
+     eexpr_extract_fnrefs ctxt ee UNION
+     extract_fnrefs ctxt s) /\
+  (extract_fnrefs ctxt (CIf ee s1 s2) =
+     eexpr_extract_fnrefs ctxt ee UNION
+     extract_fnrefs ctxt s1 UNION extract_fnrefs ctxt s2) /\
+  (extract_fnrefs ctxt (Standalone ee) =
+     eexpr_extract_fnrefs ctxt ee) /\
+  (extract_fnrefs ctxt (Block b vdl stl) =
+     let (dlcalls, ctxt') =
+         FOLDL (\ (calls0, ctxt) vd.
+                     let (calls, c') = vd_extract_fnrefs ctxt vd
+                     in
+                         (calls0 UNION calls, c'))
+               ({}, ctxt)
+               vdl
+     in
+         FOLDL (\a st. a UNION extract_fnrefs ctxt' st) dlcalls stl) /\
+  (extract_fnrefs ctxt (Ret ee) = eexpr_extract_fnrefs ctxt ee) /\
+  (extract_fnrefs ctxt (Trap tt st) = extract_fnrefs ctxt st) /\
+  (extract_fnrefs ctxt (Throw NONE) = {}) /\
+  (extract_fnrefs ctxt (Throw (SOME ee)) = eexpr_extract_fnrefs ctxt ee) /\
+  (extract_fnrefs ctxt (Catch st handlers) =
+     FOLDL (\a (e,s). a UNION extract_fnrefs ctxt s)
+           (extract_fnrefs ctxt st)
+           handlers) /\
+  (extract_fnrefs ctxt _ = {})
+
+     /\
+
+  (eexpr_extract_fnrefs ctxt (NormE e se) = expr_extract_fnrefs ctxt e) /\
+  (eexpr_extract_fnrefs ctxt (EStmt st c) = extract_fnrefs ctxt st)
+
+     /\
+
+  (vd_extract_fnrefs ctxt (VDec ty nm) =
+     ((case strip_const ty of
+          Class id -> {CallConstructor id []; CallDestructor id}
+       || _ -> {}), extend_ctxt ty nm ctxt)) /\
+  (vd_extract_fnrefs ctxt (VDecInit ty nm init) =
+     let ctxt' = extend_ctxt ty nm ctxt in
+     let (conarg_types, calls) = init_extract_fnrefs ty ctxt' init
+     in
+         ((case strip_const ty of
+              Class id -> {CallConstructor id conarg_types;
+                           CallDestructor id}
+           || _ -> {}) UNION calls,
+          ctxt')) /\
+  (vd_extract_fnrefs ctxt (VStrDec nm ciopt) =
+     let ctxt' = str_extend_ctxt nm ciopt ctxt in
+     let calls = case ciopt of NONE -> {}
+                            || SOME ci -> ci_extract_fnrefs ctxt ci
+     in
+         (calls, ctxt')) /\
+  (vd_extract_fnrefs ctxt _ = ({}, ctxt))
+
+     /\
+
+  (ci_extract_fnrefs ctxt ci =
+     FOLDL (\a (ce,b,p). a UNION centry_extract_fnrefs ctxt ce)
+           {}
+           ci.fields)
+
+     /\
+
+  (centry_extract_fnrefs ctxt (CFnDefn ty sfnm params NONE) = {}) /\
+  (centry_extract_fnrefs ctxt (CFnDefn ty sfnm params (SOME st)) =
+     let pdecs = MAP (\ (n,ty). VDec ty (Base n)) params
+     in
+         extract_fnrefs ctxt (Block T pdecs [st])) /\
+  (centry_extract_fnrefs ctxt (FldDecl fldnm ty) = {}) /\
+  (centry_extract_fnrefs ctxt (Constructor params meminits bodyopt) =
+     FOLDL (\a (memid, aopt).
+              case aopt of
+                 NONE -> {}
+              || SOME args -> FOLDL (\a e. a UNION
+                                           expr_extract_fnrefs ctxt e)
+                                    a
+                                    args)
+           (case bodyopt of
+               NONE -> {}
+            || SOME st ->
+                 let pdecs = MAP (\ (n,ty). VDec ty (Base n)) params
+                 in
+                     extract_fnrefs ctxt (Block T pdecs [st]))
+           meminits) /\
+  (centry_extract_fnrefs ctxt (Destructor NONE) = {}) /\
+  (centry_extract_fnrefs ctxt (Destructor (SOME st)) =
+     extract_fnrefs ctxt st)
+
+     /\
+
+  (init_extract_fnrefs ty ctxt (DirectInit0 elist) =
+     let tylist = (@tylist. listRel (expr_type (ctxt_typing ctxt) RValue)
+                                    elist tylist)
+     in
+         (tylist,
+          FOLDL (\a e. expr_extract_fnrefs ctxt e UNION a) {} elist)) /\
+  (init_extract_fnrefs ty ctxt (CopyInit ee) =
+     ([ty], eexpr_extract_fnrefs ctxt ee))
+`;
+
+val LT_FOLDL = prove(
+  ``!elems f x acc. x:num < acc ==> x < FOLDL (\a e. a + f e) acc elems``,
+  Induct THEN SRW_TAC [ARITH_ss][]);
+val LT_FOLDL2 = prove(
+  ``!elems f x acc. 0n < acc /\ MEM x elems ==>
+                    f x < FOLDL (\a e. a + f e) acc elems``,
+  Induct THEN SRW_TAC [ARITH_ss][] THEN SRW_TAC [ARITH_ss][LT_FOLDL]);
+val LE_FOLDL1 = prove(
+  ``!elems f x acc. x:num <= acc ==> x <= FOLDL (\a e. a + f e) acc elems``,
+  Induct THEN SRW_TAC [ARITH_ss][]);
+val LE_FOLDL2 = prove(
+  ``!elems (f:'a->num) x acc.
+        MEM x elems ==> f x <= FOLDL (\a e. a + f e) acc elems``,
+  Induct THEN SRW_TAC [ARITH_ss][] THENL [
+    SRW_TAC [ARITH_ss][LE_FOLDL1],
+    RES_TAC THEN SRW_TAC [][]
+  ]);
+
+
+val UNCURRY_alt = prove(``UNCURRY f = \p. f (FST p) (SND p)``,
+                        SRW_TAC [][FUN_EQ_THM, pairTheory.UNCURRY])
+val (extract_fnrefs_def, extract_fnrefs_ind) = Defn.tprove(
+  extract_fnrefs_defn,
+  WF_REL_TAC
+    `measure (\sum.
+       case sum of
+          INL (c,st) -> alt_size st
+       || INR (INL (c, ee)) -> eealt_size ee
+       || INR (INR (INL (c, vd))) -> vdalt_size vd
+       || INR (INR (INR (INL (c, ci)))) -> cinfoalt_size ci
+       || INR (INR (INR (INR (INL (c, ce))))) -> cealt_size ce
+       || INR (INR (INR (INR (INR (ty, c, init))))) -> initalt_size init)` THEN
+  REPEAT CONJ_TAC THEN
+  SRW_TAC [ARITH_ss][] THENL [
+    Q.SPEC_TAC (`alt_size st`,`m:num`) THEN
+    Induct_on `handlers` THEN
+    ASM_SIMP_TAC (srw_ss() ++ DNF_ss ++ ARITH_ss) [pairTheory.FORALL_PROD] THEN
+    REPEAT STRIP_TAC THENL [
+      POP_ASSUM (K ALL_TAC) THEN
+      Q_TAC SUFF_TAC
+            `!n:num m f. n < m ==> n < FOLDL (\a p. a + f p) m handlers`
+            THEN1 (DISCH_THEN
+                     (Q.SPECL_THEN [`alt_size s`, `m + (alt_size s + 1)`,
+                                    `\ (e,s). alt_size s`] MP_TAC) THEN
+                   SRW_TAC [ARITH_ss][] THEN
+                   FULL_SIMP_TAC (srw_ss()) [UNCURRY_alt]) THEN
+      Induct_on `handlers` THEN SRW_TAC [ARITH_ss][],
+      FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [] THEN
+      FIRST_X_ASSUM (Q.SPEC_THEN `m + alt_size p_2` MP_TAC) THEN
+      SRW_TAC [ARITH_ss][]
+    ],
+
+    Q.MATCH_ABBREV_TAC `LHS < alt_size s + 2` THEN
+    Q_TAC SUFF_TAC `LHS = alt_size s + 1` THEN1 DECIDE_TAC THEN
+    Q.UNABBREV_ALL_TAC THEN Induct_on `params` THEN SRW_TAC [][] THEN
+    Cases_on `h` THEN SRW_TAC [][],
+
+    MATCH_MP_TAC LT_FOLDL THEN
+    Q_TAC SUFF_TAC `alt_size st <= FOLDL (\a st. a + alt_size st) 0 stl`
+          THEN1 DECIDE_TAC THEN
+    MATCH_MP_TAC LE_FOLDL2 THEN SRW_TAC [][],
+
+    Cases_on `ci` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+    MATCH_MP_TAC (DECIDE ``!x y:num. x <= y ==> x < y + 1``) THEN
+    Q.ISPECL_THEN [`l`, `\ (ce,b:bool,p:protection). cealt_size ce`] MP_TAC
+                  LE_FOLDL2 THEN
+    SRW_TAC [][UNCURRY_alt] THEN RES_TAC THEN
+    FULL_SIMP_TAC (srw_ss()) [],
+
+    MATCH_MP_TAC LT_FOLDL2 THEN SRW_TAC [ARITH_ss][],
+
+    Q.MATCH_ABBREV_TAC `LHS < alt_size s + 2` THEN
+    Q_TAC SUFF_TAC `LHS = alt_size s + 1` THEN1 DECIDE_TAC THEN
+    Q.UNABBREV_ALL_TAC THEN Induct_on `params` THEN SRW_TAC [][] THEN
+    Cases_on `h` THEN SRW_TAC [][],
+
+    Q.MATCH_ABBREV_TAC `lhs:num < FOLDL f acc handlers` THEN
+    `f = (\a p. a + (\ (e,s). alt_size s) p)`
+       by SRW_TAC [][FUN_EQ_THM, UNCURRY_alt, Abbr`f`] THEN
+    SRW_TAC [][LT_FOLDL, Abbr`lhs`, Abbr`acc`]
+  ]);
+val _ = save_thm("extract_fnrefs_def", extract_fnrefs_def)
+val _ = export_rewrites ["extract_fnrefs_def"]
+
+
+
+(* first thing to do on seeing a function definition (could be member function
+   or not), is to check if it's at a ground type, or a template definition.
+   If the latter, just put it into the Templates field.  Otherwise,
+   scan it for ground template types, and put these onto the list of things
+   that need doing.  *)
+val fndefn0_def = Define`
+  fndefn0 Templates Residuals Needs edecs (FnDefn ty nm params body) =
+    let edec = FnDefn ty nm params body
+    in
+      if cppidfrees nm = {} then
+        if MEM (FnDefn ty nm params body) Residuals then
+          Running (Templates, Residuals, edecs)
+        else
+          let tys = extdecl_ttypes edec in
+          let cmp id1 id2 = CPP_ID_size id1 <= CPP_ID_size id2 in
+          let tyl = QSORT cmp
+                      (SET_TO_LIST (IMAGE (\ (tid,targs). IDTempCall tid targs)
+                                          tys))
+          in
+            Running(Templates,
+                    Residuals,
+                    Needs,
+                    MAP (\id. (Decl (VStrDec id NONE), 0n)) tyl ++
+                    [(edec,1)] ++ edecs)
+      else (* might check that edec is not a partial specialisation
+              occurring before the general pattern is given here *)
+        Running (edec INSERT Templates, Residuals, Needs, edecs)
+`;
+
+
+val edec_ctxt_def = Define`
+  (edec_ctxt ctxt (FnDefn ty id params body) =
+     let funty = Function ty (MAP SND params)
+     in
+       case id of
+          IDTempCall tid args ->
+             ctxt with vars updated_by (\fm. fm |+ (id, funty))
+       || IDConstant tname ->
+             ctxt with vars updated_by (\fm. fm |+ (id, funty))
+       || id -> ctxt) /\
+  (edec_ctxt ctxt (ClassConDef nm params meminits bod) = ctxt) /\
+  (edec_ctxt ctxt (ClassDestDef nm body) = ctxt) /\
+  (edec_ctxt ctxt (Decl (VDec ty nm)) =
+      ctxt with vars updated_by (\fm. fm |+ (nm,ty))) /\
+  (edec_ctxt ctxt (Decl (VDecInit ty nm init)) =
+      ctxt with vars updated_by (\fm. fm |+ (nm,ty))) /\
+  (edec_ctxt ctxt (Decl (VStrDec nm NONE)) = ctxt) /\
+  (edec_ctxt ctxt (Decl (VStrDec nm (SOME ci))) =
+      ctxt with classes updated_by (\fm. fm |+ (nm, ci))) /\
+  (edec_ctxt ctxt (Decl (VException e)) = ctxt) (* dynamic value *)
+`;
+
+
+
+
+
+val mk_initial_ctxt_def = Define`
+  mk_initial_ctxt Templates Residuals nm params =
+    let alldecs = SET_TO_LIST Templates ++ REVERSE Residuals in
+    let ctxt0 = FOLDL edec_ctxt empty_ctxt alldecs in
+    let ctxt1 = FOLDL edec_ctxt ctxt0
+                      (MAP (\ (n, ty). Decl (VDec ty (Base n))) params) in
+    let thisty =
+          case nm of
+             IDConstant tn -> NONE
+          || IDTempCall tid targs -> NONE
+          || IDVar s -> NONE (* impossible *)
+          || IDFld cnm sfld -> SOME (Class cnm)
+    in
+       ctxt1 with thisinfo := thisty
+`;
+
+val already_present_def = Define`
+  (already_present residuals (FnCall id) =
+      ?ty params body. MEM (FnDefn ty id params body) residuals) /\
+  (already_present residuals (CallConstructor id ptypes) =
+      ?params meminits body.
+         MEM (ClassConDef id params meminits body) residuals /\
+         (MAP SND params = ptypes)) /\
+  (already_present residuals (CallDestructor id) =
+      ?body. MEM (ClassDestDef id body) residuals)
+`;
+
+val optimage_def = Define`
+  optimage (f : 'a -> 'b option) (s : 'a set) =
+     ({ b | ?a. a IN s /\ (SOME b = f a) },
+      { a | f a = NONE })
+`;
+
+val optimage_image = store_thm(
+  "optimage_image",
+  ``optimage f s = (IMAGE THE (IMAGE f s DELETE NONE),
+                    { a | f a = NONE })``,
+  SRW_TAC [DNF_ss][optimage_def, EXTENSION, EQ_IMP_THM] THENL [
+    Q.EXISTS_TAC `a` THEN POP_ASSUM (fn th => SRW_TAC [][SYM th]),
+    Q.EXISTS_TAC `x''` THEN Cases_on `f x''` THEN
+    FULL_SIMP_TAC (srw_ss()) []
+  ]);
+
+val best_class_match_def = Define`
+  best_class_match Temps id sub (id', ci) =
+    (cppID_inst sub id' = SOME id) /\
+    Decl (VStrDec id' ci) IN Temps /\
+    !id2 ci2 sub2.  Decl (VStrDec id2 ci2) IN Temps /\
+                    (cppID_inst sub2 id2 = SOME id) ==>
+                    ?sub'. cppID_inst sub' id2 = SOME id'
+`;
+
+val find_defn_def = Define`
+  (find_defn Templates (FnCall id) =
+      case id of
+         IDFld cnm sfld ->
+
+val categorise_new_fnrefs_def = Define`
+  categorise_new_fnrefs Templates newfns
+
+(* if we get this far, we can be sure that all the ground type declarations
+   are in scope, and that the function we're looking at is itself not a
+   template.  Now we have to see what functions might also be required.
+   When we extract the functions,
+     1. we have to check if they're already in Residuals.
+     2. If they are not, we can check if they're in Needs.  If so
+        leave it, and continue.
+     3. Otherwise, we can look for a definition in Templates.
+     4. There should be a declaration there, but there may not be a
+        definition.
+     5. If there is a definition, we pull it out, instantiate it, and
+        put that onto the list of functions to check.
+     6. Otherwise, we put the function into the Needs list and continue.
+*)
+val fndefn1_def = Define`
+  fndefn1 Templates Residuals Needs edecs (FnDefn ty nm params body) =
+    let edec = FnDefn ty nm params body in
+    let ctxt = mk_initial_ctxt Templates Residuals nm params in
+    let fnrefs = extract_fnrefs ctxt body in
+    let newfns = fnrefs DIFF (already_present Residuals UNION Needs) in
+    let (NewNeeds, NewlyInstantiated) = categorise_new_fnrefs Templates newfns
+    in
+      Running(Templates, Residuals, NewNeeds ++ Needs,
+              NewlyInstantiated ++ [(edec,2)] ++ edecs)
+`;
+
+
+
+val program_instantiate_def = Define`
+  proginst (Templates, Residuals, Needs, extdecllist) =
+    case extdecllist of
+       [] -> Done (Residuals, Needs)
+    || ((edec,m) :: edecs) ->
+          (case edec of
+             FnDefn ty nm params body ->
+               if m = 0 then fndefn0 Templates Residuals Needs edecs edec
+               else if m = 1 then fndefn1 Templates Residuals edecs edec
+               else Running(Templates, edec :: Residuals, edecs))
+`
+
+
+
+
 
 val _ = export_theory();
 
