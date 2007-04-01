@@ -890,6 +890,29 @@ val var_init0_def = Define`
                   MAP (\e. (e,0n)) (SET_TO_LIST new_instances) ++ edecs)
 `
 
+(* strip function definitions out of a cinfo *)
+val strip_centry_defs_def = Define`
+  (strip_centry_defs cnm (CFnDefn ty snm params (SOME body)) = 
+     (CFnDefn ty snm params NONE, [FnDefn ty (IDFld cnm snm) params body])) /\
+  (strip_centry_defs cnm (Constructor params meminits (SOME body)) = 
+     (Constructor params [] NONE, [ClassConDef cnm params meminits body])) /\
+  (strip_centry_defs cnm (Destructor (SOME body)) = 
+     (Destructor NONE, [ClassDestDef cnm body])) /\
+  (strip_centry_defs cnm x = (x, []))
+`;
+val strip_cinfo_defs_def = Define`
+  strip_cinfo_defs cnm ci = 
+    let (newfields, extdefs) = 
+        FOLDL (\ (flds, defs) (e,b,p). 
+               let (fld, edefs) = strip_centry_defs cnm e
+               in 
+                 (flds ++ [(fld,b,p)], defs ++ edefs))
+              ([], [])
+              ci.fields
+    in
+      (ci with fields := newfields, extdefs)
+`
+
 (* declaring/defining a class type - phase 0 *)
 val str_init0_def = Define`
   (str_init0 Templates Residuals Needs edecs (cnm, NONE) = 
@@ -916,12 +939,16 @@ val str_init0_def = Define`
                   case ci of 
                      NONE -> Failed
                   || SOME cinfo -> 
-                      let cinfo' = THE (cinfo_inst sub cinfo) 
+                      (* found something to instantiate.  Don't want to 
+                         have member functions defined here though, so these
+                         get stripped out *)
+                      let cinfo' = THE (cinfo_inst sub cinfo) in
+                      let cinfo'' = FST (strip_cinfo_defs cnm' cinfo')
                       in
                           insert_type_requirements 
                             Templates Residuals 
                             Needs edecs 
-                            (Decl (VStrDec cnm (SOME cinfo')))
+                            (Decl (VStrDec cnm (SOME cinfo'')))
        else (* forward declaration of a template type *)
          Running (edec INSERT Templates, Residuals, Needs, edecs)) /\
   (str_init0 Templates Residuals Needs edecs (cnm, SOME cinfo) = 
@@ -931,14 +958,18 @@ val str_init0_def = Define`
          if MEM edec Residuals then 
            Running (Templates, Residuals, Needs, edecs)
          else
-           insert_type_requirements Templates Residuals Needs edecs edec
+           let cinfo' = FST (strip_cinfo_defs cnm cinfo)
+           in
+             insert_type_requirements Templates Residuals Needs edecs 
+                                      (Decl(VStrDec cnm (SOME cinfo')))
        else
-         Running (edec INSERT Templates, Residuals, Needs, edecs))
+         let (cinfo', newdefs) = strip_cinfo_defs cnm cinfo in 
+         let new_edec = Decl (VStrDec cnm (SOME cinfo')) in
+         let new_edecs = new_edec INSERT LIST_TO_SET newdefs
+         in
+           Running (new_edecs UNION Templates, Residuals, Needs, edecs))
 `
                     
-             
-           
-
 (* if we get this far, we can be sure that all the ground type declarations
    are in scope, and that the function we're looking at is itself not a
    template.  Now we have to see what functions might also be required.
@@ -983,6 +1014,31 @@ val var_init1_def = Define`
                edecs)
 `
 
+(* the only thing that needs to be resolved after a struct's type dependencies
+   have been dealt with is the struct's static data members.  *)
+val str_init1_def = Define`
+  str_init1 Templates Residuals Needs edecs (cnm, cinfo_opt) = 
+    let (sub,cnm',ci) = 
+        @(sub,cnm',ci). best_class_match Templates cnm sub (cnm',ci) in
+    let cinfo = THE (cinfo_inst sub (THE ci)) in
+    let stat_flds = 
+        mapPartial 
+          ( \(ce,b,p). if b then 
+                         case ce of 
+                            FldDecl nm ty -> 
+                                   if function_type ty then NONE
+                                   else SOME (StaticVar cnm nm)
+                         || _ -> NONE
+                       else NONE)
+          cinfo.fields in
+    let (NewlyInstantiated, NewNeeds) = optimage (find_defn Templates) 
+                                                 (LIST_TO_SET stat_flds)
+    in
+      Running(Templates, Residuals, Needs UNION NewNeeds, 
+              MAP (\e. (e,0n)) (SET_TO_LIST NewlyInstantiated) ++ edecs)
+`
+        
+
 val decl_instantiate_def = Define`
   decl_instantiate Templates Residuals Needs edecs d m = 
     case d of 
@@ -1005,8 +1061,8 @@ val decl_instantiate_def = Define`
 ` 
 
 
-val program_instantiate_def = Define`
-  program_instantiate (Templates, Residuals, Needs, extdecllist) =
+val prog_inst_def = Define`
+  prog_inst (Templates, Residuals, Needs, extdecllist) =
     case extdecllist of
        [] -> Done (Residuals, Needs)
     || ((edec,m) :: edecs) ->
@@ -1017,6 +1073,12 @@ val program_instantiate_def = Define`
                 else fndefn1 Templates Residuals Needs edecs edec)
 `
 
+val program_instantiate_def = Define`
+  program_instantiate edecs = 
+    WHILE (\s. case s of Running x -> T || y -> F)
+          (\s. case s of Running x -> prog_inst x)
+          (Running({}, [], {}, MAP (\e. (e,0)) edecs))
+`;
 
 
 

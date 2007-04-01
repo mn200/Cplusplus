@@ -176,27 +176,6 @@ val is_zero_def = Define`
   (is_zero (Ptr t) v = (INT_VAL (Ptr t) v = SOME 0))
 `
 
-val final_value_def = Define`
-  (final_value (mExpr e se) =
-      is_null_se se /\
-      ((?v t. (e = ECompVal v t)) \/
-       (?a t p. (e = LVal a t p) /\ class_type (strip_const t)))) /\
-  (final_value (mStmt s c) = F)
-`;
-
-
-
-val final_stmt_def = Define`
-  (final_stmt EmptyStmt c = T) /\
-  (final_stmt Break c = T) /\
-  (final_stmt Cont c = T) /\
-  (final_stmt (Ret e) c =
-     case c of
-        LVC f se0 -> (?a t p se. (e = NormE (LVal a t p) se) /\ is_null_se se)
-     || RVC f se0 -> final_value e) /\
-  (final_stmt (Throw exn) c = ?e. (exn = SOME e) /\ final_value e) /\
-  (final_stmt _ c = F)
-`;
 
 val copy2globals_def = Define`
   copy2globals s = (s with <| gclassmap := s.classmap;
@@ -388,8 +367,6 @@ val exception_parameter_match_def = Define`
         F
 `;
 
-
-
 val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: number-literal *)
@@ -504,12 +481,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: econtext-propagates-failure *)
-(!f se s e.
-     valid_econtext f /\
-     ((e = UndefinedExpr) \/ (?e0. e = ExceptionExpr e0))
+(* RULE-ID: econtext-propagates-undefinedness *)
+(!f se s.
+     valid_econtext f 
    ==>
-     ^mng (mExpr (f e) se) s (s, ev e se))
+     ^mng (mExpr (f UndefinedExpr) se) s (s, ev UndefinedExpr se))
 
    /\
 
@@ -1026,15 +1002,13 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: return-exception *)
-(!e exte c f s0 se0 se.
-     (exte = SOME (mExpr e se0)) /\
-     ((c = LVC f se) \/ (c = RVC f se)) /\
-     final_value (mExpr e se0)
+(!e c s.
+     is_exnval e
    ==>
-     ^mng (mStmt (Throw exte) c) s0 (s0, mExpr (f (ExceptionExpr e)) se))
+     ^mng (mStmt (Ret e) c) s (s, mk_exn e c))
 
    /\
-
+ 
 (* RULE-ID: empty-ret *)
 (!s c.
      T
@@ -1077,6 +1051,15 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (RVR e0) s0 (s, RVR e)
    ==>
      ^mng (mStmt (Throw (SOME e0)) c) s0 (s, mStmt (Throw (SOME e)) c))
+
+   /\
+
+(* RULE-ID: throw-expr-exception *)
+(* the expression being evaluated may itself cause an exception *)
+(!e c s.
+     is_exnval e
+   ==>
+     ^mng (mStmt (Throw e) c) s (s, mk_exn e c))
 
    /\
 
@@ -1234,6 +1217,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mStmt (Standalone (NormE (ECompVal v t) se)) c) s
           (s, mStmt EmptyStmt c)) /\
 
+(* RULE-ID: standalone-exception *)
+(!e c s.
+     is_exnval e
+   ==>
+     ^mng (mStmt (Standalone e) c) s (s, mk_exn e c))
+
+   /\
+
 (* RULE-ID: if-eval-guard *)
 (!guard guard' c t e s0 s.
      ^mng (RVR guard) s0 (s, RVR guard')
@@ -1257,6 +1248,15 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mStmt (CIf (NormE (ECompVal v t) se) thenstmt elsestmt) c) s
           (s, mStmt elsestmt c))
+
+   /\
+
+(* RULE-ID: if-exception *)
+(!e thenstmt elsestmt c s.
+     is_exnval guard
+   ==>
+     ^mng (mStmt (CIf guard thenstmt elsestmt) c) s
+          (s, mk_exn guard c))
 
    /\
 
@@ -1368,11 +1368,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: block-declmng-exception *)
-(!d0 s0 e c sts vds.
-     declmng ^mng I (d0, s0) ([VException e], s0)
+(!d0 s0 f e ex ty loc c c' sts vds.
+     ((f = CopyInit) \/ (f = DirectInit)) /\
+     declmng ^mng I (d0, s0) ([VDecInitA ty loc (f e)], s0) /\
+     is_exnval e /\
+     (e = mStmt (Throw (SOME ex)) c')
    ==>
      ^mng (mStmt (Block T (d0 :: vds) sts) c) s0
-          (s0, mStmt (Block T [] [Throw (SOME (mExpr e base_se))]) c))
+          (s0, mStmt (Block T [] [Throw (SOME (mExpr ex base_se))]) c))
 
    /\
 

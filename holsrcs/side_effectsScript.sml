@@ -22,10 +22,6 @@ open typesTheory memoryTheory expressionsTheory statementsTheory statesTheory
 val _ = new_theory "side_effects";
 
 
-val is_null_se_def = Define`
-  is_null_se se = (se.pending_ses = EMPTY_BAG)
-`;
-
 val add_se = Define`
   add_se ise se = se with pending_ses updated_by (BAG_INSERT ise)
 `;

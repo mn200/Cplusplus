@@ -486,16 +486,6 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: decl-vdecinit-evaluation-exception *)
-(!s0 se ty loc f e.
-     ((f = CopyInit) \/ (f = DirectInit)) /\
-     is_null_se se
-   ==>
-     declmng mng vdf (VDecInitA ty loc (f (mExpr (ExceptionExpr e) se)), s0)
-                     ([VException e], s0))
-
-   /\
-
 (* RULE-ID: decl-vdecinit-lval2rval *)
 (!ty loc e0 se0 s0 s e se f.
      lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty /\

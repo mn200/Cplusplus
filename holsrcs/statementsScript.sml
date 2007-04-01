@@ -28,6 +28,9 @@ val _ = Hol_datatype `se_info = <| pending_ses : se->num ;
 val base_se_def = Define`
   base_se = <| pending_ses := {| |}; update_map := {}; ref_map := {} |>
 `;
+val is_null_se_def = Define`
+  is_null_se se = (se.pending_ses = {| |})
+`;
 
 
 (* sorts of things that might be trapped - will probably be extended to allow
@@ -167,6 +170,34 @@ val _ = Hol_datatype`
 
 val _ = export_rewrites ["CStmt_size_def"]
 
+val final_value_def = Define`
+  (final_value (NormE e se) =
+      is_null_se se /\
+      ((?v t. (e = ECompVal v t)) \/
+       (?a t p. (e = LVal a t p) /\ class_type (strip_const t)))) /\
+  (final_value (EStmt s c) = F)
+`;
+
+val final_stmt_def = Define`
+  (final_stmt EmptyStmt c = T) /\
+  (final_stmt Break c = T) /\
+  (final_stmt Cont c = T) /\
+  (final_stmt (Ret e) c =
+     case c of
+        LVC f se0 -> (?a t p se. (e = NormE (LVal a t p) se) /\ is_null_se se)
+     || RVC f se0 -> final_value e) /\
+  (final_stmt (Throw exn) c = ?e. (exn = SOME e) /\ final_value e) /\
+  (final_stmt _ c = F)
+`;
+
+val is_exnval_def = Define`
+  (is_exnval (EStmt (Throw (SOME e)) c) = final_value e) /\
+  (is_exnval _ = F)
+`
+
+val mk_exn_def = Define`
+  (mk_exn (EStmt (Throw (SOME e)) c0) c = EStmt (Throw (SOME e)) c) 
+`;
 
 (* derived loop forms *)
 val forloop_def = Define`

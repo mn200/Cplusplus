@@ -24,7 +24,7 @@ SANITY
 THEORIES
 --------
 
-There are 19 theories in this directory.
+There are 20 theories in this directory.
 
 utils:
    Defines a variety of useful functions for manipulating lists and
@@ -49,7 +49,8 @@ memory:
    integers), defines the offset and sizeof relations.
 
 intrep:
-
+   Some preliminary work on encoding integers as lists of bytes in a
+   suitably under-determined way.
 
 expressions:
    Defines the type of C expressions, and a few predicates on these.
@@ -101,3 +102,19 @@ sanity:
 concrete_tests:
    Sanity theorems to do with particular, "concrete" program
    fragments.
+
+aggregates:
+   Theory specifying how to calculate sizes and offsets for aggregate
+   types (classes and structs).
+
+instantiation:
+   Defines the functions for instantiating template variables in
+   abstract syntax.  This allows the definition of a partial ordering
+   on types (and other forms), which is shown to be anti-symmetric up
+   to the renaming of free variables. 
+
+templates: 
+   Defines the program_instantiation constant, which takes a list of
+   external declarations (possibly including templates), and returns a
+   list of "concrete" or "grounded" declarations, which will be what
+   is actually run.  
