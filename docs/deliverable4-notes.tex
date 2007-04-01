@@ -1,0 +1,234 @@
+\documentclass[11pt]{article}
+
+\usepackage{charter}
+\usepackage{alltt}
+\usepackage{url}
+\usepackage{proof}
+\usepackage{amsfonts}
+\usepackage{underscore}
+\usepackage{pstricks}
+\usepackage{pst-node}
+
+\include{cpp-macros}
+
+\newcommand{\ie}{\emph{i.e.}}
+\newcommand{\naive}{na\"\i{}ve}
+
+\title{Notes on Deliverable 4 (April 2007)}
+\author{Michael Norrish\\{\small \texttt{Michael.Norrish@nicta.com.au}}}
+\date{}
+
+
+\begin{document}
+\maketitle
+
+\section{Form}
+
+This deliverable consists of a compressed \texttt{tar}-file, that when
+unpacked consists of a directory called \texttt{qinetiq-cpp}, which in
+turn contains four directories
+\begin{itemize}
+\item \texttt{holsrcs}, containing the HOL source files of the
+  mechanisation.  These files will build with the version of HOL4
+  present in the CVS repository at SourceForge, with timestamp
+  \texttt{2007-04-01 00:00Z}.  See Section~\ref{sec:getting-hol}
+  below for instructions on how this version of HOL can be retrieved,
+  and how the deliverable's HOL source files can then be built and
+  checked.
+\item \texttt{talks}, containing the \LaTeX{} source and a PDF for the
+  talk presented at the DARP meeting in Newcastle in April 2006.  The
+  source assumes that the \texttt{latex-beamer} and \texttt{PSTricks}
+  packages are available.
+\item \texttt{docs}, containing \LaTeX{} sources and a PDF version of
+  this document, as well as sources for the notes on the earlier
+  deliverables (nos.~1--3). 
+\item \texttt{notes}, some \cpp{} source files that illustrate various
+  aspects of \cpp{} behaviour.  An accompanying text file explains some
+  of the behaviours.
+\end{itemize}
+
+\subsection{Building HOL Source-Files}
+\label{sec:getting-hol}
+
+\paragraph{Getting HOL From SourceForge}
+
+To get a particular, dated, version of the HOL4 sources from the CVS
+repository, one must first issue the command
+
+{\small
+\begin{verbatim}
+   cvs -d:pserver:anonymous@hol.cvs.sourceforge.net:/cvsroot/hol login
+\end{verbatim}
+}
+
+When prompted for a password, just press \texttt{Enter} to send a null
+response.  The check-out of source code from SourceForge can now
+proceed.  The source code fits into 60MB.  Issue the command
+
+{\small
+\begin{alltt}
+   cvs \textit{repository-spec} co -D \textit{date} hol98
+\end{alltt}
+}
+
+\noindent where \textit{\ttfamily repository-spec} is the string
+
+{\small
+\begin{alltt}
+   -d:pserver:anonymous@hol.cvs.sourceforge.net:/cvsroot/hol
+\end{alltt}
+}
+
+\noindent (also used in the \texttt{login} command), and where
+\textit{\ttfamily date} is the desired date, best specified as an
+ISO~8601 string enclosed in double-quotes.  For example,
+\texttt{"2006-06-30 04:05Z"}.
+
+Once a copy of the sources have been downloaded, further commands can
+be used to update this copy to correspond to different dates.  As long
+as such commands are issued from within the \texttt{hol98} directory,
+the repository specification can be omitted.  The update command is
+
+{\small
+\begin{alltt}
+   cvs update -d -D \textit{date}
+\end{alltt}
+}
+
+\paragraph{Installing HOL} Once the sources have been downloaded, the
+installation instructions from the page at
+\url{http://hol.sourceforge.net} should be followed to build a copy of
+HOL.  An installation of the Moscow~ML compiler (v2.01) will also be
+required.
+
+\paragraph{Building Deliverable Sources}
+When HOL4 has been installed, the \texttt{Holmake} program (found in
+the \texttt{hol98/bin} directory) can be run in the \texttt{holsrcs}
+directory to create and check the logical theories.
+
+\section{Content}
+
+This deliverable adds a treatment of \cpp{} exceptions and templates
+to the existing semantics. 
+
+\subsection{Exceptions}
+\label{sec:exceptions}
+
+As suggested in Deliverable~1, exceptions can indeed be modelled in a
+way similar to the existing treatment of \texttt{return},
+\texttt{break} and \texttt{continue}.  One difference is that
+exceptions propagate further: the \texttt{return} ``value'' only
+propagates up as far as a function call (within an expression).  In
+contrast, an exception will continue to propagate up through the
+call-stack until it hits a suitable handler.
+
+\newcommand{\ethrow}{\texttt{throw}\ensuremath{_e}}
+This much allows a preliminary sketch of the behaviour.  The
+\texttt{throw} form is actually an expression, but we set things up so
+that there is a statement-level version of \texttt{throw} as well, and
+it will be this that propagates through statement syntax.  The
+expression syntax is written \ethrow{}, and the rule
+\ruleid{expression-throw-some} describes the behaviour when the
+\texttt{throw} has an argument:
+\[
+\infer{
+  \statebrack{\textsf{Ex}(\ethrow(e)), \sigma}
+  \rightarrow
+  \statebrack{\textsf{St}(\texttt{throw}(e),c) \sigma}}{}
+\]
+The variable $c$ represents the continuation that would normally
+convert the result of the statement into a value to be inserted into a
+containing expression tree.  Because \texttt{throw} values can't ever
+turn into values until they initialise a handler, this $c$ can be
+anything at all. 
+
+At the statement level, the \texttt{throw} form takes an extended
+expression as an argument.  This evaluates its argument as one might
+expect (rule \ruleid{throw-expr-evaluation})
+\[
+\infer{\statebrack{\texttt{throw}\;e_0,\sigma_0}\stmtarrow\statebrack{\texttt{throw}\;e,\sigma}}{\statebrack{e_0,\sigma_0}\rightarrow\statebrack{e,\sigma}}
+\]
+When a \texttt{throw}'s expression has been completely evaluated, we
+have something that can then propagate upwards through the abstract
+syntax of statements.  Because of the way the rules for loops and
+\texttt{if}-statements work, we only have to worry about how
+\texttt{throw}-statements traverse \texttt{Block} values. 
+
+This propagation uses the rule \ruleid{block-interrupted}:
+\[
+\infer{
+  \statebrack{
+    \mathbf{\{} \;[\,] \;(s\!::\!\mathit{sts})\,\mathbf{\}},
+    \sigma
+  }
+  \stmtarrow
+  \statebrack{\mathbf{\{} \;[\,]\; [s]\mathbf{\}},\sigma}}{
+  \textsf{final\_stmt}(s) & s \neq \textsf{EmptyStmt} & \mathit{sts}
+  \neq [\,]}
+\]
+That this is a block rule is indicated by the
+$\mathbf{\{\,\}}$-delimiters.  The first argument inside the block on
+both sides of the arrow is an empty list of declarations.  The
+predicate \textsf{final\_stmt} is true of \texttt{throw} and
+\texttt{return} statements with fully evaluated arguments, as well as
+of \texttt{break}, \texttt{continue} and the \textsf{EmptyStmt} form.
+The latter doesn't cause an interruption, so is excluded by the second
+hypothesis to the rule.  The final hypothesis ensures that there isn't
+an infinite loop on this rule.
+
+A \naive{} version of the rule for exitting a block
+(\ruleid{block-exit}) is
+\[
+\infer{
+  \statebrack{\mathbf{\{}\;[\,]\;[s]\;\mathbf{\}},\sigma}
+  \stmtarrow
+  \statebrack{s,\sigma}
+}{
+  \textsf{final\_stmt}(s)
+}
+\]
+If a block has a final statement as its only statement, then that
+statement can be propagated out to the top-level of the abstract
+syntax. We will return to this rule when we come to worry about the
+interaction of exceptions and object lifetimes.
+
+Because exceptions arise from expressions, the statement level rules
+need to acknowledge this possibility.  Thus, this rule for
+\texttt{if} (\ruleid{if-exception}): 
+\[
+\infer{
+  \statebrack{\textsf{St}(\texttt{if}\;G\;t\;e, c), \sigma}
+  \rightarrow
+  \statebrack{\textsf{mk\_exn}(G,c),\sigma}
+}{
+  \textsf{is\_exnval(G)}
+}
+\]
+where $\textsf{is\_exnval}(G)$ is true if $G$ is of the form
+$\textsf{St}(\texttt{throw}(e), c_0)$, and $e$ has been fully
+evaluated.  The function \textsf{mk\_exn} takes an exception value and
+replaces its continuation information with something appropriate for
+the level of the containing statement.  In this example, $c_0$ will be
+replaced by $c$.
+
+\subsection{Templates}
+\label{sec:templates}
+
+
+\section{Future}
+
+The next deliverable calls for a treatment of exceptions and
+templates.  My notes for deliverable 1 cover how I believe exceptions
+will be handled.  Templates remain unclear.  I would also appreciate
+advice on which of the wrinkles and omissions above are seen as
+significant and worthy of further attention.
+
+\bibliographystyle{plain}
+\bibliography{deliverables}
+
+\end{document}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
