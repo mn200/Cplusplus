@@ -204,7 +204,7 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
 
   (!s n. expr_type s RValue (Cnum n) (Signed Int)) /\
 
-  (!s c. expr_type s RValue (Cchar c) (Signed Int)) /\
+  (!s c. expr_type s RValue (Cchar c) BChar) /\
 
   (!s ty.
        (s.this_type = SOME ty)

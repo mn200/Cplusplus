@@ -100,8 +100,6 @@ val _ = Hol_datatype`
 
            | VStrDec of class_spec => class_info option
 
-           | VException of CExpr
-
   ;
 
   (* TODO: classes can contain nested classes

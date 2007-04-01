@@ -497,6 +497,24 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: expression-throw-some *)
+(* choice of c is irrelevant, as any enclosing mStmt will replace it. *)
+(!e se s c.
+     T
+   ==>
+     ^mng (mExpr (EThrow (SOME e)) se) s 
+          (s, mStmt (Throw (SOME (mExpr e se))) c))
+
+   /\
+
+(* RULE-ID: expression-throw-none *)
+(!c se s.
+     T
+   ==>
+     ^mng (mExpr (EThrow NONE) se) s (s, mStmt (Throw NONE) c))
+  
+   /\
+
 (* RULE-ID: apply-se *)
 (!e se0 s0 s se.
      apply_se (se0, s0) (se, s)
@@ -1059,7 +1077,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!e c s.
      is_exnval e
    ==>
-     ^mng (mStmt (Throw e) c) s (s, mk_exn e c))
+     ^mng (mStmt (Throw (SOME e)) c) s (s, mk_exn e c))
 
    /\
 
@@ -1073,11 +1091,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: bare-throw-fails *)
-(!s0 ct c se.
-     (s0.current_exn = NONE) /\
-     ((c, se) = case ct of LVC c' se' -> (c',se') || RVC c' se' -> (c',se'))
+(!s0 ct se.
+     (s0.current_exn = NONE) 
    ==>
-     ^mng (mStmt (Throw NONE) ct) s0 (s0, mExpr (c UndefinedExpr) se))
+     ^mng (mStmt (Throw NONE) ct) s0 (s0, mExpr UndefinedExpr se))
 
    /\
 
@@ -1252,7 +1269,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: if-exception *)
-(!e thenstmt elsestmt c s.
+(!guard thenstmt elsestmt c s.
      is_exnval guard
    ==>
      ^mng (mStmt (CIf guard thenstmt elsestmt) c) s
@@ -1375,7 +1392,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (e = mStmt (Throw (SOME ex)) c')
    ==>
      ^mng (mStmt (Block T (d0 :: vds) sts) c) s0
-          (s0, mStmt (Block T [] [Throw (SOME (mExpr ex base_se))]) c))
+          (s0, mStmt (Block T [] [Throw (SOME ex)]) c))
 
    /\
 

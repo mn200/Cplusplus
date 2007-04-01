@@ -751,8 +751,9 @@ val expr_inst_def = Define`
   (expr_inst sigma (RValreq e) = OPTION_MAP RValreq (expr_inst sigma e)) /\
   (expr_inst sigma (ECompVal bytes ty) =
      OPTION_MAP (ECompVal bytes) (type_inst sigma ty)) /\
-  (expr_inst sigma (ExceptionExpr e) =
-     OPTION_MAP ExceptionExpr (expr_inst sigma e)) /\
+  (expr_inst sigma (EThrow eopt) = OPTION_MAP EThrow (expropt_inst sigma eopt))
+
+     /\
 
   (exprl_inst sigma [] = SOME []) /\
   (exprl_inst sigma (e::es) =
@@ -857,8 +858,7 @@ val stmt_inst_defn = Hol_defn "stmt_inst" `
           (case cinfo_inst sigma info of
               NONE -> NONE
            || SOME info' -> OPTION_MAP (\i. VStrDec i (SOME info'))
-                                       (cppID_inst sigma id))) /\
-  (vdec_inst sigma (VException e) = OPTION_MAP VException (expr_inst sigma e))
+                                       (cppID_inst sigma id))) 
 
      /\
 

@@ -113,14 +113,17 @@ val expr_ttypes_def = Define`
   (expr_ttypes (DestructorCall _ _) = {}) /\
   (expr_ttypes (RValreq e) = expr_ttypes e) /\
   (expr_ttypes (ECompVal _ _) = {}) /\
-  (expr_ttypes (ExceptionExpr _) = {}) /\
+  (expr_ttypes (EThrow eopt) = expropt_ttypes eopt) /\
   (expr_ttypes UndefinedExpr = {}) /\
 
   (exprl_ttypes [] = {}) /\
   (exprl_ttypes (e::elist) = expr_ttypes e UNION exprl_ttypes elist) /\
 
   (exprlopt_ttypes NONE = {}) /\
-  (exprlopt_ttypes (SOME elist) = exprl_ttypes elist)
+  (exprlopt_ttypes (SOME elist) = exprl_ttypes elist)  /\
+
+  (expropt_ttypes NONE = {}) /\
+  (expropt_ttypes (SOME e) = expr_ttypes e)
 `;
 
 val mem_init_id_ttypes_def = Define`
@@ -167,9 +170,10 @@ val stmt_ttypes_defn = Defn.Hol_defn "stmt_ttypes" `
        (case cinfo_opt of
            NONE -> {}
         || SOME cinfo -> cinfo_ttypes cinfo)
-     else {}) /\
-  (vd_ttypes (VException _) = {})  /\ (* dynamic value only *)
+     else {}) 
 
+     /\
+   
   (centry_ttypes (CFnDefn retty sfld params bodyopt) =
      if sfldfrees sfld = {} then
        ttypes retty UNION sfld_ttypes sfld UNION
@@ -661,8 +665,7 @@ val edec_ctxt_def = Define`
       ctxt with vars updated_by (\fm. fm |+ (nm,ty))) /\
   (edec_ctxt ctxt (Decl (VStrDec nm NONE)) = ctxt) /\
   (edec_ctxt ctxt (Decl (VStrDec nm (SOME ci))) =
-      ctxt with classes updated_by (\fm. fm |+ (nm, ci))) /\
-  (edec_ctxt ctxt (Decl (VException e)) = ctxt) (* dynamic value *)
+      ctxt with classes updated_by (\fm. fm |+ (nm, ci))) 
 `;
 
 
