@@ -41,7 +41,7 @@ turn contains four directories
   packages are available.
 \item \texttt{docs}, containing \LaTeX{} sources and a PDF version of
   this document, as well as sources for the notes on the earlier
-  deliverables (nos.~1--3). 
+  deliverables (nos.~1--3).
 \item \texttt{notes}, some \cpp{} source files that illustrate various
   aspects of \cpp{} behaviour.  An accompanying text file explains some
   of the behaviours.
@@ -108,8 +108,10 @@ directory to create and check the logical theories.
 
 \section{Content}
 
-This deliverable adds a treatment of \cpp{} exceptions and templates
-to the existing semantics. 
+This deliverable adds a treatment of \cpp{} exceptions
+(Section~\ref{sec:exceptions}) and templates
+(Section~\ref{sec:templates}) to the existing semantics.  It also
+fixes a variety of minor bugs.
 
 \subsection{Exceptions}
 \label{sec:exceptions}
@@ -133,28 +135,30 @@ expression syntax is written \ethrow{}, and the rule
 \[
 \infer{
   \statebrack{\textsf{Ex}(\ethrow(e)), \sigma}
-  \rightarrow
-  \statebrack{\textsf{St}(\texttt{throw}(e),c) \sigma}}{}
+  \to
+  \statebrack{\textsf{St}(\texttt{throw}(e),c), \sigma}}{}
 \]
 The variable $c$ represents the continuation that would normally
 convert the result of the statement into a value to be inserted into a
 containing expression tree.  Because \texttt{throw} values can't ever
 turn into values until they initialise a handler, this $c$ can be
-anything at all. 
+anything at all.
 
 At the statement level, the \texttt{throw} form takes an extended
 expression as an argument.  This evaluates its argument as one might
 expect (rule \ruleid{throw-expr-evaluation})
 \[
-\infer{\statebrack{\texttt{throw}\;e_0,\sigma_0}\stmtarrow\statebrack{\texttt{throw}\;e,\sigma}}{\statebrack{e_0,\sigma_0}\rightarrow\statebrack{e,\sigma}}
+\infer{\statebrack{\texttt{throw}\;e_0,\sigma_0}\stmtarrow\statebrack{\texttt{throw}\;e,\sigma}}{\statebrack{e_0,\sigma_0}\to\statebrack{e,\sigma}}
 \]
 When a \texttt{throw}'s expression has been completely evaluated, we
 have something that can then propagate upwards through the abstract
 syntax of statements.  Because of the way the rules for loops and
-\texttt{if}-statements work, we only have to worry about how
-\texttt{throw}-statements traverse \texttt{Block} values. 
+\texttt{if}-statements work, their sub-statements are never executed
+while still sub-statements.
 
-This propagation uses the rule \ruleid{block-interrupted}:
+We start by specifying how \texttt{throw}-statements traverse
+\texttt{Block} values.  This propagation uses the rule
+\ruleid{block-interrupted}:
 \[
 \infer{
   \statebrack{
@@ -176,7 +180,7 @@ The latter doesn't cause an interruption, so is excluded by the second
 hypothesis to the rule.  The final hypothesis ensures that there isn't
 an infinite loop on this rule.
 
-A \naive{} version of the rule for exitting a block
+A \naive{} version of the rule for exiting a block
 (\ruleid{block-exit}) is
 \[
 \infer{
@@ -192,13 +196,27 @@ statement can be propagated out to the top-level of the abstract
 syntax. We will return to this rule when we come to worry about the
 interaction of exceptions and object lifetimes.
 
+There is also rule \ruleid{trap-exn-passes} for exception statements
+escaping the \texttt{Trap} form (which is used for handling
+\texttt{continue} and \texttt{break}):
+\[
+\infer{
+  \statebrack{
+    \textsf{St}(\texttt{Trap}\;\mathit{tt}\;\mathit{exn}, c), \sigma
+  }
+  \to
+  \statebrack{\textsf{St}(\mathit{exn},c), \sigma}
+}{\textsf{is\_exnval}(\textsf{St}(\mathit{exn},c))}
+\]
+
+\medskip
 Because exceptions arise from expressions, the statement level rules
 need to acknowledge this possibility.  Thus, this rule for
-\texttt{if} (\ruleid{if-exception}): 
+\texttt{if} (\ruleid{if-exception}):
 \[
 \infer{
   \statebrack{\textsf{St}(\texttt{if}\;G\;t\;e, c), \sigma}
-  \rightarrow
+  \to
   \statebrack{\textsf{mk\_exn}(G,c),\sigma}
 }{
   \textsf{is\_exnval(G)}
@@ -209,19 +227,770 @@ $\textsf{St}(\texttt{throw}(e), c_0)$, and $e$ has been fully
 evaluated.  The function \textsf{mk\_exn} takes an exception value and
 replaces its continuation information with something appropriate for
 the level of the containing statement.  In this example, $c_0$ will be
-replaced by $c$.
+replaced by $c$.  There is a similar rule for the standalone
+expression and \texttt{return} forms, as well as for the
+statement-level \texttt{throw} form itself.  (The rule
+\ruleid{expression-throw-some} turns a \ethrow{} into a \texttt{throw}
+statement immediately, without evaluating the argument.  When the
+argument \emph{is} evaluated, it may itself cause an exception.)
+
+Because exceptions can arise in variable declarations, there is also a
+rule for handling these.  This is \ruleid{block-declmng-exception}:
+\[
+\infer{
+  \statebrack{
+    \textsf{St}(\mathbf{\{}\,(d\!::\!\mathit{ds})\;sts\,\mathbf{\}}, c),
+    \sigma_0
+  }
+  \to
+  \statebrack{
+    \textsf{St}(\mathbf{\{}\,[\,]\;[\texttt{throw}(\mathit{ex})]\,\mathbf{\}}, c),
+    \sigma
+  }
+}{
+  \statebrack{d,\sigma_0}\to_d
+  \statebrack{[\texttt{VDecInitA}\;\tau\;\mathit{loc}\;e], \sigma}
+  &
+  e = \textsf{St}(\texttt{throw}(\mathit{ex}), c')
+}
+\]
+Again, note how the continuation initially associated with the
+exception ($c'$) is ignored.
+
+
+\subsubsection{Handling Exceptions}
+
+Handling exceptions is done with the \texttt{try-catch} form, which is a
+sequence of handlers associated with a statement that might raise an
+exception.  In the concrete syntax, programmers write something like
+\newcommand{\suplus}{\ensuremath{^+}}
+\newcommand{\sustar}{\ensuremath{^*}}
+\begin{alltt}
+   try \{
+     \emph{statement}\sustar
+   \}
+   \emph{handler}\suplus
+\end{alltt}
+where a \emph{handler} is of the form
+\begin{alltt}
+   catch (\emph{guard}) \{ \emph{statement}\sustar \}
+\end{alltt}
+and a \emph{guard} can be ``\texttt{...}'' (\ie, three full-stops), a
+type, or a standard parameter declaration (associating a type with a
+name).
+
+At the abstract syntax level, this is captured by the following HOL
+declarations (in \texttt{statementsScript}):
+\begin{alltt}
+   exn_pdecl = (string option # CPP_Type) option
+
+   stmt = ...
+        | Catch of stmt => (exn_pdecl # stmt) list
+\end{alltt}
+In what is to come, I will write $*$ to correspond to the ``null''
+value in option types, and use $\lfloor x\rfloor$ to make it explicit
+that $x$ is in an option type.
+
+\bigskip
+\noindent
+Statements can evaluate as usual under a \texttt{Catch}
+\ruleid{catch-stmt-evaluation}:
+\[
+\infer{
+  \statebrack{\textsf{St}(\texttt{Catch}\;s\;\mathit{hnds}, c),
+    \sigma_0}
+  \to
+  \statebrack{\textsf{St}(\texttt{Catch}\;s'\;\mathit{hnds}, c),
+    \sigma}
+}{
+  \statebrack{\textsf{St}(s,c),\sigma_0}\to
+  \statebrack{\textsf{St}(s',c),\sigma}
+}
+\]
+Non-exception statements pass through \texttt{Catch} statements,
+ignoring the handlers \ruleid{catch-normal-stmt-passes}:
+\[
+\infer{
+  \statebrack{
+    \textsf{St}(\texttt{Catch}\;s\;\mathit{hnds}, c),
+    \sigma
+  }
+  \to
+  \statebrack{\textsf{St}(s,c), \sigma}
+}{
+  \textsf{final\_stmt}(s) &
+  \lnot\textsf{is\_exnval}(\textsf{St}(s,c))
+}
+\]
+
+There are three rules governing how handlers interact with thrown
+exceptions.  The first describes the behaviour when the handler
+parameter is given as ``\texttt{...}'' \ruleid{catch-all}:
+\[
+\infer{
+  \begin{array}{l}
+    \statebrack{
+      \textsf{St}(\texttt{Catch}\;(\texttt{throw}(e))\;((*,
+      \mathit{hnd})::\mathit{hnds}), c), \sigma
+    }
+    \to\\[1ex]
+    \quad \statebrack{
+      \textsf{St}(\mathbf{\{}\,[\,]\;[\mathit{hnd};\,\textsf{ClearExn}]\,\mathbf{\}}, c),
+      \sigma[\textsf{current\_exns}\,:=\,e::\textsf{current\_exns}\,]
+    }
+  \end{array}
+}{
+}
+\]
+This rule introduces two new features, the \textsf{current\_exns}
+field of the program state, and the \textsf{ClearExn} statement-form.
+Both are present to support the ability of programs to use
+\texttt{throw} without an argument to re-throw the ``current
+exception''.  This is covered below in Section~\ref{sec:throw-none}.
+
+Otherwise, the behaviour is clear: if the top handler has
+``\texttt{...}'' as its parameter, then this handler is entered (and
+the other handlers are discarded).
+
+When the top handler has an explicitly-typed parameter, the handler is
+only entered if the type of the thrown value matches
+\ruleid{catch-specific-type-matches}:
+\[
+\infer{
+  \begin{array}{l}
+    \statebrack{
+      \textsf{St}(\texttt{Catch}\;
+                    (\texttt{throw}(e))\;
+                    ((\lfloor(\mathit{pnm?},\tau)\rfloor, \mathit{hnd})::
+                     \mathit{hnds}),c),
+      \sigma
+    }
+    \to\\[.5ex]
+    \quad \left\langle
+      \begin{array}{l}
+        \textsf{St}(
+           \mathbf{\{}\,[\textsf{VDecInit}\;\tau\;\mathit{pnm}\;
+                                            (\textsf{CopyInit}\;e)]\;
+                        [\mathit{hnd};\,\textsf{ClearExn}]\,\mathbf{\}}, c),\\
+        \sigma[\textsf{current\_exns}\,:=\,e::\textsf{current\_exns}\,]
+      \end{array}\right\rangle
+  \end{array}
+}{
+  \begin{array}{c}
+  \mathit{pnm} = (\textsf{case}\;\mathit{pnm?}\;\textsf{of}\;*\to \texttt{" no name "}
+  \;\;|\;\; \lfloor x \rfloor \to x)\\[.5ex]
+  \textsf{exn\_param\_matches}\;\sigma\;\tau\;(\textsf{typeof}(e))
+  \end{array}
+}
+\]
+The string \texttt{" no name "} is chosen arbitrarily as the name of
+the invisible temporary if the handler has just a type as its
+parameter and no associated name.  This name is chosen so as to not
+mask any existing names in scope (no legal \cpp{} program can have
+variable names that include spaces).
+
+If the declared type $\tau$ matches the type of the exception value,
+then the exception value copy-initialises the parameter, and the
+handler body is executed.  The constant \textsf{exn\_param\_matches}
+checks the match, embodying the rules in \S15.3, paragraph 3.  If
+there is no match, then the remaining handlers have to be tried
+\ruleid{catch-specific-type-nomatch}:
+\[
+\infer{
+  \begin{array}{c}
+    \statebrack{
+      \textsf{St}(\texttt{Catch}\;
+                    (\texttt{throw}(e))\;
+                    ((\lfloor(\mathit{pnm?},\tau)\rfloor, \mathit{hnd})::
+                     \mathit{hnds}), c),
+      \sigma
+    }\\
+    \to\\
+    \quad\statebrack{
+      \textsf{St}(\texttt{Catch}\;(\texttt{throw}(e))\;\mathit{hnds},c),
+      \sigma
+    }
+  \end{array}
+}{
+  \lnot\,\textsf{exn\_param\_matches}\;\sigma\;\tau\;(\textsf{typeof}(e))
+}
+\]
+If no handlers, remain, the exception propagates further
+\ruleid{catch-stmt-empty-hnds} (generalised to allow any statements to
+pass through):
+\[
+\infer{
+  \statebrack{
+    \textsf{St}(\texttt{Catch}\;s\;[\,], c),
+    \sigma
+  }
+  \to
+  \statebrack{\textsf{St}(s, c), \sigma}
+}{\rule{0mm}{2ex}}
+\]
+
+
+\subsubsection{Using \texttt{throw} with No Argument}
+\label{sec:throw-none}
+
+If flow of control is within an exception handler, or within a
+function body that has been called from such, then it is permissible
+to use the expression \texttt{throw} without any arguments to cause
+the current exception to be rethrown.  This requires the model to
+track what the current handled exception is.  More, the
+standard requires the state to track the notion of ``most recently
+caught'' exception~(\S15.1, paragraph 7), which requires the state to
+track a stack of exceptions that have been caught.
+
+The expression version \ethrow{} is converted to the statement form as
+soon as it is encountered \ruleid{expression-throw-none}:
+\[
+\infer{\statebrack{\textsf{Ex}(\ethrow(*),\mathit{se}), \sigma}
+  \to
+  \statebrack{\textsf{St}(\texttt{throw}(*),c), \sigma}
+}{}
+\] (The choice of $c$ is again irrelevant.)
+
+There are then two rules for the statement $\texttt{throw}(*)$.  If
+there is a current exception, all is well
+\ruleid{bare-throw-succeeds}:
+\[
+\infer{
+  \statebrack{\textsf{St}(\texttt{throw}(*), c), \sigma}
+  \to
+  \statebrack{\textsf{St}(\texttt{throw}(e), c),
+    \sigma[\textsf{current\_exns} := \mathit{es}]}
+}{
+  \sigma.\textsf{current\_exns} = e :: \mathit{es}
+}
+\]
+Otherwise, the program must call the \texttt{std::terminate} function
+\[
+\infer{
+  \statebrack{\textsf{St}(\texttt{throw}(*), c), \sigma}
+  \to
+  \statebrack{\textsf{St}(\texttt{std::terminate}(), c),\sigma}
+}{
+  \sigma.\textsf{current\_exn} = [\,]
+}
+\]
+
+Above, the rules for handlers also use a statement-form
+\textsf{ClearExn}.  This special value has the following rule
+\ruleid{clear-exn}:
+\[
+\infer{
+\statebrack{\textsf{St}(\textsf{ClearExn},c), \sigma}
+\to
+\statebrack{\textsf{St}(\textsf{EmptyStmt},c),
+  \sigma[\textsf{current\_exns}:=\mathit{es}]}
+}{
+  \sigma.\textsf{current\_exns} = e::es
+}
+\]
+This ensures that when a handler finishes the most recently caught
+exception is no longer recorded as such.  If a handler rethrows the
+current exception, or throws a fresh exception of its own, and this
+exception escapes the handler, then the flow of control will never
+reach the \textsf{ClearExn}, and this rule will not fire.
+
+\subsubsection{Exception Specifications}
+
+The standard's \S15.4 specifies a method whereby functions can specify
+which exception types they will produce.  If an unexpected exception
+value occurs, this results in a call to \texttt{std::unexpected}.
+This is not modelled in the dynamic semantics as it can be emulated
+with a compile-time rewriting of the program.  If a function
+\texttt{f} is specified to only raise exceptions X and Y, then it can
+be rewritten to be
+\begin{verbatim}
+   f(args)
+   {
+     try {
+       body
+     }
+     catch (X) { throw; }
+     catch (Y) { throw; }
+     catch (...) { std::unexpected(); }
+   }
+\end{verbatim}
+
+\subsubsection{Exceptions and Object Lifetimes}
+
+Exceptions complicate the story about the construction and destruction
+of objects.  The system described in Deliverable~3 carefully arranged
+things so that class objects, and their sub-objects were all
+``created'' in the outermost scope, at the level where the constructor
+for the outermost object appeared.  This meant that when the enclosing
+block finished, the destructors for all of those objects and
+sub-objects would be called as appropriate.
+
+Unfortunately, this does not serve so well if constructors are allowed
+to raise exceptions.  If this occurs, then any sub-objects that have
+already been constructed have to have their destructors called
+immediately.  Consider for example
+\begin{alltt}
+  Class::Class(objty p1) : b1(3), b2(\(e\)) \{ \(\mathit{body}\) \}
+\end{alltt}
+There are three objects that have their constructors called as a
+result of a call to this constructor.  One is the parameter
+\texttt{p1}, and the other are the base classes (or data-members)
+\texttt{b1} and \texttt{b2}.  When this constructor is called,
+\texttt{p1} is always destroyed, but (sub-)objects \texttt{b1} and
+\texttt{b2} should live on, unless $\mathit{body}$ or $e$ cause an
+exception to be raised.
+
+To get this situation to work in the model, the state's
+\texttt{blockclasses} field has to record two sorts of object
+construction (which are to be unwound later), sub-object creation and
+normal object creation.  When a block exits normally, sub-object
+destructors are not called, but instead delayed so that they can be
+recorded as having the same lifetime as the enclosing object.  In
+Deliverable~3's version of the semantics, all sub-objects were
+constructed at the same, uppermost, level, but the addition of
+exceptions requires the model to be able to destroy sub-objects
+earlier.
 
 \subsection{Templates}
 \label{sec:templates}
 
+In this section, I describe how the semantics models templates.  I
+have been inspired by Siek and Taha~\cite{DBLP:conf/ecoop/SiekT06},
+though as I shall discuss, the dynamics of their model is too
+simplistic for the full language of templates, in particular handling
+template parameters that are themselves references to templates
+(``higher order templates'' if you will).\footnote{Siek and Taha do
+  model \texttt{typedef} declarations within classes, which I do not.}
+
+Previously, I suggested that it might be possible to treat templates
+at ``run-time'', as if one had written a one-pass \cpp{} interpreter.
+However, the example in Figure~\ref{fig:templates-not-interpretable}
+demonstrates that such a goal is impossible, that one would have to
+write a two pass interpreter at the very least.  Any reference to the
+figure's \texttt{List} template, perhaps within a function that was
+called at a great stack depth, causes the need to statically
+initialise the global \texttt{node\_count} before the program even
+begins.  A \naive{} interpreter that attempts to execute the program
+source as it sees it, will come unstuck.
+
+As the interpreter sees the template declarations above, it does
+nothing.  Then it performs its global declarations, and jumps into
+main.  At this point it has already failed to do the right thing.
+Instead, the putative interpreter would have to scan the whole program
+for template applications so that it can generate the appropriate
+global variable initialisations.  This is no better than explicitly
+pre-compiling templates, so I have adopted an explicit two-phase
+compilation approach.
+
+\begin{figure}
+\begin{verbatim}
+  template <class T> class List {
+    T item;
+    List *next;
+    static int node_count;
+  };
+
+  template<class T> int List<T>::node_count = 0;
+\end{verbatim}
+\caption{A program demonstrating the difficulty of interpreting
+  templates.}
+\label{fig:templates-not-interpretable}
+\end{figure}
+
+
+\subsubsection{Names and Identifiers}
+Modelling templates raises a number of interesting questions.  One of
+the more trivial seeming issues is the representation of types and
+names when the former can have the latter embedded within them.
+Indeed, names end up needing to be mutually recursive with types
+(which has the follow-on effect of eliminating the \texttt{names}
+theory from the development; names are now defined as part of the
+\texttt{types} theory).
+
+\newcommand{\bnfof}{\;\textsf{of}\;}
+\newcommand{\bnfcurry}{\;\texttt{=>}\;}
+\newcommand{\stringty}{\textsf{string}}
+\newcommand{\boolty}{\textsf{bool}}
+\newcommand{\intty}{\textsf{int}}
+The new definitions begin by defining the notion of ``top-level
+name'' (\texttt{TopName}) below.  This is the sort of name that can
+occur with namespace components, possibly with a leading \texttt{::}
+to indicate that the ``path'' is an absolute one.
+\[
+\texttt{TopName} \;\;=\;\; \boolty \times \stringty^*
+\times \stringty
+\]
+If true, the boolean field indicates that this is a name prefixed by
+the \texttt{::} operator.  The list of names are those of enclosing
+namespaces.  For example, \texttt{ns1::subspace::foo} is represented
+by the triple \[(\textsf{false}, [\texttt{"ns1"}, \texttt{"subspace"}],
+\texttt{"foo"})\]
+
+Next, the template identifiers can be specified:
+\[
+\texttt{TemplateID}
+\begin{array}[t]{cl}
+  ::= & \texttt{TemplateConstant} \bnfof \texttt{TopName}\\
+  |   & \texttt{TemplateVar}      \bnfof \stringty
+\end{array}
+\]
+
+\newcommand{\cppid}{\texttt{CPP\_ID}}
+\bigskip Now we are ready to specify types.  Types need to include
+identifiers (\cppid{} henceforth) directly in order to model
+something like
+\begin{alltt}
+  template <class T> int size<T>(T x) { return x.size(); }
+\end{alltt}
+where \texttt{T} has to be viewed as a type in the parameter list of
+the function.
+
+So, we extend the type
+of types, by allowing identifiers:
+\[ \texttt{CPP\_Type} \begin{array}[t]{cl}
+  ::= & \texttt{int} \;\;|\;\; \texttt{char} \;\;|\;\; \texttt{float} \\
+| & \dots\\
+| & \texttt{TypeID}\bnfof \cppid
+\end{array}
+\]
+Identifiers may be template calls, so that it is legitimate to write
+\texttt{f<myclass>} or \texttt{List<T>}, and identifiers can also
+refer to sub-classes and (static) fields of classes.  This means that
+we must define \cppid{} thus:
+\[\cppid \begin{array}[t]{cl}
+  ::= & \texttt{IDVar}\bnfof\stringty\\
+| & \texttt{IDConstant} \bnfof\texttt{TopName}\\
+| &
+\texttt{IDTempCall}\bnfof\texttt{TemplateID}\bnfcurry \texttt{TemplateArg}^*\\
+| & \texttt{IDFld}\bnfof\cppid\bnfcurry\texttt{StaticField}
+\end{array}
+\]
+Recall that \texttt{=>} is the HOL notation for specifying that the
+arguments to a constructor are curried.  Thus, for example, we write
+$\texttt{IDFld}\;\mathit{id}\;\mathit{sfld}$.
+
+Fields within classes can themselves be templates (template member
+functions), so the \texttt{StaticField} type is defined
+\[
+\texttt{StaticField} \begin{array}[t]{cl}
+  ::= &
+  \texttt{SFTempCall}\bnfof\stringty\bnfcurry\texttt{TemplateArg}^*\\
+| & \texttt{SFName}\bnfof\stringty
+\end{array}
+\]
+Finally, we need to specify the possible sorts of arguments that can
+be passed to templates.  The Standard is quite explicit
+here~\cite[\S14.3~para~1]{cpp-standard-iso14882}, there are three
+sorts of arguments: types, templates, and ``non-type, non-template''
+arguments (meaning references to objects with linkage, or numbers).
+Thus:
+\[
+  \texttt{TemplateArg} \begin{array}[t]{cl}
+::= & \texttt{TType}\bnfof\texttt{CPP\_Type}\\
+|   & \texttt{TTemp}\bnfof\texttt{TemplateID}\\
+|   & \texttt{TVal}\bnfof\texttt{TemplateValueArg}
+\end{array}
+\]
+Finally, there are four different sorts of non-type, non-template
+arguments~\cite[\S14.3.2~para~1]{cpp-standard-iso14882}:
+\[\texttt{TemplateValueArg}
+\begin{array}[t]{cl}
+::= & \texttt{TNum}\bnfof\intty\\
+|   & \texttt{TObj}\bnfof\cppid\\
+|   & \texttt{TMPtr}\bnfof\cppid\bnfcurry\texttt{CPP\_Type}\\
+|   & \texttt{TVAVar}\bnfof\stringty
+\end{array}
+\]
+This presentation is slightly simplified because the standard also
+allows arithmetic on these arguments, where this is appropriate
+(between \texttt{TNum} and \texttt{TVAVar} parameters).
+
+This is a complicated type, and it does assume that some previous
+phase of analysis has determined which references are to class types,
+and which are to namespaces.  In this way, something like
+\texttt{x::y::z} can be split up to include namespaces within a
+\texttt{TopName} component, and sub-fields or sub-classes within
+\texttt{IDFld} structuring.
+
+Similarly, a string such as \texttt{x::t<int>} is ambiguous without
+some static analysis being performed to determine whether \texttt{x}
+is a namespace or a class.  If \texttt{x} is a class, then \texttt{t}
+must be a template member function, but if it is a namespace, then
+\texttt{t} might be either a class template or a function template.
+
+Further note that there can be at most two template calls within an
+identifier.  If there are two, then the outermost is a class template,
+and the second will occur last, and will be a template member
+function.
+
+\subsubsection{Instantiation and Matching}
+
+(This seection describes formalisation done in the script file
+\texttt{instantiation}.)
+
+\medskip
+\noindent Types and identifiers can be \emph{instantiated}: mappings
+from variable names to values are applied over the structure of the
+value (type or identifier), and occurrences of variable names are
+replaced by the appropriate element from the range of the function.
+Because there are three sorts of variables (corresponding to the three
+different sorts of template argument), an instantiation is actually a
+triple of functions (one for each sort of variable).
+
+In Siek and Taha~\cite{DBLP:conf/ecoop/SiekT06}, instantiation is a
+very elegant operation.  In a more faithful model of more of \cpp,
+more complexities intrude.  In addition to the need for three
+mappings, the model must also accept that instantiation can result in
+an invalid result.  Instantiation must become partial, which is
+modelled by making the types of the various instantiation functions be
+of the form
+\[
+\texttt{inst<}\tau\texttt{>} : \mathit{substitution} \rightarrow \tau
+\rightarrow \tau\;\textsf{option}
+\]
+The partiality arises at the lowest level, as in the following
+example:
+\begin{verbatim}
+   template<class T> void f<T>(int x) { T::staticfield = x; }
+   void g() { f<int>(3); }
+\end{verbatim}
+This must be an error because it is not sensible to write
+\texttt{int::staticfield}.  (Other type substitutions may also cause
+this to be an error, but this error can be detected as the
+substitution is done, without any need to lookup information about the
+argument.)
+
+The partiality of instantiation does not prevent us from defining a
+partial order over types, such that $\tau_1 \leq \tau_2$ when $\tau_2$
+is a more specialised/instantiated version of $\tau_1$.  As in Siek
+and Taha~\cite{DBLP:conf/ecoop/SiekT06}, we can prove reflexivity,
+transitivity, and antisymmetry (up to renaming of free variables).
+
+Given the partial order, it is straightforward to find the best match
+amongst a set of template definitions for a given template call.
+
+\subsubsection{Program Instantiation}
+
+Siek and Taha have an elegant model for program instantiation.  A
+program is a sequence of definitions (of classes, and of static member
+functions).  A definition may cause an existing template to be
+instantiated because of a reference to that template within the
+definition.  When a member function definition is encountered, if its
+body includes a reference to other functions, these functions may need
+to be instantiated.
+
+For example, when analysing the program in Figure~\ref{fig:taha-prog},
+the Siek and Taha's model will see the reference to
+\texttt{Foo<T*>::f()} in the definition of \texttt{Bar<T>::g()} and
+instantiate the definition of \texttt{f} (it knows that it does not
+already have an instantiation for a type of the form \texttt{T*}).
+This instantiation will result in a template definition (one with free
+variables), which may or may not be required in the rest of the
+program.
+\begin{figure}
+\begin{verbatim}
+   template <class T> class Foo { static int f(); };
+   template <class T> int Foo<T>::f() { return 3; }
+
+   template <class T> class Bar { static int g(); };
+   template <class T> int Bar<T>::g() { return Foo<T*>::f(); }
+\end{verbatim}
+  \caption{In Siek and Taha's model, the definition of
+    \texttt{Foo<T>::f()} will get instantiated to provide a definition
+    of \texttt{Foo<T*>::f()}.}
+\label{fig:taha-prog}
+\end{figure}
+
+This model breaks down in the presence of template parameters that are
+templates because it becomes impossible to determine the dependencies
+of a template definition.  In the program in
+Figure~\ref{fig:taha-problem}, it is impossible to tell what
+definition should be instantiated when processing the definition of
+\texttt{Baz<A>::g}.  In the presence of template parameters, Siek and
+Taha's model is too eager.
+
+\begin{figure}
+\begin{verbatim}
+   template <class T> struct Foo { static int f(); };
+   template <class T> int Foo<T>::f() { return 3; }
+
+   template <class T> struct Bar { static int f(); };
+   template <class T> int Bar<T>::f() { return 4; }
+
+   template <template <class> class A> struct Baz {
+     static int g();
+   };
+   template <template <class> class A>
+   int Baz<A>::g() {
+     return A<int>::f();
+   }
+
+   int main() { return Baz<Foo>::g(); }
+\end{verbatim}
+  \caption{Siek and Taha's model's early instantiation breaks down
+    when it sees the definition of \texttt{Baz<A>::g}.  At this point,
+    it can not tell which template is being instantiated in the body.
+    By way of contrast, my model doesn't instantiate anything until it
+    sees the definition of \texttt{main}.
+    (This program is available as
+    \texttt{notes/siek-taha-tempvar.cpp})}
+\label{fig:taha-problem}
+\end{figure}
+
+My model only performs instantiations when there is a ground instance
+to drive the instantiation.  Otherwise, it is similar to what is
+presented in Siek and Taha.  In particular, it is important to avoid
+instantiating member functions unless they are called for.
+
+The model in the \texttt{templates} script is based around a working
+state of four components: Templates, Residuals, Needs and
+Declarations.  The Templates are those declarations encountered so far
+which are of templates.  The Residuals are those ``resolved''
+declarations that have either been encountered, or which have been
+instantiated from Templates, and are thus ``ground'' or variable-free.
+A resolved declaration is one that has had all of its dependencies
+appropriately instantiated, or at least recorded.  The Needs are those
+declarations that have been required for a resolution, and for which
+there have been template declarations, but no definitions.  Needs can
+be functions (class-members, including constructors and destructors,
+or normal top-level functions), and static data members of classes.
+Finally, the Declarations are the declarations that still need to be
+processed, coupled with a number specifying how much work has been
+done to the declaration so far (all declarations start at level 0).
+
+The Declarations component of the instantation state can grow as well
+as shrink, and it is this that can cause compilation to fail to
+terminate.
+
+Values in the Declarations component can be declarations or
+definitions, and can be of classes, variables and functions.  The
+behaviour on encountering declarations of ground entities is rather
+involved, and detailed in Table~\ref{tab:ground-decls}.  The basic
+idea is that any ground definition can cause the instantiation of
+templates.  Such instantiations are always governed by the requirement
+that the best match is found.  Successful instantiations are stored in
+the Residuals component, so duplicate work is avoided.
+
+Instantiations are done in two phases.  First any template classes
+required are instantiated.  This instantiation can in turn prompt
+further instantiation because a template class can have template
+members, or template ancestors.  if the required types can be
+instantiated without causing an infinite loop, the original definition
+will eventually return to the top of the Declarations list, but at
+Level 1.  This time, the definition is scanned to see if it depends on
+any functions or static variables.   These references may or may not
+have definitions (though they will all at least have declarations).
+Those with definitions are instantiated and put onto the list of
+Declarations.  Those without end up in Needs.
+
+When a template declaration is encountered, this is put straight into
+the Templates component.  When a template definition is encountered,
+this may resolve an outstanding Need, so it is checked against all
+current Needs.  Those that can instantiate against the new Template
+definition are put onto the Declarations list.
+
+\begin{table}
+\hspace{-3em}
+\begin{tabular}{lp{0.32\textwidth}p{0.32\textwidth}p{0.32\textwidth}}
+  & \multicolumn{1}{c}{\textbf{Function}} &
+  \multicolumn{1}{c}{\textbf{Class}} &
+  \multicolumn{1}{c}{\textbf{Variable}} \\
+  \textbf{Decl.}
+  &
+  \small \textbf{L0:}
+  Add declarations of any referred to template types
+  to the list of Declarations still to be processed.
+  &
+  % Class
+  \small \textbf{L0:}
+  If not already in Residuals, and a template application, find best
+  instantiation for this type and add its instantiated definition
+  (less any member function definitions) to
+  list of Declarations still to be processed.
+  &
+  \small \textbf{L0:} Declarations can only be of non-template variables
+  (template variables are declared inside class definitions).  Add to
+  Residuals and continue.
+  \\ \\
+  \textbf{Defn.}
+  &
+  % Function 0
+  \small\textbf{L0:} If not already present in Residuals, extract any
+  template
+  types, and put declarations of
+  these into Declarations, ahead of this function definition at
+  Level~1.
+  &
+  % Class 0
+  \small \textbf{L0:} Extract any template types from the data-member
+  definitions, and put Level~0 declarations for these into
+  Declarations, followed by this declaration at Level~1.
+  &
+  % Variable 0
+  \small \textbf{L0:} Add any referenced template types to
+  declarations at Level~0 (such types may occur in the initialising
+  expression for the variable), followed by the same declaration at
+  Level~1.
+  \\[1ex]
+  &
+  % Function 1
+  \small \textbf{L1:} Extract any function and static
+  variable references, and
+  add those with definitions (once instantiated with best match)  to
+  Declarations at Level 0.  Those
+  functions or static variables without definitions are added to
+  Needs.
+  &
+  % Class 1
+  \small \textbf{L1:}
+  Required types have been dealt with: now check for definitions of
+  any static data members.  Those not present are added to Needs.
+  Best matched members are added to Declarations at Level~0.
+  &
+  % Variable 1
+  \small \textbf{L1:} Check initialising expression for references to
+  template functions, or other static variables.  Add instantiated
+  definitions (for those with definitions) to
+  Declarations list at Level~0.  Add others to Needs.
+\end{tabular}
+\caption{Behaviour of program instantiation on ground declarations}
+\label{tab:ground-decls}
+\end{table}
+
+
+\bigskip
+\noindent
+Unlike Siek and Taha's model, there hasn't been any validation of my
+model of program instantiation, whether by the proof of theorems, or
+by simulation of concrete examples.  I hope to address this in the
+final deliverable.
+
+
+\subsubsection{Resolving Names}
+
+One significant issue, at least as far as the standard is concerned,
+is the resolution of names in templates.  When a template definition
+is instantiated, it is important to specify how the names occuring in
+the template bind.  Typically, such names might bind to global names
+that are in scope at the point of the template's definition, or to
+member functions associated with the template argument.
+
+The rule is actually fairly straightforward, at least in principle:
+names are bound to argument names when the statically determined type
+of the name refers to the template parameter.  I do not model this
+issue as static processing can resolve it before compilation begins.
+In particular, if a name is determined to depend on a template
+parameter, then that name can be prefixed with an explicit use of
+\texttt{this->}, making it clear that a member is being referred to.
 
 \section{Future}
 
-The next deliverable calls for a treatment of exceptions and
-templates.  My notes for deliverable 1 cover how I believe exceptions
-will be handled.  Templates remain unclear.  I would also appreciate
-advice on which of the wrinkles and omissions above are seen as
-significant and worthy of further attention.
+The final deliverable calls for sanity theorems, namespaces, run-time
+type identification and library functions.  All of these save the last
+are strightforward.  It is now not clear to me what is meant by
+``library functions''; whether actual functions are to be specified,
+or whether this is a reference to the mechanisms for linking to
+library functions (paragraph three of \S3 of the Statement of Work).
 
 \bibliographystyle{plain}
 \bibliography{deliverables}
