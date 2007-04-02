@@ -150,7 +150,7 @@ val _ = Hol_datatype
                    full enclosing expression *)
               ;
 
-              current_exn : CExpr option
+              current_exns : CExpr list
 
              |>`;
 val _ = type_abbrev("CState", ``:state``)

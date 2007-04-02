@@ -363,8 +363,8 @@ val exception_parameter_match_def = Define`
          ?pty. (strip_const paramty = Ref pty) /\
                unamb_public_base s pty exnty) \/
 
-        (* para 3, clauses 3 - (* TODO *) *)
-        F
+        (* para 3, clauses 3 *)
+        ?v1 v2. nonclass_conversion s (v1,exnty) (v2,paramty)
 `;
 
 val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
@@ -483,7 +483,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: econtext-propagates-undefinedness *)
 (!f se s.
-     valid_econtext f 
+     valid_econtext f
    ==>
      ^mng (mExpr (f UndefinedExpr) se) s (s, ev UndefinedExpr se))
 
@@ -502,7 +502,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!e se s c.
      T
    ==>
-     ^mng (mExpr (EThrow (SOME e)) se) s 
+     ^mng (mExpr (EThrow (SOME e)) se) s
           (s, mStmt (Throw (SOME (mExpr e se))) c))
 
    /\
@@ -512,7 +512,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      ^mng (mExpr (EThrow NONE) se) s (s, mStmt (Throw NONE) c))
-  
+
    /\
 
 (* RULE-ID: apply-se *)
@@ -917,7 +917,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
      TODO: set up class member values as "locals".  I.e., if class C
        has a member x, then x can be directly referred to in the
-       class's member functions
+       class's member functions.  This is really a name-space issue.
 
      NOTE: the block is "manually" entered, hence its flag being T, so that
      its internal thisvalue can be set correctly.
@@ -1026,7 +1026,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mStmt (Ret e) c) s (s, mk_exn e c))
 
    /\
- 
+
 (* RULE-ID: empty-ret *)
 (!s c.
      T
@@ -1082,28 +1082,30 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: bare-throw-succeeds *)
-(!s0 e c.
-     (s0.current_exn = SOME e)
+(!s0 e es c.
+     (s0.current_exns = e::es)
    ==>
      ^mng (mStmt (Throw NONE) c) s0
-          (s0, mStmt (Throw (SOME (mExpr e base_se))) c))
+          (s0 with current_exns := es,
+           mStmt (Throw (SOME (mExpr e base_se))) c))
 
    /\
 
 (* RULE-ID: bare-throw-fails *)
-(!s0 ct se.
-     (s0.current_exn = NONE) 
+(!s0 ct.
+     (s0.current_exns = [])
    ==>
-     ^mng (mStmt (Throw NONE) ct) s0 (s0, mExpr UndefinedExpr se))
+     ^mng (mStmt (Throw NONE) ct) s0
+          (s0, mStmt (Standalone (mExpr ^callterminate base_se)) ct))
 
    /\
 
 (* RULE-ID: clear-exn *)
-(!s0 c.
-     T
+(!s0 c e es.
+     (s0.current_exns = e::es)
    ==>
      ^mng (mStmt ClearExn c) s0
-          (s0 with current_exn := NONE, mStmt EmptyStmt c))
+          (s0 with current_exns := es, mStmt EmptyStmt c))
 
    /\
 
@@ -1113,7 +1115,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    tried and found not to match the type of the exception value)
 *)
 (!st c s0.
-     final_stmt st c
+     T
    ==>
      ^mng (mStmt (Catch st []) c) s0 (s0, mStmt st c))
 
@@ -1129,21 +1131,18 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: catch-all *)
-(* NOTE: relying on the fact that no user program can generate " no name " as
-   the name of an identifier *)
 (!exn e hnd_body rest c s0.
      (exn = SOME (mExpr e base_se))
    ==>
      ^mng (mStmt (Catch (Throw exn) ((NONE, hnd_body) :: rest)) c) s0
-          (s0 with current_exn := SOME e,
-           mStmt (Block F [VDecInit (value_type e)
-                                    (Base " no name ")
-                                    (CopyInit (mExpr e base_se))]
-                          [hnd_body; ClearExn]) c))
+          (s0 with current_exns updated_by (CONS e),
+           mStmt (Block F [] [hnd_body; ClearExn]) c))
 
    /\
 
 (* RULE-ID: catch-specific-type-matches *)
+(* NOTE: relying on the fact that no user program can generate " no name " as
+   the name of an identifier *)
 (!exn e hnd_body rest c s0 pty pnameopt pname.
      (exn = SOME (mExpr e base_se)) /\
      exception_parameter_match s0 pty (value_type e) /\
@@ -1151,8 +1150,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mStmt (Catch (Throw exn) ((SOME(pnameopt, pty), hnd_body) :: rest)) c)
           s0
-          (s0 with current_exn := SOME e,
-           mStmt (Block F [VDecInit (value_type e)
+          (s0 with current_exns updated_by (CONS e),
+           mStmt (Block F [VDecInit pty
                                     pname
                                     (CopyInit (mExpr e base_se))]
                           [hnd_body; ClearExn]) c))
@@ -1216,6 +1215,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mStmt (Trap tt (Ret (NormE (ECompVal v t) se))) c) s0
           (s0, mStmt (Ret (NormE (ECompVal v t) se)) c))
+
+   /\
+
+(* RULE-ID: trap-exn-passes *)
+(!tt exn c s.
+     exception_stmt exn
+   ==>
+     ^mng (mStmt (Trap tt exn) c) s (s, mStmt exn c))
 
    /\
 
@@ -1385,14 +1392,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: block-declmng-exception *)
-(!d0 s0 f e ex ty loc c c' sts vds.
+(!d0 s0 s f e ex ty loc c c' sts vds.
      ((f = CopyInit) \/ (f = DirectInit)) /\
-     declmng ^mng I (d0, s0) ([VDecInitA ty loc (f e)], s0) /\
+     declmng ^mng I (d0, s0) ([VDecInitA ty loc (f e)], s) /\
      is_exnval e /\
      (e = mStmt (Throw (SOME ex)) c')
    ==>
      ^mng (mStmt (Block T (d0 :: vds) sts) c) s0
-          (s0, mStmt (Block T [] [Throw (SOME ex)]) c))
+          (s, mStmt (Block T [] [Throw (SOME ex)]) c))
 
    /\
 

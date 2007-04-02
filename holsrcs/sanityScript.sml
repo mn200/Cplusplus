@@ -28,7 +28,7 @@ val _ = new_theory "sanity";
 
 open side_effectsTheory
 val prove = fn (t,tac) => SIMP_RULE (srw_ss()) [] (prove(t,tac))
-val store_thm = fn (s,t,tac) => let val th = prove(t,tac) 
+val store_thm = fn (s,t,tac) => let val th = prove(t,tac)
 				in save_thm(s,th) end
 
 val val2mem_fnmap = store_thm(
@@ -75,7 +75,7 @@ val fninfo_invariant = store_thm(
   ``!ee0 s0 see. meaning ee0 s0 see ==> (s0.fnmap = (FST see).fnmap)``,
   HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
   TRY (IMP_RES_TAC declmng_elim_preserves_fnmaps THEN
-       FULL_SIMP_TAC (srw_ss()) []  THEN NO_TAC) THEN 
+       FULL_SIMP_TAC (srw_ss()) []  THEN NO_TAC) THEN
   METIS_TAC [lval2rval_states_equal, apply_se_preserves_fnmaps,
              realise_destructors_fnmap_invariant]);
 
@@ -142,6 +142,29 @@ val valid_this_def = Define`
   (valid_this (ECompVal bytes (Ptr (Class cspec))) = T) /\
   (valid_this x = F)
 `;
+
+(* ----------------------------------------------------------------------
+    statement to statement evaluations preserve continuations
+   ---------------------------------------------------------------------- *)
+
+open statementsTheory
+val is_exnval_lemma = prove(
+  ``is_exnval e /\ (mk_exn e c = mStmt s c') ==> (c' = c)``,
+  Cases_on `e` THEN SIMP_TAC (srw_ss()) [is_exnval_def] THEN
+  Cases_on `C'` THEN SIMP_TAC (srw_ss()) [is_exnval_def] THEN
+  Cases_on `o'` THEN SIMP_TAC (srw_ss()) [is_exnval_def] THEN
+  SRW_TAC [][mk_exn_def]);
+
+val stmt_preserve_continuations = store_thm(
+  "stmt_preserve_continuations",
+  ``!ee s0 see. meaning ee s0 see ==>
+                !c1 c2 st1 st2 s.
+                    (ee = mStmt st1 c1) /\
+                    (see = (s, mStmt st2 c2)) ==>
+                    (c2 = c1)``,
+  HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
+  METIS_TAC [is_exnval_lemma]);
+
 
 val _ = export_theory();
 
