@@ -6,46 +6,72 @@ open aggregatesTheory memoryTheory
 val _ = new_theory "concrete_tests"
 
 val cname_def = Define`cname = Base "c"`;
+fun Store_thm(x as (n,t,tac)) = (store_thm x before export_rewrites [n])
+fun Save_thm (x as (n,th)) = (save_thm x before export_rewrites [n])
+
+val is_abs_id_cname = Store_thm(
+  "is_abs_id_cname",
+  ``is_abs_id cname = F``,
+  SRW_TAC [][typesTheory.Base_def, cname_def, typesTheory.is_abs_id_def]);
 
 val state1_def = Define`
-  state1 =
-    ARB with classmap updated_by
-      (\fm. fm |+ (cname,
-                   SOME (<| fields := [(FldDecl "foo" (Signed Char),F, Public);
-                                      (FldDecl "bar" (Signed Int), F, Public)];
-                           ancestors := [] |>, {})))
-
+  state1 = <|
+    env :=
+     FTNode (<| classenv :=
+                  FEMPTY |+
+                   (SFName "c",
+                    FTNode (<| info :=
+                                 SOME (<| fields :=
+                                            [(FldDecl "foo" (Signed Char), F,
+                                              Public);
+                                             (FldDecl "bar" (Signed Int), F,
+                                              Public)];
+                                            ancestors := [] |>, {}) |>)
+                           FEMPTY) |>)
+            FEMPTY
+|>
 `;
 
 val simp = SIMP_CONV (srw_ss()) [state1_def]
 
-val state1_applied_base = save_thm(
-  "state1_applied_base",
-  CONJ (simp ``state1.classmap ' cname``)
-       (simp ``deNONE state1.classmap ' cname``))
-val _ = export_rewrites ["state1_applied_base"]
+open environmentsTheory
 
-val base_in_classmap0 = prove(
-  ``cname IN FDOM (deNONE state1.classmap) /\
-    cname IN FDOM state1.classmap``,
-  SRW_TAC [][state1_def]);
+val elookup_class_cname = Save_thm(
+  "elookup_class_cname",
+  SIMP_CONV (srw_ss()) [elookup_class_def,cname_def, typesTheory.Base_def,
+                        state1_def, FLOOKUP_UPDATE]
+            ``elookup_class state1.env cname``);
 
-val base_in_classmap = save_thm(
-  "base_in_classmap",
-  SIMP_RULE (srw_ss()) [] base_in_classmap0)
+val lookup_class_cname = Save_thm(
+  "lookup_class_cname",
+  SIMP_CONV (srw_ss()) [lookup_class_def, lift_lookup_def]
+            ``lookup_class state1 cname``)
 
-val _ = export_rewrites ["base_in_classmap"]
+val c_is_class_name_env = Store_thm(
+  "c_is_class_name_env",
+  ``is_class_name_env state1.env cname``,
+  SRW_TAC [][is_class_name_env_def]);
+val c_is_class_name = Store_thm(
+  "c_is_class_name",
+  ``is_class_name state1 cname``,
+  SRW_TAC [][is_class_name_def]);
+val c_IN_class_name = Store_thm(
+  "c_IN_class_name",
+  ``cname IN is_class_name state1``,
+  SRW_TAC [][IN_DEF]);
 
-val defined_classes = store_thm(
+val cinfo0_state1 = Save_thm(
+  "cinfo0_state1",
+  SIMP_CONV (srw_ss()) [cinfo0_def] ``cinfo0 state1 cname``)
+
+val defined_classes = Store_thm(
   "defined_classes",
   ``cname IN defined_classes state1``,
   SRW_TAC [][defined_classes_def]);
-val _ = export_rewrites ["defined_classes"]
 
-val cinfo_state1_c = save_thm(
+val cinfo_state1_c = Save_thm(
   "cinfo_state1_c",
   SIMP_CONV (srw_ss()) [cinfo_def] ``cinfo state1 cname``);
-val _ = export_rewrites ["cinfo_state1_c"]
 
 val nsdmembers_state1 = SIMP_CONV (srw_ss()) [nsdmembers_def]
                            ``nsdmembers state1 cname``
@@ -81,14 +107,16 @@ val gcc = store_thm(
 val sizeofmap = save_thm(
   "sizeofmap",
     SIMP_CONV (srw_ss()) [sizeofmap_def, nsdmembers_state1,
-                          fmap_lemma, LET_THM, base_in_classmap,
+                          fmap_lemma, LET_THM,
+                          ASSUME ``FINITE (is_class_name state1)``,
                           finite_mapTheory.FUN_FMAP_DEF, gcc]
               ``sizeofmap state1 mdp ' cname``)
 
-val FDOM_sizeofmap = store_thm(
+val FDOM_sizeofmap = save_thm(
   "FDOM_sizeofmap",
-  ``FDOM (sizeofmap state1 mdp) = FDOM state1.classmap``,
-  SRW_TAC [][sizeofmap_def, FUN_FMAP_DEF]);
+  SIMP_CONV (srw_ss()) [sizeofmap_def, FUN_FMAP_DEF,
+                        ASSUME ``FINITE (is_class_name state1)``]
+            ``FDOM (sizeofmap state1 mdp)``);
 
 val base_not_empty = store_thm(
   "base_not_empty",
@@ -112,7 +140,7 @@ val align_lemma = prove(
     (a = int_align)``,
   ONCE_REWRITE_TAC [align_cases] THEN
   SIMP_TAC (srw_ss() ++ DNF_ss)
-           [sizeofmap, FDOM_sizeofmap, base_in_classmap,
+           [sizeofmap, FDOM_sizeofmap,
             base_not_empty, listTheory.listRel_CONS, align_int,
             align_char, lcml_def]);
 

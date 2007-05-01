@@ -115,6 +115,34 @@ val id_basename_def = Define`
   (id_basename (IDConstant tn) = SOME tn)
 `;
 
+val strip_field_def = Define`
+  (strip_field (IDFld id fld) =
+     let (b, fs) = strip_field id
+     in
+         (b, fs ++ [fld])) /\
+  (strip_field (IDConstant c) = (IDConstant c, [])) /\
+  (strip_field (IDVar v) = (IDVar v, [])) /\
+  (strip_field (IDTempCall tc targs) = (IDTempCall tc targs, []))
+`;
+
+val strip_nspaces_def = Define`
+  (strip_nspaces (IDFld id fld) = NONE) /\
+  (strip_nspaces (IDConstant(b, ns, n)) = SOME ((b,ns), SFName n)) /\
+  (strip_nspaces (IDVar s) = NONE) /\
+  (strip_nspaces (IDTempCall (TemplateConstant(b,ns,n)) targs) =
+     SOME ((b,ns), SFTempCall n targs)) /\
+  (strip_nspaces (IDTempCall (TemplateVar s) targs) = NONE)
+`;
+
+val is_abs_id_def = Define`
+  (is_abs_id (IDFld id fld) = is_abs_id id) /\
+  (is_abs_id (IDConstant(b, ns, n)) = b) /\
+  (is_abs_id (IDVar s) = F) /\
+  (is_abs_id (IDTempCall (TemplateConstant(b,ns,n)) targs) = b) /\
+  (is_abs_id (IDTempCall (TemplateVar s) targs) = F)
+`;
+
+
 val _ = Hol_datatype `tvar_sort = TempV of string
                                 | TypeV of string
                                 | ObjV of string`
@@ -218,6 +246,16 @@ val strip_ptr_const_def = Define`
   (strip_ptr_const (Ptr ty) = Ptr (strip_ptr_const ty)) /\
   (strip_ptr_const (MPtr cnm ty) = MPtr cnm (strip_ptr_const ty)) /\
   (strip_ptr_const ty = ty)
+`;
+
+val array_size_def = Define`
+  (array_size (Array bt n) = n * array_size bt) /\
+  (array_size ty = 1)
+`;
+
+val strip_array_def = Define`
+  (strip_array (Array bt n) = strip_array bt) /\
+  (strip_array t = t)
 `;
 
 (* protection types for fields *)

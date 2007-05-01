@@ -725,8 +725,8 @@ val expr_inst_def = Define`
      OP2CMB MemAddr (cppID_inst sigma cid) (sfld_inst sigma fld)) /\
   (expr_inst sigma (Assign bopopt e1 e2) =
      OP2CMB (Assign bopopt) (expr_inst sigma e1) (expr_inst sigma e2)) /\
-  (expr_inst sigma (SVar e fld) =
-     OP2CMB SVar (expr_inst sigma e) (sfld_inst sigma fld)) /\
+  (expr_inst sigma (SVar e id) =
+     OP2CMB SVar (expr_inst sigma e) (cppID_inst sigma id)) /\
   (expr_inst sigma (FnApp e args) =
      OP2CMB FnApp (expr_inst sigma e) (exprl_inst sigma args)) /\
   (expr_inst sigma (CommaSep e1 e2) =
@@ -858,7 +858,7 @@ val stmt_inst_defn = Hol_defn "stmt_inst" `
           (case cinfo_inst sigma info of
               NONE -> NONE
            || SOME info' -> OPTION_MAP (\i. VStrDec i (SOME info'))
-                                       (cppID_inst sigma id))) 
+                                       (cppID_inst sigma id)))
 
      /\
 
@@ -946,30 +946,30 @@ val (stmt_inst_def, stmt_inst_ind) = Defn.tprove(
   ]);
 
 val extdecl_inst_def = Define`
-  (extdecl_inst sub (FnDefn retty fnm params body) = 
-     case OP2CMB FnDefn (type_inst sub retty) (cppID_inst sub fnm) of 
+  (extdecl_inst sub (FnDefn retty fnm params body) =
+     case OP2CMB FnDefn (type_inst sub retty) (cppID_inst sub fnm) of
         NONE -> NONE
-     || SOME c -> OP2CMB c (olmap (\ (s,ty). 
+     || SOME c -> OP2CMB c (olmap (\ (s,ty).
                                      OPTION_MAP ((,)s) (type_inst sub ty))
                                   params)
                            (stmt_inst sub body)) /\
   (extdecl_inst sub (Decl d) = OPTION_MAP Decl (vdec_inst sub d)) /\
-  (extdecl_inst sub (ClassConDef cnm params meminits body) = 
-     case OP2CMB ClassConDef (cppID_inst sub cnm) 
+  (extdecl_inst sub (ClassConDef cnm params meminits body) =
+     case OP2CMB ClassConDef (cppID_inst sub cnm)
                              (olmap (\ (s,ty).
                                        OPTION_MAP ((,)s) (type_inst sub ty))
                                     params)
      of
         NONE -> NONE
-     || SOME c' -> OP2CMB c' 
-                          (olmap (\ (mid,elistopt). 
+     || SOME c' -> OP2CMB c'
+                          (olmap (\ (mid,elistopt).
                                        OP2CMB (,) (meminitid_inst sub mid)
-                                                  (OPTION_MAP 
+                                                  (OPTION_MAP
                                                    (olmap (expr_inst sub))
                                                    elistopt))
-                                 meminits) 
+                                 meminits)
                           (stmt_inst sub body)) /\
-  (extdecl_inst sub (ClassDestDef cnm body) = 
+  (extdecl_inst sub (ClassDestDef cnm body) =
      OP2CMB ClassDestDef (cppID_inst sub cnm) (stmt_inst sub body))
 `
 

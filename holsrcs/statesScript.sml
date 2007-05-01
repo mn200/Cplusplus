@@ -12,7 +12,7 @@ local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 (* C++ ancestor theories  *)
 open utilsTheory typesTheory memoryTheory expressionsTheory statementsTheory
-     staticsTheory
+     environmentsTheory
 
 val _ = new_theory "states";
 (* actually also the theory of declaration forms *)
@@ -36,31 +36,6 @@ val _ = Hol_datatype `fn_info = <| return_type : CPP_Type ;
    structs/classes (unlike C) (9 p1).
 
    NOTE, moreover that an empty C++ struct has non-zero size. (9 p3) *)
-
-
-(* those sorts of things that can get implicitly declared and defined by
-   the implementation if the user does not provide them *)
-val _ = Hol_datatype`
-  implicitly_definable = DefaultConstructor
-                       | Destructor
-                       | CopyConstructor
-                       | CopyAssignment
-`;
-
-(* when a class name is looked up, it may get
-     - that the name is not in the domain of the map, which means that the
-       name is not the name of a class at all
-     - the name maps to NONE, which means it has been declared only,
-       as in
-          class foo;
-     - the name maps to SOME(cinfo, user_provided) where cinfo is the
-       information about the class, and user_provided is the set of things
-       that were given by the user (and didn't need filling in by the
-       implementation)
-*)
-
-val _ = type_abbrev("state_class_info",
-                    ``:(class_info # implicitly_definable set) option``)
 
 
 val _ = type_abbrev("construction_locn",
@@ -93,20 +68,8 @@ val _ = Hol_datatype
               fndecode : byte list |-> fnid ;
                          (* map inverting fnencode *)
 
-              gclassmap: CPPname |-> state_class_info ;
-                         (* the global map from class names to class info;
-                            can be dynamically overridden by local class
-                            declarations *)
-
-              gtypemap : CPPname |-> CPP_Type ;
-                         (* global map giving types to global variables.
-                            Can be dynamically overridden by local variables *)
-
-              gvarmap  : CPPname |-> (num # class_spec list) ;
-                         (* global map giving adddresses and paths for
-                            global vars; can be dynamically overridden.  See
-                            varmap for explanation of why paths are necessary
-                         *)
+              genv: environment ;
+              env : environment ; (* dynamic version of the above *)
 
               initmap  : addr -> bool ;
                          (* the set of initialised addresses *)
@@ -114,28 +77,9 @@ val _ = Hol_datatype
               locmap   : addr -> byte ;
                          (* memory.  Domain should be ( void * ) words *)
 
-              stack    : ((class_spec |-> state_class_info) #
-                          (CPPname |-> CPP_Type) #
-                          (CPPname |-> (addr # class_spec list)) #
-                          CExpr option) list ;
-                         (* stack of class, type and var info.  Updated
+              stack    : (environment #CExpr option) list ;
+                         (* stack of environment and this info.  Updated
                             as blocks are entered and left *)
-
-              classmap : CPPname |-> state_class_info;
-                         (* local, dynamically changing class map *)
-
-              class_templates : CPPname |-> state_class_info ;
-                         (* the name will have variables free at the top
-                            level *)
-
-              typemap  : CPPname |-> CPP_Type ;
-                         (* local information about types of variables *)
-
-              varmap   : CPPname |-> (num # class_spec list) ;
-                         (* address and path information for local variables.
-                            The path information has to be present because
-                            variables can be references, and these can be
-                            (initialised to be) references to sub-classes. *)
 
               thisvalue: CExpr option ;
                          (* the value (i.e., this will always be an ECompVal
@@ -150,7 +94,8 @@ val _ = Hol_datatype
                    full enclosing expression *)
               ;
 
-              current_exns : CExpr list
+              current_exns : CExpr list ;
+              current_nspace : string list option
 
              |>`;
 val _ = type_abbrev("CState", ``:state``)
@@ -158,20 +103,16 @@ val _ = type_abbrev("CState", ``:state``)
 val initial_state_def = Define`
   initial_state = <| allocmap := {};
                      hallocmap := {};
+                     env := empty_env ;
+                     genv := empty_env ;
                      fnmap := FEMPTY;
                      fnencode := FEMPTY;
                      fndecode := FEMPTY;
-                     gclassmap := FEMPTY;
-                     gtypemap := FEMPTY;
-                     gvarmap := FEMPTY;
                      initmap := {};
 
                      (* note that there is no value provided for locmap *)
 
                      stack := [];
-                     classmap := FEMPTY;
-                     typemap := FEMPTY;
-                     varmap := FEMPTY ;
                      thisvalue := NONE ;
 
                      blockclasses := [[]];
@@ -199,15 +140,6 @@ val mem2val_LENGTH = store_thm(
   "mem2val_LENGTH",
   --`!sz s n. LENGTH (mem2val s n sz) = sz`--,
   Induct THEN ASM_SIMP_TAC (srw_ss()) []);
-
-val install_global_maps_def = Define`
-  install_global_maps s =
-         s with <| gvarmap := s.varmap ;
-                   gclassmap := s.classmap;
-                   gtypemap := s.typemap |>
-`;
-
-
 
 (* pointer encoding and decoding *)
 (* if the list of strings is not empty, it is the path

@@ -11,10 +11,139 @@ open arithmeticTheory pred_setTheory integerTheory
 local open wordsTheory integer_wordTheory finite_mapTheory in end
 
 (* C++ ancestor theories  *)
-open utilsTheory typesTheory memoryTheory expressionsTheory staticsTheory
-     statesTheory class_infoTheory aggregatesTheory
+open utilsTheory typesTheory memoryTheory expressionsTheory
+     statesTheory aggregatesTheory class_infoTheory
 
 val _ = new_theory "operators";
+
+(* ----------------------------------------------------------------------
+    Statics of operators
+   ---------------------------------------------------------------------- *)
+
+(* conditions on whether or not a conditional expressions has a given type *)
+(* In C++ Standard, this is 5.16 *)
+val cond_typing_conds_def = Define`
+  cond_typing_conds (gty, t1, t2, restype) =
+      scalar_type gty /\
+      (arithmetic_type t1 /\ arithmetic_type t2 /\
+       (restype = ua_conversions t1 t2) \/
+      (?s. (t1 = Class s) /\ (t1 = t2) /\ (t1 = restype)) \/
+      pointer_type t1 /\ pointer_type t2 /\
+      ((t1 = t2) /\ (restype = t1) \/
+       Ptr Void IN {t1; t2} /\ (restype = Ptr Void)) \/
+      (t1 = Void) /\ (t2 = t1) /\ (restype = t1))
+`;
+
+(* SANITY *)
+val cond_typing_conds_det = store_thm(
+  "cond_typing_conds_det",
+  ``!gty t1 t2 rt1 rt2.
+       cond_typing_conds (gty, t1, t2, rt1) ==>
+       cond_typing_conds (gty, t1, t2, rt2) ==>
+       (rt1 = rt2)``,
+  SRW_TAC [][cond_typing_conds_def] THEN
+  TRY (FULL_SIMP_TAC (srw_ss()) [arithmetic_type_def] THEN NO_TAC) THEN
+  METIS_TAC [type_classes])
+
+(* SANITY *)
+val cond_typing_wellformed = store_thm(
+  "cond_typing_wellformed",
+  ``!gty acs t1 t2 rt.
+       cond_typing_conds (gty, t1, t2, rt) /\
+       wf_type acs t1 /\ wf_type acs t2 ==>
+       wf_type acs rt``,
+  SRW_TAC [][cond_typing_conds_def] THEN
+  SRW_TAC [][typesTheory.ua_converted_types_well_formed])
+
+val arithmetic_pair_type_def = Define`
+  arithmetic_pair_type t1 t2 t =
+      arithmetic_type t1 /\ arithmetic_type t2 /\
+      (t = ua_conversions t1 t2)
+`;
+
+val binary_op_type_def = Define`
+    (binary_op_type CPlus t1 t2 t =
+      arithmetic_pair_type t1 t2 t \/
+      (pointer_type t1 /\ integral_type t2 /\ (t = t1)) \/
+      (integral_type t1 /\ pointer_type t2 /\ (t = t2))) /\
+    (binary_op_type CMinus t1 t2 t =
+      arithmetic_pair_type t1 t2 t \/
+      (pointer_type t1 /\ integral_type t2 /\ (t = t1)) \/
+      (pointer_type t1 /\ (t1 = t2) /\ (t = ptrdiff_t))) /\
+    (binary_op_type CLess t1 t2 t =
+      arithmetic_type t1 /\ arithmetic_type t2 /\ (t = Signed Int) \/
+      pointer_type t1 /\ (t1 = t2) /\ (t = Signed Int)) /\
+    (binary_op_type CGreat t1 t2 t =
+      arithmetic_type t1 /\ arithmetic_type t2 /\ (t = Signed Int) \/
+      pointer_type t1 /\ (t1 = t2) /\ (t = Signed Int)) /\
+    (binary_op_type CLessE t1 t2 t =
+      arithmetic_type t1 /\ arithmetic_type t2 /\ (t = Signed Int) \/
+      pointer_type t1 /\ (t1 = t2) /\ (t = Signed Int)) /\
+    (binary_op_type CGreatE t1 t2 t =
+      arithmetic_type t1 /\ arithmetic_type t2 /\ (t = Signed Int) \/
+      pointer_type t1 /\ (t1 = t2) /\ (t = Signed Int)) /\
+    (binary_op_type CEq t1 t2 t =
+      arithmetic_type t1 /\ arithmetic_type t2 /\ (t = Signed Int) \/
+      pointer_type t1 /\ (t1 = t2) /\ (t = Signed Int) \/
+      pointer_type t1 /\ pointer_type t2 /\
+      {Ptr Void} SUBSET {t1; t2} /\ (t = Signed Int)) /\
+    (binary_op_type CNotEq t1 t2 t =
+      arithmetic_type t1 /\ arithmetic_type t2 /\ (t = Signed Int) \/
+      pointer_type t1 /\ (t1 = t2) /\ (t = Signed Int) \/
+      pointer_type t1 /\ pointer_type t2 /\
+      {Ptr Void} SUBSET {t1; t2} /\ (t = Signed Int)) /\
+    (binary_op_type CTimes t1 t2 t = arithmetic_pair_type t1 t2 t) /\
+    (binary_op_type CDiv t1 t2 t = arithmetic_pair_type t1 t2 t) /\
+    (binary_op_type CMod t1 t2 t =
+      integral_type t1 /\ integral_type t2 /\
+      (t = ua_conversions t1 t2))
+`
+
+val unary_op_type_def = Define`
+    (unary_op_type CUnPlus t0 t =
+      arithmetic_type t0 /\ (t = integral_promotions t0)) /\
+    (unary_op_type CUnMinus t0 t =
+      arithmetic_type t0 /\ (t = integral_promotions t0)) /\
+    (unary_op_type CComp t0 t =
+      integral_type t0 /\ (t = integral_promotions t0)) /\
+    (unary_op_type CNot t0 t = scalar_type t0 /\ (t = Signed Int))
+`
+
+(* SANITY *)
+val ops_dont_produce_arrays = store_thm(
+  "ops_dont_produce_arrays",
+  ``(!f t1 t2 rt. binary_op_type f t1 t2 rt ==> ~array_type rt) /\
+    (!f t0 rt.    unary_op_type f t0 rt ==> ~array_type rt)``,
+  CONJ_TAC THEN GEN_TAC THENL [
+    STRUCT_CASES_TAC (Q.SPEC `f` expressionsTheory.c_binops_nchotomy),
+    STRUCT_CASES_TAC (Q.SPEC `f` expressionsTheory.c_unops_nchotomy)
+  ] THEN SRW_TAC [][binary_op_type_def, unary_op_type_def,
+    arithmetic_pair_type_def] THEN
+  METIS_TAC [type_classes, integral_type_def, integral_promotions_safe,
+             ua_conversions_safe]);
+
+(* SANITY *)
+val unary_op_type_det = store_thm(
+  "unary_op_type_det",
+  ``!f t0 t1.
+       unary_op_type f t0 t1 ==>
+       (!t2. unary_op_type f t0 t2 ==> (t1 = t2))``,
+  GEN_TAC THEN Cases_on `f` THEN SIMP_TAC (srw_ss()) [unary_op_type_def]);
+
+(* SANITY *)
+val binary_op_type_det = store_thm(
+  "binary_op_type_det",
+  ``!f t1 t2 t.
+       binary_op_type f t1 t2 t ==>
+       (!t'. binary_op_type f t1 t2 t' ==> (t' = t))``,
+  Cases THEN
+  SIMP_TAC (srw_ss()) [binary_op_type_def, arithmetic_pair_type_def] THEN
+  SRW_TAC [][] THEN METIS_TAC [type_classes]);
+
+
+(* ----------------------------------------------------------------------
+    Dynamics of operators
+   ---------------------------------------------------------------------- *)
 
 (* ASSUMPTION: the REP_INT/INT_VAL functions convert pointer values
                appropriately

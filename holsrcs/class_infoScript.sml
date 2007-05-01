@@ -20,18 +20,25 @@ open statesTheory aggregatesTheory
 val _ = new_theory "class_info";
 
 val is_class_name_def = Define`
-  is_class_name st cppid = cppid IN FDOM st.classmap
+  is_class_name st cppid = if is_abs_id cppid then
+                             is_class_name_env st.genv cppid
+                           else is_class_name_env st.env cppid
 `;
 
+val cinfo0_def = Define`
+  cinfo0 s cnm = (item (THE (elookup_class (if is_abs_id cnm then s.genv
+                                            else s.env)
+                                           cnm))).info
+`
 
 
 val cinfo_def = Define`
-  cinfo s cnm : class_info = FST (THE (s.classmap ' cnm))
+  cinfo s cnm : class_info = FST (THE (cinfo0 s cnm))
 `;
 
 (* set of a state's fully defined class *)
 val defined_classes_def = Define`
-  defined_classes s = FDOM (deNONE s.classmap)
+  defined_classes s = { id | is_class_name s id /\ ~(cinfo0 s id = NONE) }
 `;
 
 (* similarly, direct base classes, in order of declaration *)
@@ -99,7 +106,7 @@ val has_user_constructor_def = Define`
   has_user_constructor s cnm =
     cnm IN defined_classes s /\
     ?ci userdefined.
-       (s.classmap ' cnm = SOME (ci,userdefined)) /\
+       (cinfo0 s cnm = SOME (ci,userdefined)) /\
        (DefaultConstructor IN userdefined \/ CopyConstructor IN userdefined)
 `;
 
@@ -115,18 +122,13 @@ val is_aggregate_def = Define`
   (is_aggregate s _ = F)
 `;
 
-val strip_array_def = Define`
-  (strip_array (Array bt n) = strip_array bt) /\
-  (strip_array t = t)
-`;
-
 (* 9 p4  : POD types *)
 val (PODstruct_rules, PODstruct_ind, PODstruct_cases) = Hol_reln`
   (!s cnm.
      cnm IN defined_classes s /\
      is_aggregate s (Class cnm) /\
      DISJOINT {Destructor; CopyAssignment}
-              (SND (THE (s.classmap ' cnm))) /\
+              (SND (THE (cinfo0 s cnm))) /\
      (!fldname fldty prot.
          MEM (FldDecl fldname fldty, F, prot)
              ((cinfo s cnm).fields) ==>
@@ -295,7 +297,7 @@ val MethodDefs_def = Define`
                            (cinfo s (LAST Cs)).fields }
 `
 
-(* s |- C has least fld -: ty via Cs *)
+(* s |- C has least method -: ty via Cs *)
 val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
                   paren_style = OnlyIfNecessary,
                   fixity = Infix (NONASSOC, 460),
@@ -490,7 +492,7 @@ val get_class_constituents_def = Define`
 
 val sizeofmap_def = Define`
   sizeofmap s mdp =
-     FUN_FMAP (get_class_constituents s mdp) (FDOM s.classmap)
+     FUN_FMAP (get_class_constituents s mdp) (is_class_name s)
 `
 
 
@@ -520,6 +522,10 @@ val constituent_offsets_def = Define`
         MAP (\(n,c). (c, @off. offset (sizeofmap s) ccs n off)) nccs
 `;
 
+(* given a class name, and a mdp status, returns the list of direct components
+   along with their offsets, presented in the order in which they have to be
+   initialised - virtual bases (if any), direct bases, followed by
+   non-static data-members *)
 val init_order_offsets_def = Define`
   init_order_offsets s mdp cnm =
     let virts = if mdp then get_virtual_bases s cnm else [] in
@@ -534,49 +540,6 @@ val init_order_offsets_def = Define`
             alli
 `
 
-val (corder_trav_rules, corder_trav_ind, corder_trav_cases) = Hol_reln `
-   (!s a mdp cnm list.
-     cclist_trav s a (init_order_offsets s mdp cnm) list
-   ==>
-     corder_trav s mdp a cnm (list ++ [(a,cnm,[cnm])]))
-
-   /\
-
-   (!s a.
-     T
-   ==>
-     cclist_trav s a [] [])
-
-   /\
-
-   (!s a fldnm ty off.
-     ~class_type ty /\ cclist_trav s a rest list
-   ==>
-     cclist_trav s a ((NSD fldnm ty, off) :: rest) list)
-
-   /\
-
-   (!s a off cnm list1 list2 fldnm rest.
-     corder_trav s T (a + off) cnm list1 /\ cclist_trav s a rest list2
-   ==>
-     cclist_trav s a ((NSD fldnm (Class cnm), off) :: rest)
-                     (list1 ++ list2))
-
-   /\
-
-   (!s a off cnm list1 list2 rest.
-     corder_trav s F (a + off) cnm list1 /\ cclist_trav s a rest list2
-   ==>
-     cclist_trav s a ((DBase cnm, off) :: rest) (list1 ++ list2))
-
-   /\
-
-   (!s a off cnm list1 list2 rest.
-     corder_trav s F (a + off) cnm list1 /\ cclist_trav s a rest list2
-   ==>
-     cclist_trav s a ((VirtualBase cnm, off) :: rest) (list1 ++ list2))
-`;
-
 (* given derived class name C, state s, and path to (not necessarily
    immediate) base sub-class p, return the offset of the latter
    within an object of type C *)
@@ -588,47 +551,99 @@ val subobj_offset_def = Define`
                base_offset s C1 C3 + subobj_offset s (C3, (C3::t)))
 `
 
-(* BAD ASSUMPTION: no classes are abstract *)
-(* type-checking requires a variety of pieces of information, which we derive
-   from a state with this function *)
-val expr_type_comps_def = Define`
-  expr_type_comps s thisty =
-    <| class_fields :=
-          FUN_FMAP (\c. MAP (\ (n,ty). (SFName n, ty)) (THE (nsdmembers s c)))
-                   { c | ?v. c IN FDOM s.classmap /\
-                             (s.classmap ' c = SOME v) };
-       var_types := s.typemap ;
-       abs_classes := {} ;
-       this_type := thisty |>
+(* the fields belonging to this class specifically *)
+val get_fields_def = Define`
+  get_fields ci =
+          mapPartial
+            (\ (ce, b, p).
+               case ce of
+                  CFnDefn retty nm params body ->
+                     SOME (nm, Function retty (MAP SND params))
+               || FldDecl fld ty -> SOME (SFName fld, ty)
+               || _ -> NONE)
+            (FST ci).fields
 `;
 
-val MEM_splits = prove(
-  ``!l. MEM e l ==> ?pfx sfx. (l = pfx ++ (e :: sfx))``,
-  Induct THEN SRW_TAC [][] THENL [
-    MAP_EVERY Q.EXISTS_TAC [`[]`, `l`] THEN SRW_TAC [][],
-    RES_TAC THEN MAP_EVERY Q.EXISTS_TAC [`h::pfx`, `sfx`] THEN
-    SRW_TAC [][]
-  ]);
+val field_type_def = Define`
+  field_type ci sfld =
+    OPTION_MAP SND (FINDL (\ (nm, ty). nm = sfld) (get_fields ci))
+`;
 
-(* SANITY *)
-val hasfld_imp_lfi = store_thm(
-  "hasfld_imp_lfi",
-  ``s |- C has least fld -: ftype via p' /\ object_type ftype ==>
-    ?i. lookup_field_info
-          (MAP (\ (n,ty). (SFName n, ty))
-               (THE (nsdmembers s (LAST p'))))
-          fld
-          (i,ftype)``,
-  SRW_TAC [][fieldty_via_def, FieldDecls_def, nsdmembers_def] THEN
-  Cases_on `centry` THEN
-  FULL_SIMP_TAC (srw_ss()) [fieldtype_def, typesTheory.object_type_def,
-                            okfield_def] THEN
-  IMP_RES_TAC MEM_splits THEN
-  SRW_TAC [][fieldname_def] THEN
-  Q.HO_MATCH_ABBREV_TAC
-    `?i. lookup_field_info (L1 ++ (X,Y) :: L2) X (i,Y)` THEN
-  SRW_TAC [][staticsTheory.lookup_field_info_def] THEN
-  Q.EXISTS_TAC `LENGTH L1` THEN
-  SRW_TAC [ARITH_ss][rich_listTheory.EL_APPEND2])
+
+(* looks up an identifier corresponding to an object, and returns its type *)
+val elookup_type_def = Define`
+  (elookup_type env (IDFld id fld) =
+     case elookup_class env id of
+        NONE -> NONE
+     || SOME cenv -> (case (item cenv).info of
+                         NONE -> NONE
+                      || SOME ci -> field_type ci fld)) /\
+  (elookup_type env (IDConstant (b, [], n)) =
+     FLOOKUP ((item env).typemap) (SFName n)) /\
+  (elookup_type env (IDConstant (b, h :: t, n)) =
+     case FLOOKUP (map env) h of
+        NONE -> NONE
+     || SOME e' -> elookup_type e' (IDConstant (b, t, n))) /\
+  (elookup_type env (IDTempCall (TemplateConstant (b, [], n)) targs) =
+     FLOOKUP ((item env).typemap) (SFTempCall n targs)) /\
+  (elookup_type env (IDTempCall (TemplateConstant (b, h :: t, n)) targs) =
+     case FLOOKUP (map env) h of
+        NONE -> NONE
+     || SOME e' -> elookup_type e' (IDTempCall
+                                    (TemplateConstant(b, t, n))
+                                    targs))
+`;
+
+(* looks up an object identifier and returns its address *)
+val elookup_addr_def = Define`
+  (* must be a SFName, a template id could only be to a function, which is
+     not an object *)
+  (elookup_addr env (IDFld id (SFName fld)) =
+     case elookup_class env id of
+        NONE -> NONE
+     || SOME cenv -> FLOOKUP (item cenv).statvars fld) /\
+  (elookup_addr env (IDConstant (b, [], n)) = FLOOKUP (item env).varmap n) /\
+  (elookup_addr env (IDConstant (b, h::t, n)) =
+     case FLOOKUP (map env) h of
+        NONE -> NONE
+     || SOME e' -> elookup_addr e' (IDConstant(b, t, n))) /\
+  (elookup_addr env _ = NONE)
+`;
+
+(* state-based, as opposed to environment-based, lookup functions *)
+val lift_lookup_def = Define`
+  lift_lookup f s id = if is_abs_id id then f s.genv id
+                       else f s.env id
+`;
+
+val lookup_addr_def = Define` lookup_addr =  lift_lookup elookup_addr `;
+val lookup_type_def = Define` lookup_type =  lift_lookup elookup_type `;
+val lookup_class_def = Define`lookup_class = lift_lookup elookup_class `;
+
+(* looks up a fully-qualified non-static data member field (e.g., C::fld) and
+   finds its offset within that class.
+
+*)
+val lookup_offset_def = Define`
+  (lookup_offset s mdp (IDFld id (SFName fld)) =
+     let coffs = constituent_offsets s mdp id
+     in
+       case FINDL (\ (cc, off). ?ty. cc = NSD fld ty) coffs of
+          NONE -> NONE
+       || SOME (cc, off) -> SOME off) /\
+  (lookup_offset s mdp _ = NONE)
+`;
+
+
+(* looks up a fully-qualified field (e.g., C::fld) and finds its type *)
+val lookup_field_type_def = Define`
+  (lookup_field_type s (IDFld id sfld) =
+    case lookup_class s id of
+       NONE -> NONE
+    || SOME cenv -> (case (item cenv).info of
+                        NONE -> NONE
+                     || SOME ce -> field_type ce sfld)) /\
+  (lookup_field_type s _ = NONE)
+`;
 
 val _ = export_theory();

@@ -1,4 +1,4 @@
-(* Dynamic Semantics of C++ forms *)
+(* Dynamic Semantics of C++ declarations *)
 
 (* Michael Norrish *)
 
@@ -171,6 +171,40 @@ val declare_default_specials_def = Define`
 val _ = overload_on ("mExpr", ``statements$NormE``)
 val _ = overload_on ("mStmt", ``statements$EStmt``)
 
+val state_typemap_def = Define`
+  state_typemap s = FUN_FMAP (\id. THE (lookup_type s id))
+                       { id | ?ty. lookup_type s id = SOME ty }
+`
+val _ = add_record_field ("typemap", ``state_typemap``)
+
+(* updates "dynamic" map only *)
+val state_updtypemap_def = Define`
+  state_updtypemap f s =
+    s with env := FTNode (item s.env with typemap updated_by f)
+                         (map s.env)
+`;
+val _ = add_record_fupdate("typemap", ``state_updtypemap``)
+
+val state_varmap_def = Define`
+  state_varmap s = FUN_FMAP (\id. THE (lookup_addr s (Base id)))
+                      { id | ?a. lookup_addr s (Base id) = SOME a }
+`;
+val _ = add_record_field ("varmap", ``state_varmap``)
+
+(* updates "dynamic" map only *)
+val state_updvarmap_def = Define`
+  state_updvarmap f s =
+    s with env := FTNode (item s.env with varmap updated_by f)
+                         (map s.env)
+`
+val _ = add_record_fupdate ("varmap", ``state_updvarmap``)
+
+val state_classmap_def = Define`
+  state_classmap s = FUN_FMAP (\id. THE (lookup_class s id))
+                              { id | ?c. lookup_class s id = SOME c }
+`;
+val _ = add_record_field ("classmap", ``state_classmap``)
+
 val vdeclare_def = Define`
   vdeclare s0 ty nm s =
      (?a sz rs.
@@ -182,15 +216,15 @@ val vdeclare_def = Define`
                          allocmap updated_by (UNION) rs;
                          varmap updated_by
                             (\vm. vm |+ (nm,(a,default_path ty)));
-                         typemap updated_by (\tm. tm |+ (nm,ty)) |>))
+                         typemap updated_by (\tm. tm |+ (SFName nm,ty)) |>))
         \/
      (function_type ty /\
-      (s = s0 with typemap updated_by (\tm. tm |+ (nm, ty))))
+      (s = s0 with typemap updated_by (\tm. tm |+ (SFName nm, ty))))
         \/
      (?ty0.
         (ty = Ref ty0) /\
         (* before the reference gets initialised, what should its value be?
-           Or, what does an uninitialised reference what look like?
+           Or, what does an uninitialised reference look like?
            Certainly, references must be initialised by valid objects, so
            attempting
               int &y = y ;
@@ -200,7 +234,7 @@ val vdeclare_def = Define`
            name.  See notes/ref001.cpp *)
         (s = s0 with
              <| varmap updated_by (\vm. vm |+ (nm, (0, default_path ty0)));
-                typemap updated_by (\tm. tm |+ (nm, ty0)) |>))
+                typemap updated_by (\tm. tm |+ (SFName nm, ty0)) |>))
 
 `;
 
@@ -356,7 +390,6 @@ val (value_init_rules, value_init_ind, value_init_cases) = Hol_reln`
      value_init s mdp subp ty a inits)
 `;
 
-
 val _ = print "Defining (utility) declaration relation\n"
 (* this relation performs the various manipulations on declaration syntax
    that are independent of the rest of the meaning relation *)
@@ -366,9 +399,11 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 (* RULE-ID: decl-vdec-nonclass *)
 (!s0 ty name s.
-     vdeclare s0 ty name s /\ object_type ty /\ (!cnm. ~(ty = Class cnm))
+     vdeclare s0 ty name s /\
+     object_type ty /\
+     ~class_type (strip_array ty)
    ==>
-     declmng mng vdf (VDec ty name, s0) ([], vdf s))
+     declmng mng (VDec ty (IDConstant(F, [], name)), s0) ([], s))
 
    /\
 
@@ -378,13 +413,36 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (!s0 name cnm.
      T
    ==>
-     declmng mng vdf (VDec (Class cnm) name, s0)
-             ([VDecInit (Class cnm) name (DirectInit0 [])], s0))
+     declmng mng (VDec (Class cnm) name, s0)
+                 ([VDecInit (Class cnm) name (DirectInit0 [])], s0))
+
+   /\
+
+(* RULE-ID: decl-vdec-array-class *)
+(* similarly, if called onto declare an array, then any nested constructors
+   will be called with no arguments *)
+(!s0 s a name cnm ty subdecls sz.
+     (strip_array ty = Class cnm) /\
+     array_type ty /\
+     vdeclare s0 ty name s /\
+     sizeof T (sizeofmap s0) (Class cnm) sz /\
+     (subdecls =
+       GENLIST (\n. VDecInitA
+                      (strip_array ty)
+                      (ObjPlace (a + n * sz))
+                      (DirectInit
+                         (mExpr (FnApp (ConstructorFVal T F (a + n * sz) cnm)
+                                       [])
+                                base_se)))
+               (array_size ty))
+   ==>
+     declmng mng (VDec ty (IDConstant(F,[],name)), s0)
+                 (subdecls, s))
 
    /\
 
 
-(* decl-vdecinit-start-evaluate rules switche from VDecInit to
+(* decl-vdecinit-start-evaluate rules switch from VDecInit to
    VDecInitA, reflecting allocation of space for the "object".  The
    vdeclare relation handles functions and references as well.
    Functions can't be initialised, so they won't appear here.
@@ -393,7 +451,6 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    space, and to put them into the varmap at address 0.
 
 *)
-
 
 (* RULE-ID: decl-vdecinit-start-evaluate-direct-class *)
 (* the subobjp flag of the ConstructorFVal is F because this is a top-level
@@ -404,15 +461,14 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      ((a,pth) = s1.varmap ' name)
    ==>
      declmng mng
-             vdf
-             (VDecInit ty name (DirectInit0 args), s0)
+             (VDecInit ty (IDConstant(F,[],name)) (DirectInit0 args), s0)
              ([VDecInitA ty
                          (ObjPlace a)
                          (DirectInit
                             (mExpr
                                (FnApp (ConstructorFVal T F a cnm) args)
                                base_se))],
-              vdf s1))
+              s1))
 
    /\
 
@@ -434,7 +490,6 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
        (* arg is equal to or a derived class *)
    ==>
      declmng mng
-             vdf
              (VDecInitA ty (ObjPlace a) (CopyInit (mExpr arg se)), s0)
              ([VDecInitA ty
                          (ObjPlace a)
@@ -453,12 +508,11 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      (!cnm. ~(ty = Class cnm)) /\
      vdeclare s0 ty name s /\
      ((a,pth) = s.varmap ' name) /\
-     (loc = if ref_type ty then RefPlace NONE name else ObjPlace a)
+     (loc = if ref_type ty then RefPlace NONE (Base name) else ObjPlace a)
    ==>
      declmng mng
-             vdf
-             (VDecInit ty name (DirectInit0 [arg]), s0)
-             ([VDecInitA ty loc (CopyInit (mExpr arg base_se))], vdf s))
+             (VDecInit ty (IDConstant(F,[],name)) (DirectInit0 [arg]), s0)
+             ([VDecInitA ty loc (CopyInit (mExpr arg base_se))], s))
 
    /\
 
@@ -466,12 +520,11 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (!s0 ty name arg s a pth loc.
      vdeclare s0 ty name s /\
      ((a,pth) = s.varmap ' name) /\
-     (loc = if ref_type ty then RefPlace NONE name else ObjPlace a)
+     (loc = if ref_type ty then RefPlace NONE (Base name) else ObjPlace a)
    ==>
      declmng mng
-             vdf
-             (VDecInit ty name (CopyInit arg), s0)
-             ([VDecInitA ty loc (CopyInit arg)], vdf s))
+             (VDecInit ty (IDConstant(F,[],name)) (CopyInit arg), s0)
+             ([VDecInitA ty loc (CopyInit arg)], s))
 
    /\
 
@@ -481,8 +534,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      mng exte s0 (s, exte') /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInitA ty loc (f exte), s0)
-                     ([VDecInitA ty loc (f exte')], s))
+     declmng mng (VDecInitA ty loc (f exte), s0)
+                 ([VDecInitA ty loc (f exte')], s))
 
    /\
 
@@ -491,8 +544,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInitA ty loc (f (NormE e0 se0)), s0)
-                     ([VDecInitA ty loc (f (NormE e se))], s))
+     declmng mng (VDecInitA ty loc (f (NormE e0 se0)), s0)
+                 ([VDecInitA ty loc (f (NormE e se))], s))
 
    /\
 
@@ -506,10 +559,10 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      (rs = range_set a (LENGTH v')) /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng vdf (VDecInitA dty
-                                (ObjPlace a)
-                                (f (NormE (ECompVal v ty) se)), s0)
-                     ([], s))
+     declmng mng (VDecInitA dty
+                            (ObjPlace a)
+                            (f (NormE (ECompVal v ty) se)), s0)
+                 ([], s))
 
    /\
 
@@ -524,9 +577,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      (s = s0 with varmap updated_by (\fm. fm |+ (nm, (a,p'))))
    ==>
      declmng mng
-             vdf
              (VDecInitA (Ref ty1)
-                        (RefPlace aopt nm)
+                        (RefPlace aopt (Base nm))
                         (f (NormE (LVal a ty2 p) se)), s0)
              ([], s))
 
@@ -546,7 +598,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                                               (subobjs ++ [(a,cnm,[cnm])])) ;
                      exprclasses := rest |>)
    ==>
-     declmng mng vdf
+     declmng mng
        (VDecInitA (Class cnm)
                   (ObjPlace a)
                   (DirectInit (NormE (ConstructedVal subp a cnm) se0)), s0)
@@ -558,7 +610,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 val declmng_MONO = store_thm(
   "declmng_MONO",
   ``(!x y z. P x y z ==> Q x y z) ==>
-    (declmng P f s1 s2 ==> declmng Q f s1 s2)``,
+    (declmng P s1 s2 ==> declmng Q s1 s2)``,
   STRIP_TAC THEN MAP_EVERY Q.ID_SPEC_TAC [`s2`, `s1`] THEN
   HO_MATCH_MP_TAC declmng_ind THEN SIMP_TAC (srw_ss()) [declmng_rules] THEN
   REPEAT STRIP_TAC THEN

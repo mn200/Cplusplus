@@ -194,7 +194,7 @@ val is_exnval_def = Define`
 `
 
 val mk_exn_def = Define`
-  (mk_exn (EStmt (Throw (SOME e)) c0) c = EStmt (Throw (SOME e)) c) 
+  (mk_exn (EStmt (Throw (SOME e)) c0) c = EStmt (Throw (SOME e)) c)
 `;
 
 (* derived loop forms *)
@@ -307,6 +307,7 @@ val _ = Hol_datatype`
                             mem_initializer list =>
                             CStmt
            | ClassDestDef of CPPname => CStmt
+           | NameSpace of string => ext_decl list
 `;
 
 

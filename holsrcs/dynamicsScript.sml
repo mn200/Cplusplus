@@ -178,9 +178,7 @@ val is_zero_def = Define`
 
 
 val copy2globals_def = Define`
-  copy2globals s = (s with <| gclassmap := s.classmap;
-                              gtypemap := s.typemap;
-                              gvarmap := s.varmap |>)
+  copy2globals s = (s with genv := s.env)
 `;
 
 (* true if the nth argument of f is not a reference type *)
@@ -188,9 +186,8 @@ val copy2globals_def = Define`
 val fn_expects_rval_def = Define`
   fn_expects_rval s thisty f n =
     ?retty args.
-      (expr_type (expr_type_comps s thisty) RValue f (Function retty args) \/
-       expr_type (expr_type_comps s thisty) RValue f
-                 (Ptr (Function retty args))) /\
+      (expr_type s RValue f (Function retty args) \/
+       expr_type s RValue f (Ptr (Function retty args))) /\
       ~ref_type (EL n args)
 `;
 
@@ -407,22 +404,21 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: var-to-lvalue *)
-(!vname se s a p.
-     object_type (s.typemap ' vname) /\ vname IN FDOM s.typemap /\
-     (s.varmap ' vname = (a,p))
+(!vname ty se s a p.
+     (lookup_type s vname = SOME ty) /\
+     object_type ty /\
+     (lookup_addr s vname = SOME (a,p))
    ==>
      ^mng (mExpr (Var vname) se) s
-          (s, ev (LVal a (s.typemap ' vname) p) se))
+          (s, ev (LVal a ty p) se))
 
    /\
 
 (* RULE-ID: var-to-fvalue *)
-(* BAD_ASSUMPTION: need to add treatment of member functions that are
-     called without explicitly using structure dereference operation,
-     which can happen in the body of member functions *)
 (!vname se s ty.
-     vname IN FDOM s.typemap /\ (ty = s.typemap ' vname) /\
-     function_type ty /\ vname IN FDOM s.fnencode
+     (lookup_type s vname = SOME ty) /\
+     function_type ty /\
+     vname IN FDOM s.fnencode
    ==>
      ^mng (mExpr (Var vname) se) s (s, ev (FVal vname ty NONE) se))
 
@@ -617,16 +613,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: cond-false *)
-(!v t e2 t2 e3 t3 thisty resexpr result_type se s sn.
+(!v t e2 t2 e3 t3 resexpr result_type se s sn.
      is_null_se se /\ scalar_type t /\
-     (thisty = case s.thisvalue of
-                  SOME (ECompVal bytes (Ptr ty)) -> SOME ty
-               || _ -> NONE) /\
-     expr_type (expr_type_comps s thisty) RValue e2 t2 /\
-     expr_type (expr_type_comps s thisty) RValue e3 t3 /\
-     expr_type (expr_type_comps s thisty) RValue
-               (CCond (ECompVal v t) e2 e3)
-               result_type /\
+     expr_type s RValue e2 t2 /\
+     expr_type s RValue e3 t3 /\
+     expr_type s RValue (CCond (ECompVal v t) e2 e3) result_type /\
      is_zero t v  /\
      ((t2 = Class sn) /\ (resexpr = e3) \/
       (!sn. ~(t2 = Class sn)) /\ (resexpr = Cast result_type e3))
@@ -636,16 +627,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: cond-true *)
-(!v t e2 t2 e3 t3 thisty resexpr result_type se s sn.
+(!v t e2 t2 e3 t3 resexpr result_type se s sn.
      is_null_se se /\ scalar_type t /\
-     (thisty = case s.thisvalue of
-                  SOME (ECompVal bytes (Ptr ty)) -> SOME ty
-               || _ -> NONE) /\
-     expr_type (expr_type_comps s thisty) RValue e2 t2 /\
-     expr_type (expr_type_comps s thisty) RValue e3 t3 /\
-     expr_type (expr_type_comps s thisty) RValue
-               (CCond (ECompVal v t) e2 e3)
-               result_type /\
+     expr_type s RValue e2 t2 /\
+     expr_type s RValue e3 t3 /\
+     expr_type s RValue (CCond (ECompVal v t) e2 e3) result_type /\
      ~is_zero t v /\
      ((t2 = Class sn) /\ (resexpr = e2) \/
        (!sn. ~(t2 = Class sn)) /\ (resexpr = Cast result_type e2))
@@ -702,11 +688,13 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: mem-addr-static-nonfn *)
 (* 5.3.1 p2 if the address is taken of a qualified-ident that is actually a
    static member, then a normal address is generated *)
-(!cname fldname se s addr ty cinfo prot pth ptrval userdefs.
-     cname IN FDOM s.classmap /\ object_type ty /\
-     (s.classmap ' cname = SOME (cinfo, userdefs)) /\
+(!cname cenv fldname se s addr ty cinfo prot pth ptrval userdefs.
+     cname IN defined_classes s /\
+     object_type ty /\
+     (lookup_class s cname = SOME cenv) /\
+     ((item cenv).info = SOME (cinfo, userdefs)) /\
      MEM (FldDecl fldname ty, T, prot) cinfo.fields /\
-     (s.varmap ' (IDFld cname (SFName fldname)) = (addr, pth)) /\
+     (lookup_addr s (IDFld cname (SFName fldname)) = SOME (addr, pth)) /\
      (SOME ptrval = ptr_encode s addr ty pth)
    ==>
      ^mng (mExpr (MemAddr cname (SFName fldname)) se) s
@@ -778,36 +766,45 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
        enclosing the field.  The offset is calculated with respect to
        this because the sub-object could be anywhere, and might be virtual.
 
+   Even though the fld will have been name-resolved into an
+   appropriate class :: fld reference (giving us p', as per the first
+   hypothesis), work still needs to be done dynamically, because we
+   don't know what the dynamic shape of the lhs of the svar is.
 
-       subobject of the original LVal is ignored.  This is because
-   only functions can get a "virtual" treatment.
-   This doesn't mean that a field reference can't be to an ancestor's field.
+   Dynamically, the path concatenation p ^ p' still needs to be done,
+   and we have to also determine if the class in which we are looking
+   up the field is most derived (calculation of mdp below).
 
 *)
-(!s cnm fld ftype Cflds se offn i a p p'.
-     s |- LAST p has least fld -: ftype via p' /\
-     (Cflds = THE (nsdmembers s (LAST p'))) /\
+(!s cnm1 cnm2 fld ftype se offn a mdp p p'.
+     s |- path (LAST p) to cnm2 via p' /\
      object_type ftype /\
-     lookup_field_info (MAP (\ (n,ty). (SFName n, ty)) Cflds) fld (i,ftype) /\
-     offset (sizeofmap s) (MAP (UNCURRY NSD) Cflds) i offn
+     (mdp = (cnm1 = cnm2) /\ (p = [cnm1])) /\
+     (SOME offn = lookup_offset s mdp (IDFld cnm2 fld))
    ==>
-     ^mng (mExpr (SVar (LVal a (Class cnm) p) fld) se) s
-          (s, ev (LVal (a + subobj_offset s (cnm, p ^ p') + offn) ftype
+     ^mng (mExpr (SVar (LVal a (Class cnm1) p) (IDFld cnm2 fld)) se) s
+          (s, ev (LVal (a + subobj_offset s (cnm1, p ^ p') + offn) ftype
                        (default_path ftype)) se))
 
    /\
 
-(* RULE-ID: function-member-select *)
+(* RULE-ID: virtual-function-member-select *)
 (* looking up a function member *)
 (* This is the equivalent of most of Wasserab's rule BS10.  *)
 (* As the FVal has its last component with path = Cs', the method call will
    jump into the method body with the right value for this *)
+
+(* the IDConstant reflects the fact that a call to a virtual function will
+   be via an unadorned name (the provision of a class qualification would
+   force a particular function to be called).  Virtual functions can not
+   be templates (14.5.2 p3), so the function name must just be a string *)
 (!a C Cs Cs' Ds fld dyn_retty se s static_retty body0 args0 args body.
-     s |- LAST Cs has least method fld -: (static_retty,args0,body0) via Ds /\
-     s |- (C,Cs ^ Ds) selects fld -: (dyn_retty,args,body) via Cs'
+     s |- LAST Cs has least method
+             (SFName fld) -: (static_retty,args0,body0) via Ds /\
+     s |- (C,Cs ^ Ds) selects (SFName fld) -: (dyn_retty,args,body) via Cs'
    ==>
-     ^mng (mExpr (SVar (LVal a (Class C) Cs) fld) se) s
-          (s, ev (FVal (Member (LAST Cs') fld)
+     ^mng (mExpr (SVar (LVal a (Class C) Cs) (IDConstant(F, [], fld))) se) s
+          (s, ev (FVal (Member (LAST Cs') (SFName fld))
                        (Function dyn_retty (MAP SND args))
                        (SOME (LVal a (Class C) Cs')))
                  se))
@@ -933,8 +930,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mExpr (FnApp_sqpt (FVal fnid ftype (SOME (LVal a (Class cname) p)))
                              args) se0)
           s0
-          (s0 with <| stack updated_by
-                        (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
+          (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
                       thisvalue := SOME (ECompVal this (Ptr (Class cname)));
                       blockclasses updated_by stackenv_newscope ;
                       exprclasses updated_by stackenv_newscope
@@ -956,8 +952,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ^mng (mExpr (FnApp_sqpt (ConstructorFVal mdp subp a cnm) args) se0)
           s0
           (s0 with <| thisvalue := SOME (ECompVal this (Ptr (Class cnm))) ;
-                      stack updated_by (CONS (s0.classmap, s0.typemap,
-                                              s0.varmap, s0.thisvalue)) ;
+                      stack updated_by (CONS (s0.env, s0.thisvalue)) ;
                       blockclasses updated_by stackenv_newscope ;
                       exprclasses updated_by stackenv_newscope |>,
            EStmt (Block T (pdecls ++ cpfx) [body])
@@ -1301,8 +1296,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      ^mng (mStmt (Block F vds sts) c) s
-          (s with <| stack updated_by
-                          (CONS (s.classmap,s.typemap,s.varmap,s.thisvalue));
+          (s with <| stack updated_by (CONS (s.env, s.thisvalue));
                      blockclasses updated_by stackenv_newscope ;
                      exprclasses updated_by stackenv_newscope |>,
            mStmt (Block T vds sts) c))
@@ -1329,8 +1323,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mExpr (DestructorCall a cnm) se0)
           s0
-          (s0 with <| stack updated_by
-                        (CONS (s0.classmap,s0.typemap,s0.varmap,s0.thisvalue));
+          (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
                       thisvalue := SOME (ECompVal this (Ptr (Class cnm)))
                    |>,
            EStmt body (return_cont se0 Void)))
@@ -1338,16 +1331,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: block-exit *)
-(!st s c stm tym vrm stk' this bcs ecs.
-     (s.stack = (stm,tym,vrm,this) :: stk') /\ final_stmt st c /\
+(!st s c env stk' this bcs ecs.
+     (s.stack = (env,this) :: stk') /\ final_stmt st c /\
      (s.blockclasses = []::bcs) /\
      (s.exprclasses = []::ecs)
    ==>
      ^mng (mStmt (Block T [] [st]) c) s
           (s with <| stack := stk';
-                     classmap := stm;
-                     typemap := tym;
-                     varmap := vrm;
+                     env := env;
                      thisvalue := this;
                      blockclasses := bcs;
                      exprclasses := ecs |>,
@@ -1384,7 +1375,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: block-declmng *)
 (!s0 s d0 ds vds sts c.
-     declmng ^mng I (d0, s0) (ds, s)
+     declmng ^mng (d0, s0) (ds, s)
    ==>
      ^mng (mStmt (Block T (d0 :: vds) sts) c) s0
           (s, mStmt (Block T (ds ++ vds) sts) c))
@@ -1394,7 +1385,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: block-declmng-exception *)
 (!d0 s0 s f e ex ty loc c c' sts vds.
      ((f = CopyInit) \/ (f = DirectInit)) /\
-     declmng ^mng I (d0, s0) ([VDecInitA ty loc (f e)], s) /\
+     declmng ^mng (d0, s0) ([VDecInitA ty loc (f e)], s) /\
      is_exnval e /\
      (e = mStmt (Throw (SOME ex)) c')
    ==>
@@ -1404,113 +1395,16 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: block-vstrdec *)
-(* TODO: handle local classes *)
-(!name info s vds sts c.
-     T
-   ==>
-     ^mng (mStmt (Block T (VStrDec name info :: vds) sts) c) s
-          (s with classmap
-           updated_by (\sm. sm |+ (name,
-                                   case info of NONE -> NONE
-                                             || SOME i -> SOME (i,{}))),
-           mStmt (Block T vds sts) c))
-
-`
-
-
-(* ----------------------------------------------------------------------
-    how to evaluate a sequence of external declarations
-   ---------------------------------------------------------------------- *)
-
-(* split a name into a class::fld part *)
-val class_fld_split_def = Define`
-  class_fld_split (IDFld id fld) = (id, fld)
-`;
-
-
-(* if the evaluation can't get the list of external declarations to the
-   empty list, this is (implicitly) an occurrence of undefined behaviour *)
-val (emeaning_rules, emeaning_ind, emeaning_cases) = Hol_reln`
-
-(* RULE-ID: global-fndefn *)
-(!s0 s fval name rettype params body ftype edecls.
-     installfn s0 Ptr rettype name params body fval s /\
-     ~(name IN FDOM s.typemap) /\ ~is_class_name s0 name /\
-     (ftype = Function rettype (MAP SND params))
-   ==>
-     emeaning
-       (FnDefn rettype name params body :: edecls) s
-       (s with <| typemap updated_by (\tm. tm |+ (name, ftype)) |>,
-        edecls))
-
-   /\
-
-(* RULE-ID: member-fndefn *)
-(* The first MEM clause looks up the assumed declaration, and gets
-   static-ness and protection information there.
-   The second MEM clauses checks that this is not a duplicate definition
-     (this is a static check, one that would be performed by the compiler
-      if the duplication occurred within a single translation unit, or by
-      the linker if it occurred across multiple units)
-*)
-(!rettype userdefs name params body edecls s0 s cinfo staticp prot cpart base.
-     is_class_name s0 name /\
-     ((cpart, base) = class_fld_split name) /\
-     (SOME (cinfo, userdefs) = s0.classmap ' cpart) /\
-     (?pms'.
-         MEM (CFnDefn rettype base pms' NONE, staticp, prot)
-             cinfo.fields /\
-         (MAP SND pms' = MAP SND params)) /\
-     (!bdy' rettype' statp prot pms'.
-         MEM (CFnDefn rettype' base pms' bdy', statp, prot) cinfo.fields
-           ==>
-         ~(MAP SND pms' = MAP SND params)) /\
-     install_member_functions cpart s0
-                              [(CFnDefn rettype base params (SOME body),
-                                staticp, prot)]
-                              s
-   ==>
-     emeaning (FnDefn rettype name params body :: edecls) s0
-              (s, edecls))
-
-   /\
-
-(* RULE-ID: global-declmng *)
-(!s0 s d0 ds edecls.
-     declmng meaning copy2globals (d0, s0) (ds, s)
-   ==>
-     emeaning (Decl d0 :: edecls) s0 (s, MAP Decl ds ++ edecls))
-
-   /\
-
-(* RULE-ID: global-class-declaration *)
-(*   one might argue that this is a useless rule to have dynamically, as
-     class declarations are only made for the benefit of static type-checking
-*)
-(!name edecls s0.
-     T
-   ==>
-     emeaning
-        (Decl (VStrDec name NONE) :: edecls) s0
-        (copy2globals
-           (s0 with classmap updated_by (\sm. sm |+ (name, NONE))),
-         edecls))
-
-   /\
-
-(* RULE-ID: global-class-definition *)
-(!s0 s name info0 userdefs info edecls.
+(* this is the declaration of a local class *)
+(!name info0 info userdefs s0 s vds sts c env'.
      ((info,userdefs) = define_default_specials info0) /\
-     install_member_functions name s0 info.fields s
+     install_member_functions name s0 info.fields s /\
+     ~is_abs_id name /\
+     (SOME env' = update_class name (info,userdefs) s.env)
    ==>
-     emeaning (Decl (VStrDec name (SOME info0)) :: edecls) s0
-              (copy2globals
-                  (s with <| classmap updated_by
-                                      (\sm. sm |+ (name,
-                                                   SOME (info, userdefs))) |>),
-               edecls))
-`;
-
+     ^mng (mStmt (Block T (VStrDec name (SOME info0) :: vds) sts) c) s0
+          (s with env := env', mStmt (Block T vds sts) c))
+`
 
 
 val _ = export_theory();

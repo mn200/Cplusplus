@@ -45,7 +45,7 @@ val _ = Hol_datatype
          | Addr of CExpr
          | MemAddr of class_spec => StaticField
          | Assign of c_binops option => CExpr => CExpr
-         | SVar of CExpr => StaticField
+         | SVar of CExpr => CPP_ID
          | FnApp of CExpr => CExpr list
          | CommaSep of CExpr => CExpr
          | Cast of CPP_Type => CExpr
@@ -124,8 +124,8 @@ val rec_expr_P_def = Define`
     (rec_expr_P (MemAddr cname fld) P = P (MemAddr cname fld)) /\
     (rec_expr_P (Assign fo e1 e2) P =
       P (Assign fo e1 e2) /\ rec_expr_P e1 P /\ rec_expr_P e2 P) /\
-    (rec_expr_P (SVar e fld) P =
-      P (SVar e fld) /\ rec_expr_P e P) /\
+    (rec_expr_P (SVar e n) P =
+      P (SVar e n) /\ rec_expr_P e P) /\
     (rec_expr_P (FnApp e args) P =
       P (FnApp e args) /\ rec_expr_P e P /\ rec_exprl_P args P) /\
     (rec_expr_P (CommaSep e1 e2) P =
