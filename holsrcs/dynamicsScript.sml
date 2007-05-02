@@ -139,7 +139,11 @@ val installfn_def = Define`
 val imemfn_def = Define`
   (imemfn cnm s0 [] s = (s0 = s)) /\
   (imemfn cnm s0 ((FldDecl flnm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
-  (imemfn cnm s0 ((CFnDefn retty nm params (SOME body), statp, p) :: rest) s =
+  (imemfn cnm
+          s0
+          ((CFnDefn virtp retty nm params (SOME(SOME body)), statp, p) :: rest)
+          s
+    =
      if statp then
        ?s' fval. installfn s0 Ptr retty (Member cnm nm) params body fval s' /\
                  imemfn cnm s' rest s
@@ -148,11 +152,11 @@ val imemfn_def = Define`
                            fval
                            s' /\
                  imemfn cnm s' rest s) /\
-  (imemfn cnm s0 ((CFnDefn retty nm params NONE, statp, p) :: rest) s =
+  (imemfn cnm s0 ((CFnDefn virtp retty nm params bd, statp, p) :: rest) s =
      imemfn cnm s0 rest s) /\
   (imemfn cnm s0 ((Constructor _ _ _, _, _) :: rest) s =
      imemfn cnm s0 rest s) /\
-  (imemfn cnm s0 ((Destructor _, b, p) :: rest) s = imemfn cnm s0 rest s)
+  (imemfn cnm s0 ((Destructor _ _, b, p) :: rest) s = imemfn cnm s0 rest s)
 `
 
 val install_member_functions_def =
@@ -214,8 +218,8 @@ val find_constructor_info_def = Define`
 val find_destructor_info_def = Define`
   find_destructor_info s0 cnm body =
     cnm IN defined_classes s0 /\
-    ?prot.
-       MEM (Destructor (SOME body), F, prot) (cinfo s0 cnm).fields
+    ?virtp prot.
+       MEM (Destructor virtp (SOME body), F, prot) (cinfo s0 cnm).fields
 `;
 
 
@@ -911,10 +915,6 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: member-function-call *)
 (*   by the time this call is made, we have already figured out which
      function we will be jumping into
-
-     TODO: set up class member values as "locals".  I.e., if class C
-       has a member x, then x can be directly referred to in the
-       class's member functions.  This is really a name-space issue.
 
      NOTE: the block is "manually" entered, hence its flag being T, so that
      its internal thisvalue can be set correctly.

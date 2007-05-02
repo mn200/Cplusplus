@@ -862,18 +862,24 @@ val stmt_inst_defn = Hol_defn "stmt_inst" `
 
      /\
 
-  (centry_inst sigma (CFnDefn ty fld params body) =
+  (centry_inst sigma (CFnDefn virtp ty fld params body) =
      case type_inst sigma ty of
         NONE -> NONE
      || SOME ty' ->
           (case sfld_inst sigma fld of
               NONE -> NONE
-           || SOME sfld' -> OP2CMB (CFnDefn ty' sfld')
-                                   (olmap (\ (n,ty).
-                                             OPTION_MAP ((,) n)
-                                                        (type_inst sigma ty))
-                                          params)
-                                   (OPTION_MAP (stmt_inst sigma) body))) /\
+           || SOME sfld' ->
+                OP2CMB (CFnDefn virtp ty' sfld')
+                       (olmap (\ (n,ty).
+                                 OPTION_MAP ((,) n) (type_inst sigma ty))
+                              params)
+                       (case body of
+                           NONE -> SOME NONE
+                        || SOME NONE -> SOME (SOME NONE)
+                        || SOME (SOME st) ->
+                             (case stmt_inst sigma st of
+                                 NONE -> NONE
+                              || SOME st' -> SOME (SOME (SOME st')))))) /\
   (centry_inst sigma (FldDecl fldnm ty) =
      OPTION_MAP (FldDecl fldnm) (type_inst sigma ty)) /\
   (centry_inst sigma (Constructor params meminits bodyopt) =
@@ -888,8 +894,8 @@ val stmt_inst_defn = Hol_defn "stmt_inst" `
                                               optargs))
                         meminits)
                  (OPTION_MAP (stmt_inst sigma) bodyopt)) /\
-  (centry_inst sigma (Destructor bodyopt) =
-     OPTION_MAP Destructor (OPTION_MAP (stmt_inst sigma) bodyopt))
+  (centry_inst sigma (Destructor virtp bodyopt) =
+     OPTION_MAP (Destructor virtp) (OPTION_MAP (stmt_inst sigma) bodyopt))
 
      /\
 
@@ -945,7 +951,11 @@ val (stmt_inst_def, stmt_inst_ind) = Defn.tprove(
     RES_TAC THEN DECIDE_TAC
   ]);
 
-val extdecl_inst_def = Define`
+val _ = save_thm("stmt_inst_def", stmt_inst_def)
+val _ = save_thm("stmt_inst_ind", stmt_inst_ind)
+val _ = export_rewrites ["stmt_inst_def"]
+
+val extdecl_inst_defn = Defn.Hol_defn "extdecl_inst" `
   (extdecl_inst sub (FnDefn retty fnm params body) =
      case OP2CMB FnDefn (type_inst sub retty) (cppID_inst sub fnm) of
         NONE -> NONE
@@ -970,7 +980,23 @@ val extdecl_inst_def = Define`
                                  meminits)
                           (stmt_inst sub body)) /\
   (extdecl_inst sub (ClassDestDef cnm body) =
-     OP2CMB ClassDestDef (cppID_inst sub cnm) (stmt_inst sub body))
+     OP2CMB ClassDestDef (cppID_inst sub cnm) (stmt_inst sub body)) /\
+  (extdecl_inst sub (NameSpace s edecs) =
+     OPTION_MAP (NameSpace s) (olmap (extdecl_inst sub) edecs))
 `
+
+val (extdecl_inst_def, extdecl_inst_ind) = Defn.tprove(
+  extdecl_inst_defn,
+  WF_REL_TAC `measure (\(sub,e). ext_decl_size e)` THEN
+  Induct_on `edecs` THEN
+  SRW_TAC [ARITH_ss][#2 (TypeBase.size_of ``:ext_decl``)] THENL [
+    DECIDE_TAC,
+    FIRST_X_ASSUM (Q.SPECL_THEN [`s`, `a`] MP_TAC) THEN
+    SRW_TAC [ARITH_ss][]
+  ]);
+
+val _ = save_thm("extdecl_inst_def", extdecl_inst_def)
+val _ = save_thm("extdecl_inst_ind", extdecl_inst_ind)
+val _ = export_rewrites ["extdecl_inst_def"]
 
 val _ = export_theory()

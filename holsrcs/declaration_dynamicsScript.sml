@@ -157,9 +157,11 @@ val declare_default_specials_def = Define`
                       CONS (Constructor [] [] NONE, F, Public),
             set) in
     let destructor (i0,set) =
-      if (?bdy statp prot. MEM (Destructor bdy, statp, prot) i0.fields) then
+      if (?virtp bdy statp prot.
+             MEM (Destructor virtp bdy, statp, prot) i0.fields)
+      then
         (i0,Destructor INSERT set)
-      else (i0 with fields updated_by CONS (Destructor NONE, F, Public),
+      else (i0 with fields updated_by CONS (Destructor F NONE, F, Public),
             set)
     in
       constructor (destructor (info0, {}))

@@ -240,19 +240,19 @@ val SFld_to_ID_def = Define`
 
 val fieldname_def = Define`
   (fieldname (FldDecl fldnm ty) = SFName fldnm) /\
-  (fieldname (CFnDefn retty n args body) = n)
+  (fieldname (CFnDefn virtp retty n args body) = n)
 `
 
 (* again, omitting constructors and destructors as these can't be called *)
 val fieldtype_def = Define`
   (fieldtype (FldDecl fld ty) = ty) /\
-  (fieldtype (CFnDefn retty n args body) = Function retty (MAP SND args))
+  (fieldtype (CFnDefn virtp retty n args body) = Function retty (MAP SND args))
 `;
 
 (* those fields for which the above two predicates are well-defined *)
 val okfield_def = Define`
   (okfield (FldDecl fld ty) = T) /\
-  (okfield (CFnDefn retty n args body) = T) /\
+  (okfield (CFnDefn virtp retty n args body) = T) /\
   (okfield _ = F)
 `;
 
@@ -293,8 +293,9 @@ val MethodDefs_def = Define`
   MethodDefs s cnm mthnm =
     { (Cs,(rettype,ps,body)) |
          (cnm,Cs) IN subobjs s /\
-         ?prot statp.  MEM (CFnDefn rettype mthnm ps body, statp, prot)
-                           (cinfo s (LAST Cs)).fields }
+         ?prot virtp statp.
+             MEM (CFnDefn virtp rettype mthnm ps body, statp, prot)
+                 (cinfo s (LAST Cs)).fields }
 `
 
 (* s |- C has least method -: ty via Cs *)
@@ -411,7 +412,7 @@ val nsdmembers_def = Define`
       SOME
         (mapPartial
            (\ce. case ce of
-                    (CFnDefn ret nm args bod, stat, prot) -> NONE
+                    (CFnDefn virtp ret nm args bod, stat, prot) -> NONE
                  || (FldDecl fld ty, stat, prot) -> if stat then NONE
                                                     else SOME (fld,ty)
                  || _ -> NONE)
@@ -557,7 +558,7 @@ val get_fields_def = Define`
           mapPartial
             (\ (ce, b, p).
                case ce of
-                  CFnDefn retty nm params body ->
+                  CFnDefn virtp retty nm params body ->
                      SOME (nm, Function retty (MAP SND params))
                || FldDecl fld ty -> SOME (SFName fld, ty)
                || _ -> NONE)

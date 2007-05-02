@@ -108,9 +108,17 @@ val _ = Hol_datatype`
                   enclosing class's definition. *)
   (* TODO: allow declaration of friends *)
   class_entry =
-
-             CFnDefn of CPP_Type => StaticField => (string # CPP_Type) list =>
-                        CStmt option
+             (* member functions must be declared and defined with CFnDefn
+                forms.  The first boolean is true iff the member is virtual.
+                The type is the return type, the StaticField is the name of
+                the function, next is the parameter list, and finally the
+                body information: SOME (SOME st) for a body,
+                                  SOME NONE for a = 0 abs-class declaration
+                                  NONE for a deferred def'n.
+             *)
+             CFnDefn of bool => CPP_Type => StaticField =>
+                        (string # CPP_Type) list =>
+                        CStmt option option
                (* function definitions within a class must be of member
                   function for that class, it is not legit to write
                      class A {
@@ -133,7 +141,7 @@ val _ = Hol_datatype`
            | Constructor of (string # CPP_Type) list =>
                             mem_initializer list =>
                             CStmt option
-           | Destructor of CStmt option;
+           | Destructor of bool => CStmt option; (* bool = T iff virtual *)
 
   class_info =
              <| fields : (class_entry # bool # protection) list ;
