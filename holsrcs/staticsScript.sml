@@ -82,11 +82,8 @@ val nodups_lfi_det = store_thm(
              DECIDE ``0n < i /\ 0 < i' /\ (i - 1 = i' - 1) ==> (i = i')``]);
 
 
-(* BAD ASSUMPTION: no classes are abstract *)
-val abs_classes_def = Define`
-  abs_classes (s:state) = ({} : CPP_ID set)
-`;
-val _ = temp_add_record_field ("abs_classes", ``abs_classes``)
+
+val _ = temp_add_record_field ("abs_classes", ``is_abstract``)
 
 val this_type_def = Define`
   this_type s = case s.thisvalue of
@@ -122,19 +119,19 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
 
   (!s n ty.
       (lookup_type s n = SOME ty) /\
-      wf_type (abs_classes s) ty /\
+      wf_type s.abs_classes ty /\
       ~(ty = Void)
     ==>
       expr_type s LValue (Var n) ty) /\
 
   (!si n t t' p.
-      wf_type (abs_classes si) t /\ ~(t = Void) /\
+      wf_type si.abs_classes t /\ ~(t = Void) /\
       (t' = if p = [] then t else Class (LAST p))
          ==>
       expr_type si LValue (LVal n t p) t') /\
 
   (!si v t.
-      wf_type (abs_classes si) t /\ ~array_type t
+      wf_type si.abs_classes t /\ ~array_type t
          ==>
       expr_type si RValue (ECompVal v t) t) /\
 
@@ -143,7 +140,7 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
             expr_type s RValue (RValreq e) t) /\
 
   (!si e t t0.
-      wf_type (abs_classes si) t /\ (scalar_type t \/ (t = Void)) /\
+      wf_type si.abs_classes t /\ (scalar_type t \/ (t = Void)) /\
       expr_type si RValue e t0
           ==>
       expr_type si RValue (Cast t e) t) /\
@@ -210,20 +207,22 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
   (!s e t. expr_type s LValue e t ==>
            expr_type s RValue (Addr e) (Ptr t)) /\
 
-  (!s e c1 c2 sfld ty.
+  (!s e c1 c2 fldid ty.
        expr_type s LValue e (Class c1) /\
        s |- c2 <= c1 /\
-       (lookup_field_type s (IDFld c2 sfld) = SOME ty)
+       (class_part fldid = c2) /\
+       (lookup_field_type s fldid = SOME ty)
      ==>
-       expr_type s LValue (SVar e (IDFld c2 sfld)) ty) /\
+       expr_type s LValue (SVar e fldid) ty) /\
 
-  (!s e c1 c2 sfld ty.
+  (!s e c1 c2 fldid ty.
        expr_type s RValue e (Class c1) /\
        s |- c2 <= c1 /\
-       (lookup_field_type s (IDFld c2 sfld) = SOME ty) /\
+       (class_part fldid = c2) /\
+       (lookup_field_type s fldid = SOME ty) /\
        ~array_type ty
      ==>
-       expr_type s RValue (SVar e (IDFld c2 sfld)) ty)
+       expr_type s RValue (SVar e fldid) ty)
 
   /\
 

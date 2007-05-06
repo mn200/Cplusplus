@@ -22,6 +22,77 @@ in end
 
 val _ = new_theory "name_resolution";
 
+val _ = Hol_datatype`
+  nameres_ctxt = <|
+    objs : string -> CPP_ID # CPP_Type ;
+    classes : string -> CPP_ID ;
+    nspaces : string -> string list ;
+  |>
+`;
+
+
+val _ = Hol_datatype`
+  nametypes = NSname | Classname | Unknown
+`
+
+val tn_outermost_def = Define`
+  (tn_outermost (b, [], s) = (b, s, Unknown)) /\
+  (tn_outermost (b, h::t, s) = (b, h, NSname))
+`;
+
+val tid_outermost_def = Define`
+  (tid_outermost (TemplateConstant tn) = tn_outermost tn)
+`
+
+val get_outerid_def = Define`
+  (get_outerid (IDFld id sf) =
+     case get_outerid id of
+        (b, s, Unknown) -> (b,s,Classname)
+     || x -> x) /\
+  (get_outerid (IDTempCall tid targs) = tid_outermost tid) /\
+  (get_outerid (IDConstant tn) = tn_outermost tn)
+`;
+
+val tid_prepend_def = Define`
+  tid_prepend nslist clist (TemplateConstant (b, ns, s)) =
+    if ns = [] then
+      if clist = [] then
+        IDConstant(T, nslist, s)
+      else
+
+val id_prepend_def = Define`
+  (id_prepend nslist clist (IDFld id sf) =
+     IDFld (id_prepend nslist clist id) sf) /\
+  (id_prepend nslist clist (IDConstant (b, ns, s)) =
+     if ns = [] then
+       if clist = [] then
+         IDConstant(T, nslist, s)
+       else
+         FOLDL IDFld (IDConstant(T,nslist, HD clist)) (TL clist ++ [s])
+     else
+       IDConstant (T, nslist ++ ns, s)) /\
+  (id_prepend nslist clist (IDVar s) = IDVar s) /\
+  (id_prepend nslist clist (IDTempCall tid targs) =
+     IDTempCall (tid_prepend nslist clist tid) targs)
+`;
+
+val translate_tid_def = Define`
+  (translate_tid ctxt (TemplateConstant tn) =
+     case tn_outermost tn of
+        (T, h, ty) -> TemplateConstant tn
+     || (F, h, NSname) -> TemplateConstant (T, ctxt.nspaces h
+
+val translate_id_def = Define`
+  (translate_id ctxt classp (IDVar s) = IDVar s) /\
+  (translate_id ctxt classp (IDFld id sfld) =
+     IDFld (translate_id ctxt T id) sfld) /\
+  (translate_id ctxt (IDTempCall tid targs) =
+     IDTempCall (translate_tid ctxt tid)
+
+
+
+
+
 val _ = set_trace "inddef strict" 1
 
 

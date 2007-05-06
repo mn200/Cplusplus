@@ -46,14 +46,19 @@ val _ = Hol_datatype `
 `;
 
 (* terms taken from grammar, as in 12.6.2 *)
-val _ = Hol_datatype`mem_initializer_id = MI_C of class_spec
+val _ = Hol_datatype`mem_initializer_id = MI_C of CPP_ID
                                         | MI_fld of string
+   (* note it's a string, not a StaticField, because the only extra
+      advantage to having a Sfield, would be a template.  But you can't
+      initialise a field that is a template, because they only such fields
+      are functions.  Note we're cheating here somewhat, by not just having
+      strings here *)
 `;
 
 val _ = type_abbrev("mem_initializer",
                     ``:mem_initializer_id # CExpr list option``)
 
-val _ = Hol_datatype `varlocn = RefPlace of num option => CPPname
+val _ = Hol_datatype `varlocn = RefPlace of num option => CPP_ID
                               | ObjPlace of num
 `
 
@@ -87,8 +92,8 @@ val _ = Hol_datatype`
 
   ;
 
-  var_decl = VDec of CPP_Type => CPPname
-           | VDecInit of CPP_Type => CPPname => initializer
+  var_decl = VDec of CPP_Type => CPP_ID
+           | VDecInit of CPP_Type => CPP_ID => initializer
                (* init is the initial form of the initialising declarator *)
            | VDecInitA of CPP_Type => varlocn => initializer
                (* when space has been allocated, the form becomes the
@@ -98,7 +103,7 @@ val _ = Hol_datatype`
                   reference's name with an optional address for any
                   enclosing class.   *)
 
-           | VStrDec of class_spec => class_info option
+           | VStrDec of CPP_ID => class_info option
 
   ;
 
@@ -127,7 +132,7 @@ val _ = Hol_datatype`
                      }
 
                   so the first name above has to be a "simple" name
-                  and not a structured CPPname (no namespaces, no
+                  and not a structured CPP_ID (no namespaces, no
                   enclosing classes).  See 9.3 p2 : "a member function
                   definition that occurs outside of the class
                   definition shall appear in a namespace scope
@@ -147,7 +152,7 @@ val _ = Hol_datatype`
              <| fields : (class_entry # bool # protection) list ;
                    (* bool in fields is true for static members *)
 
-                ancestors : (class_spec # bool # protection) list
+                ancestors : (CPP_ID # bool # protection) list
                    (* bool indicates virtuality *)
              |> ;
 
@@ -308,13 +313,13 @@ val exception_stmt_def = Define`
 
 (* external declarations can appear at the top level of a translation unit *)
 val _ = Hol_datatype`
-  ext_decl = FnDefn of CPP_Type => CPPname => (string # CPP_Type) list =>
+  ext_decl = FnDefn of CPP_Type => CPP_ID => (string # CPP_Type) list =>
                        CStmt
            | Decl of var_decl
-           | ClassConDef of CPPname => (string # CPP_Type) list =>
+           | ClassConDef of CPP_ID => (string # CPP_Type) list =>
                             mem_initializer list =>
                             CStmt
-           | ClassDestDef of CPPname => CStmt
+           | ClassDestDef of CPP_ID => CStmt
            | NameSpace of string => ext_decl list
 `;
 

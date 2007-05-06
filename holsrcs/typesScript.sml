@@ -12,21 +12,11 @@ val _ = new_theory "types";
 
 val _ = Hol_datatype `basic_integral_type = Char | Short | Int | Long`;
 
-val _ = type_abbrev ("TopName", ``:bool # string list # string``)
-
-val _ = Hol_datatype`
-  TemplateID = TemplateConstant of TopName
-             | TemplateVar of string (* can have a template name (a TopName)
-                                        substituted for this *)
-`;
-
 val _ = Hol_datatype `
 
    (* a CPP_ID may denote a type or an object *)
    CPP_ID = IDVar of string (* can have a type substituted for this *)
-          | IDFld of CPP_ID => StaticField
-          | IDTempCall of TemplateID => TemplateArg list
-          | IDConstant of TopName
+          | IDConstant of bool # StaticField list # StaticField
 
    ;
 
@@ -36,7 +26,7 @@ val _ = Hol_datatype `
    ;
 
    TemplateArg = TType of CPP_Type
-               | TTemp of TemplateID
+               | TTemp of CPP_ID
                | TVal of TemplateValueArg
 
    ;
@@ -77,29 +67,13 @@ val _ = Hol_datatype `
 `;
 val _ = export_rewrites [ "CPP_ID_size_def" ]
 
-val _ = type_abbrev("CPPname", ``:CPP_ID``)
-val _ = type_abbrev("class_spec", ``:CPP_ID``)
-
 val Base_def = Define`
-  Base n = IDConstant (F, [], n)
-`;
-
-val _ = overload_on ("Member", ``IDFld``)
-
-val class_part_def = Define`
-  class_part (Member tyid fld) = tyid
-`;
-
-val tid_namespaces_def = Define`
-  (tid_namespaces (TemplateVar tv) = (F, [])) /\
-  (tid_namespaces (TemplateConstant (b, list, n)) = (b, list))
+  Base n = IDConstant (F, [], SFName n)
 `;
 
 val namespaces_def = Define`
   (id_namespaces (IDConstant (b, list, n)) = (b, list)) /\
-  (id_namespaces (IDVar s) = (F, [])) /\
-  (id_namespaces (IDTempCall tid targs) = tid_namespaces tid) /\
-  (id_namespaces (IDFld id fld) = id_namespaces id)
+  (id_namespaces (IDVar s) = (F, []))
 `;
 
 val sfld_basename_def = Define`
@@ -107,39 +81,9 @@ val sfld_basename_def = Define`
   (sfld_basename (SFTempCall s args) = s)
 `;
 
-val id_basename_def = Define`
-  (id_basename (IDVar s) = NONE) /\
-  (id_basename (IDFld cid sfld) = NONE) /\
-  (id_basename (IDTempCall (TemplateConstant tn) targs) = SOME tn) /\
-  (id_basename (IDTempCall (TemplateVar s) targs) = NONE) /\
-  (id_basename (IDConstant tn) = SOME tn)
-`;
-
-val strip_field_def = Define`
-  (strip_field (IDFld id fld) =
-     let (b, fs) = strip_field id
-     in
-         (b, fs ++ [fld])) /\
-  (strip_field (IDConstant c) = (IDConstant c, [])) /\
-  (strip_field (IDVar v) = (IDVar v, [])) /\
-  (strip_field (IDTempCall tc targs) = (IDTempCall tc targs, []))
-`;
-
-val strip_nspaces_def = Define`
-  (strip_nspaces (IDFld id fld) = NONE) /\
-  (strip_nspaces (IDConstant(b, ns, n)) = SOME ((b,ns), SFName n)) /\
-  (strip_nspaces (IDVar s) = NONE) /\
-  (strip_nspaces (IDTempCall (TemplateConstant(b,ns,n)) targs) =
-     SOME ((b,ns), SFTempCall n targs)) /\
-  (strip_nspaces (IDTempCall (TemplateVar s) targs) = NONE)
-`;
-
 val is_abs_id_def = Define`
-  (is_abs_id (IDFld id fld) = is_abs_id id) /\
   (is_abs_id (IDConstant(b, ns, n)) = b) /\
-  (is_abs_id (IDVar s) = F) /\
-  (is_abs_id (IDTempCall (TemplateConstant(b,ns,n)) targs) = b) /\
-  (is_abs_id (IDTempCall (TemplateVar s) targs) = F)
+  (is_abs_id (IDVar s) = F)
 `;
 
 
@@ -147,18 +91,9 @@ val _ = Hol_datatype `tvar_sort = TempV of string
                                 | TypeV of string
                                 | ObjV of string`
 
-val tid_free_vars_def = Define`
-  (tid_free_vars (TemplateVar tv) = {TempV tv}) /\
-  (tid_free_vars (TemplateConstant trip) = {})
-`;
-
 val type_free_vars_defn = Hol_defn "type_free_vars" `
   (id_free_vars (IDConstant trip) = {}) /\
-  (id_free_vars (IDVar s) = {TypeV s}) /\
-  (id_free_vars (IDTempCall tid targs) =
-     tid_free_vars tid UNION
-     FOLDL (\acc targ. acc UNION targ_free_vars targ) {} targs) /\
-  (id_free_vars (IDFld id fld) = id_free_vars id UNION sfld_free_vars fld)
+  (id_free_vars (IDVar s) = {TypeV s})
 
      /\
 
@@ -169,7 +104,7 @@ val type_free_vars_defn = Hol_defn "type_free_vars" `
      /\
 
   (targ_free_vars (TType ty) = type_free_vars ty) /\
-  (targ_free_vars (TTemp tid) = tid_free_vars tid) /\
+  (targ_free_vars (TTemp tid) = id_free_vars tid) /\
   (targ_free_vars (TVal tva) = tva_free_vars tva)
 
      /\
@@ -214,8 +149,6 @@ val (type_free_vars_def, type_free_vars_ind) = Defn.tprove(
        || INR (INR (INR (INR ty))) -> CPP_Type_size ty)` THEN
   SRW_TAC [ARITH_ss][] THENL [
     Induct_on `args` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
-    RES_TAC THEN DECIDE_TAC,
-    Induct_on `targs` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
     RES_TAC THEN DECIDE_TAC,
     Induct_on `targs` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
     RES_TAC THEN DECIDE_TAC

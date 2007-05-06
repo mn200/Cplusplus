@@ -19,33 +19,16 @@ open statesTheory aggregatesTheory
 val _ = new_theory "instantiation"
 
 
-val _ = Hol_datatype`cppid_inst_result = TypeResult of CPP_Type
-                                       | IDResult of CPP_ID
-                                       | BadResult
-`;
-
 val _ = Hol_datatype`inst_record = <| typemap : string -> CPP_Type ;
-                                      tempmap : string -> TemplateID ;
+                                      tempmap : string -> CPP_ID ;
                                       valmap : string -> TemplateValueArg |>`
 
 val empty_inst_def = Define`
   empty_inst = <| typemap := TypeID o IDVar;
-                  tempmap := TemplateVar;
+                  tempmap := IDVar;
                   valmap := TVAVar |>
 `;
 
-
-val tempid_inst_def = Define`
-  (tempid_inst sigma (TemplateConstant tn) = TemplateConstant tn) /\
-  (tempid_inst sigma (TemplateVar s) = sigma.tempmap s)
-`
-val _ = export_rewrites ["tempid_inst_def"]
-
-val NIL_tempid_inst = store_thm(
-  "NIL_tempid_inst",
-  ``!tid. tempid_inst empty_inst tid = tid``,
-  Induct THEN SRW_TAC [][empty_inst_def]);
-val _ = export_rewrites ["NIL_tempid_inst"]
 
 val is_var_type_def = Define`
   (is_var_type (TypeID cid) = T) /\
@@ -85,22 +68,20 @@ val type_inst_defn = Hol_defn "type_inst" `
   (* id instantiation returns a type.  The type may just be a TypeID,
      possibly representing no change, or a "real" type. *)
   (cppid_inst sigma (IDVar s) = SOME (sigma.typemap s)) /\
-  (cppid_inst sigma (IDFld cid fld) =
-     OPTION_MAP TypeID
-                (OP2CMB IDFld
-                        (case cppid_inst sigma cid of
-                            NONE -> NONE
-                         || SOME ty -> typeid ty)
-                        (sfld_inst sigma fld))) /\
-  (cppid_inst sigma (IDTempCall tempid tempargs) =
-     OPTION_MAP (TypeID o IDTempCall (tempid_inst sigma tempid))
-                (olmap (temparg_inst sigma) tempargs)) /\
-  (cppid_inst sigma (IDConstant tnm) = SOME (TypeID (IDConstant tnm)))
+  (cppid_inst sigma (IDConstant(b,sfs,sf)) =
+     case olmap (sfld_inst sigma) sfs of
+        NONE -> NONE
+     || SOME sfs' -> (case sfld_inst sigma sf of
+                         NONE -> NONE
+                      || SOME sf' -> SOME (TypeID (IDConstant(b,sfs',sf')))))
 
     /\
 
   (temparg_inst sigma (TType ty) = OPTION_MAP TType (type_inst sigma ty)) /\
-  (temparg_inst sigma (TTemp tid) = SOME (TTemp (tempid_inst sigma tid))) /\
+  (temparg_inst sigma (TTemp tid) =
+     case cppid_inst sigma tid of
+        NONE -> NONE
+     || SOME ty -> OPTION_MAP TTemp (typeid ty)) /\
   (temparg_inst sigma (TVal tva) =
       OPTION_MAP TVal (temp_valarg_inst sigma tva))
 
@@ -138,7 +119,7 @@ val (type_inst_def, type_inst_ind) = Defn.tprove(type_inst_defn,
   SRW_TAC [ARITH_ss][] THENL [
     Induct_on `tylist` THEN SRW_TAC [][] THEN
     SRW_TAC [ARITH_ss][] THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
-    Induct_on `tempargs` THEN SRW_TAC [][] THEN
+    Induct_on `sfs` THEN SRW_TAC [][] THEN
     SRW_TAC [ARITH_ss][] THEN RES_TAC THEN DECIDE_TAC,
     Induct_on `targs` THEN SRW_TAC [][] THEN
     SRW_TAC [ARITH_ss][] THEN RES_TAC THEN DECIDE_TAC
@@ -153,6 +134,11 @@ val type_match_def = Define`
 `;
 
 val _ = overload_on ("<=", ``type_match``);
+
+val olmap_EQ_NONE = prove(
+  ``(olmap f list = NONE) = ?e. MEM e list /\ (f e = NONE)``,
+  Induct_on `list` THEN SRW_TAC [][] THEN Cases_on `f h` THEN
+  SRW_TAC [][] THEN METIS_TAC [TypeBase.distinct_of ``:'a option``]);
 
 val type_inst_empty = store_thm(
   "type_inst_empty",
@@ -170,11 +156,12 @@ val type_inst_empty = store_thm(
    THEN1 METIS_TAC [] THEN
   HO_MATCH_MP_TAC type_inst_ind THEN
   SRW_TAC [][] THEN SRW_TAC [][] THENL [
-    `olmap (\a. type_inst empty_inst a) tylist = SOME tylist`
-       by (Induct_on `tylist` THEN SRW_TAC [][empty_inst_def]) THEN
-    SRW_TAC [][],
+    Induct_on `tylist` THEN SRW_TAC [][empty_inst_def],
     SRW_TAC [][empty_inst_def],
-    SRW_TAC [ETA_ss] [] THEN Induct_on `tempargs` THEN SRW_TAC [][],
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN
+    `olmap (sfld_inst empty_inst) sfs = SOME sfs`
+       by (Induct_on `sfs` THEN SRW_TAC [][]) THEN
+    SRW_TAC [][],
     SRW_TAC [][empty_inst_def],
     SRW_TAC [ETA_ss] [] THEN Induct_on `targs` THEN SRW_TAC [][]
   ]);
@@ -185,37 +172,30 @@ val type_match_refl = store_thm(
   SIMP_TAC (srw_ss()) [type_match_def] THEN
   METIS_TAC [type_inst_empty]);
 
+val cppID_inst_def = Define`
+  cppID_inst s id =
+    case cppid_inst s id of NONE -> NONE || SOME ty -> typeid ty
+`;
+
 val inst_comp_def = Define`
   inst_comp i2 i1 = <| typemap := THE o type_inst i2 o i1.typemap ;
-                       tempmap := tempid_inst i2 o i1.tempmap ;
+                       tempmap := THE o cppID_inst i2 o i1.tempmap ;
                        valmap  := THE o temp_valarg_inst i2 o i1.valmap |>
 `;
 
-val tempid_inst_comp = store_thm(
-  "tempid_inst_comp",
-  ``tempid_inst (inst_comp s2 s1) tid = tempid_inst s2 (tempid_inst s1 tid)``,
-  Cases_on `tid` THEN SRW_TAC [][inst_comp_def]);
-val _ = export_rewrites ["tempid_inst_comp"]
-
 fun FTRY tac = TRY (tac THEN NO_TAC)
-
-
 
 val cppid_non_typeid = store_thm(
   "cppid_non_typeid",
   ``(cppid_inst s id = SOME ty) /\ (typeid ty = NONE) ==>
     ?nm. (id = IDVar nm) /\ (s.typemap nm = ty)``,
-  Cases_on `id` THEN SRW_TAC [][] THENL [
-    Cases_on `typeid ty = NONE` THEN SRW_TAC [][] THEN
-    Cases_on `ty = TypeID z` THEN SRW_TAC [][] THEN
-    FULL_SIMP_TAC (srw_ss()) [],
-
-    Cases_on `typeid ty = NONE` THEN SRW_TAC [][] THEN
-    DISJ2_TAC THEN STRIP_TAC THEN FULL_SIMP_TAC (srw_ss()) [],
-
-    Cases_on `typeid ty = NONE` THEN SRW_TAC [][] THEN
-    STRIP_TAC THEN SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) []
-  ]);
+  Cases_on `id` THEN SRW_TAC [][] THEN
+  Cases_on `p` THEN Cases_on `r` THEN SRW_TAC [][] THEN
+  Cases_on `typeid ty = NONE` THEN SRW_TAC [][] THEN
+  Cases_on `olmap (\a. sfld_inst s a) q'`  THEN SRW_TAC [][] THEN
+  Cases_on `sfld_inst s r'` THEN SRW_TAC [][] THEN
+  Cases_on `x = sfs'` THEN SRW_TAC [][] THEN
+  STRIP_TAC THEN SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) []);
 
 val option_case_EQ_SOME = store_thm(
   "option_case_EQ_SOME",
@@ -224,6 +204,113 @@ val option_case_EQ_SOME = store_thm(
   Cases_on `v` THEN SRW_TAC [][]);
 val _ = export_rewrites ["option_case_EQ_SOME"]
 
+val inst_comp_thm = store_thm(
+  "inst_comp_thm",
+  ``(!s1 ty1 ty2 ty3 s2.
+        (type_inst s1 ty1 = SOME ty2) /\
+        (type_inst s2 ty2 = SOME ty3) ==>
+        (type_inst (inst_comp s2 s1) ty1 = SOME ty3)) /\
+    (!s1 id1 s2 ty2 id3 ty4.
+        (cppid_inst s1 id1 = SOME ty2) /\
+        (typeid ty2 = SOME id3) /\
+        (cppid_inst s2 id3 = SOME ty4) ==>
+        (cppid_inst (inst_comp s2 s1) id1 = SOME ty4)) /\
+    (!s1 ta1 ta2 ta3 s2.
+        (temparg_inst s1 ta1 = SOME ta2) /\
+        (temparg_inst s2 ta2 = SOME ta3) ==>
+        (temparg_inst (inst_comp s2 s1) ta1 = SOME ta3)) /\
+    (!s1 tva1 tva2 tva3 s2.
+        (temp_valarg_inst s1 tva1 = SOME tva2) /\
+        (temp_valarg_inst s2 tva2 = SOME tva3) ==>
+        (temp_valarg_inst (inst_comp s2 s1) tva1 = SOME tva3)) /\
+    (!s1 sfld1 sfld2 sfld3 s2.
+        (sfld_inst s1 sfld1 = SOME sfld2) /\
+        (sfld_inst s2 sfld2 = SOME sfld3) ==>
+        (sfld_inst (inst_comp s2 s1) sfld1 = SOME sfld3))``,
+  HO_MATCH_MP_TAC type_inst_ind THEN SRW_TAC [][]
+  THEN FTRY (SRW_TAC [][]) THEN
+  FTRY (FULL_SIMP_TAC (srw_ss()) []) THENL [
+    (* TypeID *)
+    Cases_on `typeid ty2` THENL [
+      `?nm. (id1 = IDVar nm) /\ (s1.typemap nm = ty2)`
+         by METIS_TAC [cppid_non_typeid] THEN
+      SRW_TAC [][inst_comp_def],
+      `ty2 = TypeID x`
+         by (Cases_on `ty2` THEN FULL_SIMP_TAC (srw_ss()) []) THEN
+      FULL_SIMP_TAC (srw_ss()) []
+    ],
+
+    (* MPtr *)
+    FULL_SIMP_TAC (srw_ss()) [] THEN PROVE_TAC [],
+
+    (* Function (type) case *)
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN
+    Induct_on `tylist` THEN SRW_TAC [][] THENL [
+      FULL_SIMP_TAC (srw_ss()) [],
+      FULL_SIMP_TAC (srw_ss()) [DISJ_IMP_THM, FORALL_AND_THM]
+
+
+SRW_TAC [][] THEN
+  FTRY (SRW_TAC [][]) THEN FTRY (FULL_SIMP_TAC (srw_ss()) []) THEN
+  FTRY (RES_TAC THEN SRW_TAC [][])
+
+    (!ty1 ty2 ty3 s1 s2.
+    (!p1 p2 p3 s1 s2 b1 b2 b3
+
+    (!tal1 tal2 tal3 s1 s2.
+        (olmap (temparg_inst s1) tal1 = SOME tal2) /\
+        (olmap (temparg_inst s2) tal2 = SOME tal3) ==>
+        (olmap (temparg_inst (inst_comp s2 s1)) tal1 = SOME tal3)) /\
+    (!tyl1 tyl2 tyl3 s1 s2.
+        (olmap (type_inst s1) tyl1 = SOME tyl2) /\
+        (olmap (type_inst s2) tyl2 = SOME tyl3) ==>
+        (olmap (type_inst (inst_comp s2 s1)) tyl1 = SOME tyl3)) /\
+    (!sflist1 sflist2 sflist3 s1 s2.
+        (olmap (sfld_inst s1) sflist1 = SOME sflist2) /\
+        (olmap (sfld_inst s2) sflist2 = SOME sflist3) ==>
+        (olmap (sfld_inst (inst_comp s2 s1)) sflist1 = SOME sflist3))``,
+  Induct THEN SRW_TAC [][] THEN
+  FTRY (SRW_TAC[][]) THEN FTRY (FULL_SIMP_TAC (srw_ss()) []) THEN
+  FTRY (RES_TAC THEN SRW_TAC [][]) THENL [
+    (* IDVar case *)
+    Cases_on `s1.typemap s` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+    SRW_TAC [][inst_comp_def],
+
+    (* IDConstant *)
+    Cases_on `p` THEN Cases_on `r` THEN
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
+    SRW_TAC [ETA_ss][inst_comp_def]
+
+    (* SFTempCall *)
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [],
+
+    (* TObj *)
+    FULL_SIMP_TAC (srw_ss()) [] THEN PROVE_TAC [],
+
+    (* TMPtr *)
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN PROVE_TAC [],
+
+    (* TVAVar *)
+    SRW_TAC [][inst_comp_def],
+
+    (* MPtr *)
+    FULL_SIMP_TAC (srw_ss()) [] THEN PROVE_TAC [],
+
+    (* Function (type) case *)
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [],
+
+    (* typeid case (?) *)
+    Cases_on `typeid ty2` THENL [
+      `?nm. (id1 = IDVar nm) /\ (s1.typemap nm = ty2)`
+          by METIS_TAC [cppid_non_typeid] THEN
+      SRW_TAC [][inst_comp_def],
+      `ty2 = TypeID x`
+         by (Cases_on `ty2` THEN FULL_SIMP_TAC (srw_ss()) []) THEN
+      FULL_SIMP_TAC (srw_ss()) []
+    ]
+  ]);
 
 val inst_comp_thm = store_thm(
   "inst_comp_thm",
@@ -248,6 +335,8 @@ val inst_comp_thm = store_thm(
         (type_inst s1 ty1 = SOME ty2) /\
         (type_inst s2 ty2 = SOME ty3) ==>
         (type_inst (inst_comp s2 s1) ty1 = SOME ty3)) /\
+    (!p1 p2 p3 s1 s2 b1 b2 b3
+
     (!tal1 tal2 tal3 s1 s2.
         (olmap (temparg_inst s1) tal1 = SOME tal2) /\
         (olmap (temparg_inst s2) tal2 = SOME tal3) ==>
@@ -255,7 +344,11 @@ val inst_comp_thm = store_thm(
     (!tyl1 tyl2 tyl3 s1 s2.
         (olmap (type_inst s1) tyl1 = SOME tyl2) /\
         (olmap (type_inst s2) tyl2 = SOME tyl3) ==>
-        (olmap (type_inst (inst_comp s2 s1)) tyl1 = SOME tyl3))``,
+        (olmap (type_inst (inst_comp s2 s1)) tyl1 = SOME tyl3)) /\
+    (!sflist1 sflist2 sflist3 s1 s2.
+        (olmap (sfld_inst s1) sflist1 = SOME sflist2) /\
+        (olmap (sfld_inst s2) sflist2 = SOME sflist3) ==>
+        (olmap (sfld_inst (inst_comp s2 s1)) sflist1 = SOME sflist3))``,
   Induct THEN SRW_TAC [][] THEN
   FTRY (SRW_TAC[][]) THEN FTRY (FULL_SIMP_TAC (srw_ss()) []) THEN
   FTRY (RES_TAC THEN SRW_TAC [][]) THENL [
@@ -263,18 +356,12 @@ val inst_comp_thm = store_thm(
     Cases_on `s1.typemap s` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
     SRW_TAC [][inst_comp_def],
 
-    (* IDFld case *)
-    SRW_TAC [DNF_ss][] THEN FULL_SIMP_TAC (srw_ss()) [] THEN
-    SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
-    PROVE_TAC [],
-
-    (* IDTempCall *)
-    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN SRW_TAC [][] THEN
-    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [],
-
     (* IDConstant *)
+    Cases_on `p` THEN Cases_on `r` THEN
     FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
-    FULL_SIMP_TAC (srw_ss()) [],
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
+    SRW_TAC [ETA_ss][inst_comp_def]
 
     (* SFTempCall *)
     FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [],
@@ -682,11 +769,6 @@ val type_match_antisym = store_thm(
      by METIS_TAC [type_match_size_increase] THEN
   `tyinst_sz ty1 = tyinst_sz ty2` by DECIDE_TAC THEN
   METIS_TAC [type_match_size_eq_renaming]);
-
-val cppID_inst_def = Define`
-  cppID_inst s id =
-    case cppid_inst s id of NONE -> NONE || SOME ty -> typeid ty
-`;
 
 (* instantiate an expression *)
 val expr_inst_def = Define`

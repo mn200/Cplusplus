@@ -19,6 +19,14 @@ open statesTheory aggregatesTheory
 
 val _ = new_theory "class_info";
 
+(* even when names have all been resolved, you need two maps at runtime
+   because there may be a class at the top level of the static namespace,
+   which is dynamically masked by a local class of the same name.
+
+   E.g.,
+     class C { ... };
+     int f(int n) { class C { ... }; C var1; ::C var2; ... }
+*)
 val is_class_name_def = Define`
   is_class_name st cppid = if is_abs_id cppid then
                              is_class_name_env st.genv cppid
@@ -43,7 +51,7 @@ val defined_classes_def = Define`
 
 (* similarly, direct base classes, in order of declaration *)
 val get_direct_bases_def = Define`
-  get_direct_bases s cnm : class_spec list =
+  get_direct_bases s cnm : CPP_ID list =
     mapPartial (\ (cnm, b, prot). if b then NONE else SOME cnm)
                (cinfo s cnm).ancestors
 `
@@ -63,7 +71,7 @@ val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
                    fixity = Infix(NONASSOC, 460) }
 
 val get_virtual_bases_def = Define`
-  get_virtual_bases s cnm : class_spec list =
+  get_virtual_bases s cnm : CPP_ID list =
     mapPartial (\ (cnm, b, prot). if b then SOME cnm else NONE)
                (cinfo s cnm).ancestors
 `;
@@ -232,12 +240,6 @@ val path_via_def = Define`
 
 (* finding fields W et al. 5.1.3
    - omitting constructors and destructors as these can't be called normally *)
-val SFld_to_ID_def = Define`
-  (SFld_to_ID (SFTempCall s args) = IDTempCall (TemplateConstant (F,[],s))
-                                               args) /\
-  (SFld_to_ID (SFName s) = Base s)
-`;
-
 val fieldname_def = Define`
   (fieldname (FldDecl fldnm ty) = SFName fldnm) /\
   (fieldname (CFnDefn virtp retty n args body) = n)
@@ -570,44 +572,63 @@ val field_type_def = Define`
     OPTION_MAP SND (FINDL (\ (nm, ty). nm = sfld) (get_fields ci))
 `;
 
+val class_part_def = Define`
+  class_part (IDConstant(b, h :: t, sf)) =
+             IDConstant(b, FRONT (h :: t), LAST (h :: t))
+`;
 
 (* looks up an identifier corresponding to an object, and returns its type *)
 val elookup_type_def = Define`
-  (elookup_type env (IDFld id fld) =
-     case elookup_class env id of
+  (elookup_type env (IDConstant (b, [], sf)) =
+     FLOOKUP (item env).typemap sf) /\
+  (elookup_type env (IDConstant (b, SFName h :: t, sf)) =
+     if SFName h IN FDOM (item env).classenv then
+       case celookup_class (item env).classenv
+                           (class_part (IDConstant(b, SFName h :: t, sf)))
+       of
+          NONE -> NONE
+       || SOME cenv -> (case (item cenv).info of
+                           NONE -> NONE
+                        || SOME ci -> field_type ci sf)
+     else
+       case FLOOKUP (map env) h of
+          NONE -> NONE
+       || SOME e' -> elookup_type e' (IDConstant (b, t, sf))) /\
+  (elookup_type env (IDConstant (b, sf1 :: t, sf)) =
+     case celookup_class (item env).classenv
+                         (class_part (IDConstant(b, sf1 :: t, sf)))
+     of
         NONE -> NONE
      || SOME cenv -> (case (item cenv).info of
                          NONE -> NONE
-                      || SOME ci -> field_type ci fld)) /\
-  (elookup_type env (IDConstant (b, [], n)) =
-     FLOOKUP ((item env).typemap) (SFName n)) /\
-  (elookup_type env (IDConstant (b, h :: t, n)) =
-     case FLOOKUP (map env) h of
-        NONE -> NONE
-     || SOME e' -> elookup_type e' (IDConstant (b, t, n))) /\
-  (elookup_type env (IDTempCall (TemplateConstant (b, [], n)) targs) =
-     FLOOKUP ((item env).typemap) (SFTempCall n targs)) /\
-  (elookup_type env (IDTempCall (TemplateConstant (b, h :: t, n)) targs) =
-     case FLOOKUP (map env) h of
-        NONE -> NONE
-     || SOME e' -> elookup_type e' (IDTempCall
-                                    (TemplateConstant(b, t, n))
-                                    targs))
+                      || SOME ci -> field_type ci sf)) /\
+  (elookup_type env _ = NONE)
 `;
 
 (* looks up an object identifier and returns its address *)
 val elookup_addr_def = Define`
   (* must be a SFName, a template id could only be to a function, which is
      not an object *)
-  (elookup_addr env (IDFld id (SFName fld)) =
-     case elookup_class env id of
+  (elookup_addr env (IDConstant (b, [], SFName n)) =
+     FLOOKUP (item env).varmap n) /\
+  (elookup_addr env (IDConstant (b, SFName h::t, SFName n)) =
+     if SFName h IN FDOM (item env).classenv then
+       case celookup_class
+              (item env).classenv
+              (class_part (IDConstant(b, SFName h::t, SFName n)))
+       of
+          NONE -> NONE
+       || SOME cenv -> FLOOKUP (item cenv).statvars n
+     else
+       case FLOOKUP (map env) h of
+          NONE -> NONE
+       || SOME e' -> elookup_addr e' (IDConstant(b, t, SFName n))) /\
+  (elookup_addr env (IDConstant (b, sf1, SFName n)) =
+     case celookup_class (item env).classenv
+                         (class_part (IDConstant(b, sf1, SFName n)))
+     of
         NONE -> NONE
-     || SOME cenv -> FLOOKUP (item cenv).statvars fld) /\
-  (elookup_addr env (IDConstant (b, [], n)) = FLOOKUP (item env).varmap n) /\
-  (elookup_addr env (IDConstant (b, h::t, n)) =
-     case FLOOKUP (map env) h of
-        NONE -> NONE
-     || SOME e' -> elookup_addr e' (IDConstant(b, t, n))) /\
+     || SOME cenv -> FLOOKUP (item cenv).statvars n) /\
   (elookup_addr env _ = NONE)
 `;
 
@@ -619,15 +640,16 @@ val lift_lookup_def = Define`
 
 val lookup_addr_def = Define` lookup_addr =  lift_lookup elookup_addr `;
 val lookup_type_def = Define` lookup_type =  lift_lookup elookup_type `;
-val lookup_class_def = Define`lookup_class = lift_lookup elookup_class `;
+val lookup_class_def = Define` lookup_class = lift_lookup elookup_class `;
 
 (* looks up a fully-qualified non-static data member field (e.g., C::fld) and
    finds its offset within that class.
 
 *)
 val lookup_offset_def = Define`
-  (lookup_offset s mdp (IDFld id (SFName fld)) =
-     let coffs = constituent_offsets s mdp id
+  (lookup_offset s mdp (IDConstant(b, sfs, SFName fld)) =
+     let coffs = constituent_offsets s mdp
+                        (class_part (IDConstant(b,sfs,SFName fld)))
      in
        case FINDL (\ (cc, off). ?ty. cc = NSD fld ty) coffs of
           NONE -> NONE
@@ -638,13 +660,71 @@ val lookup_offset_def = Define`
 
 (* looks up a fully-qualified field (e.g., C::fld) and finds its type *)
 val lookup_field_type_def = Define`
-  (lookup_field_type s (IDFld id sfld) =
-    case lookup_class s id of
+  (lookup_field_type s (IDConstant(b,sfs,sf)) =
+    case lookup_class s (class_part(IDConstant(b,sfs,sf))) of
        NONE -> NONE
     || SOME cenv -> (case (item cenv).info of
                         NONE -> NONE
-                     || SOME ce -> field_type ce sfld)) /\
+                     || SOME ce -> field_type ce sf)) /\
   (lookup_field_type s _ = NONE)
 `;
+
+(* ----------------------------------------------------------------------
+    determining virtualness, and whether or not a class is abstract
+   ---------------------------------------------------------------------- *)
+
+(* 10.3 para 5
+     covariant there actually refers to the clauses after the first here;
+     this is more the condition of being acceptable substitutes in return
+     type position - ignoring the const language in third clause of para,
+     this is statics *)
+val covariant_def = Define`
+  covariant s ty1 ty2 =
+    (ty1 = ty2) \/
+    (?ty1' ty2' c1 c2.
+       (strip_const ty1 = Ptr ty1') /\
+       (strip_const ty2 = Ptr ty2') /\
+       (strip_const ty1' = Class c1) /\
+       (strip_const ty2' = Class c2) /\
+       s |- c1 <= c2) \/
+    (?ty1' ty2' c1 c2.
+       (strip_const ty1 = Ref ty1') /\
+       (strip_const ty2 = Ref ty2') /\
+       (strip_const ty1' = Class c1) /\
+       (strip_const ty2' = Class c2) /\
+       s |- c1 <= c2)
+`;
+
+(* true if the given member function cnm::fnm, with specified return-type and
+   parameter types is a virtual function.  This will occur if some ancestor
+   (including itself), declares the same name-parameter type pairing as
+   virtual *)
+val is_virtual_def = Define`
+  is_virtual s cnm fnm retty paramtys =
+    ?bnm params body prot retty'.
+       s |- bnm <= cnm  /\
+       MEM (CFnDefn T retty' fnm params body, F, prot)
+           (cinfo s bnm).fields /\
+       (MAP SND params = paramtys) /\
+       covariant s retty' retty
+`;
+
+(* true if the given class is abstract *)
+val is_abstract_def = Define`
+  is_abstract s cnm =
+    ?fnm bnm retty params prot.
+       s |- bnm <= cnm  /\
+       MEM (CFnDefn T retty fnm params (SOME NONE), F, prot)
+           (cinfo s bnm).fields /\
+       !b' virtp prot' params' retty' body.
+          s |- bnm <= b' /\
+          s |- b' <= cnm /\
+          covariant s retty retty' /\
+          (MAP SND params' = MAP SND params) ==>
+          ~MEM (CFnDefn virtp retty' fnm params' (SOME (SOME body)), F, prot')
+               (cinfo s b').fields
+`;
+
+
 
 val _ = export_theory();

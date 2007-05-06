@@ -39,7 +39,7 @@ val _ = Hol_datatype `fn_info = <| return_type : CPP_Type ;
 
 
 val _ = type_abbrev("construction_locn",
-                    ``:addr # class_spec # class_spec list``)
+                    ``:addr # CPP_ID # CPP_ID list``)
 
 val _ = Hol_datatype`
   constructed = NormalConstruct of construction_locn
@@ -151,7 +151,7 @@ val mem2val_LENGTH = store_thm(
 (* argument to ptr_encode are same as those to LVal *)
 val _ = new_constant(
   "ptr_encode",
-  ``:state -> num -> CPP_Type -> class_spec list -> byte list option``)
+  ``:state -> num -> CPP_Type -> CPP_ID list -> byte list option``)
 
 val default_path_def = Define`
   (default_path (Class cn) = [cn]) /\

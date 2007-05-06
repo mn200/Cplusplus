@@ -25,7 +25,7 @@ val c_unops = Hol_datatype`
   c_unops = CUnPlus | CUnMinus | CComp | CNot
 `;
 
-val fnid_def = type_abbrev("fnid", ``:CPPname``)
+val fnid_def = type_abbrev("fnid", ``:CPP_ID``)
 val _ = disable_tyabbrev_printing "fnid"
 
 (* expressions *)
@@ -35,7 +35,7 @@ val _ = Hol_datatype
          | Cnullptr of CPP_Type
                      (* BAD_ASSUMPTION: want to get rid of this *)
          | This
-         | Var of CPPname
+         | Var of CPP_ID
          | COr of CExpr => CExpr
          | CAnd of CExpr => CExpr
          | CCond of CExpr => CExpr => CExpr
@@ -43,7 +43,7 @@ val _ = Hol_datatype
          | CApUnary of c_unops => CExpr
          | Deref of CExpr
          | Addr of CExpr
-         | MemAddr of class_spec => StaticField
+         | MemAddr of CPP_ID => StaticField
          | Assign of c_binops option => CExpr => CExpr
          | SVar of CExpr => CPP_ID
          | FnApp of CExpr => CExpr list
@@ -62,7 +62,7 @@ val _ = Hol_datatype
             (* this is an object lvalue, the string list is the sub-object
                path a la Wasserab et al for values of class type.  Elsewhere
                the list will be empty *)
-         | LVal of num => CPP_Type => class_spec list
+         | LVal of num => CPP_Type => CPP_ID list
 
             (* this is a function l-value.  The expression argument represents
                the class object if the function is a member function, the
@@ -78,15 +78,15 @@ val _ = Hol_datatype
                within another object, NOT the inverse of mdp as members will
                be mdp and subobjp), the address where the object is
                being constructed, and the name of the class. *)
-         | ConstructorFVal of bool => bool => addr => class_spec
+         | ConstructorFVal of bool => bool => addr => CPP_ID
 
             (* this is the value "returned" from a constructor call.  The
                boolean is true iff the class is a sub-object.
             *)
-         | ConstructedVal of bool => addr => class_spec
+         | ConstructedVal of bool => addr => CPP_ID
 
              (* bool is mdp flag *)
-         | DestructorCall of addr => class_spec
+         | DestructorCall of addr => CPP_ID
          | RValreq of CExpr
          | ECompVal of byte list => CPP_Type
          | EThrow of CExpr option

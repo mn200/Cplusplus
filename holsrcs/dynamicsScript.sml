@@ -130,6 +130,11 @@ val installfn_def = Define`
 
 
 (* installing a bunch of member functions *)
+val mk_member_def = Define`
+  mk_member (IDConstant(b, sfs, sf1)) sf2 =
+    IDConstant(b, sfs ++ [sf1], sf2)
+`;
+
 
 (* imemfn is where the real work gets done - it takes a list of function
    definitions from with a class_info and "relationally" installs them into
@@ -145,10 +150,11 @@ val imemfn_def = Define`
           s
     =
      if statp then
-       ?s' fval. installfn s0 Ptr retty (Member cnm nm) params body fval s' /\
-                 imemfn cnm s' rest s
+       ?s' fval.
+            installfn s0 Ptr retty (mk_member cnm nm) params body fval s' /\
+            imemfn cnm s' rest s
      else
-       ?s' fval. installfn s0 (MPtr cnm) retty (Member cnm nm) params body
+       ?s' fval. installfn s0 (MPtr cnm) retty (mk_member cnm nm) params body
                            fval
                            s' /\
                  imemfn cnm s' rest s) /\
@@ -272,8 +278,8 @@ val construct_ctor_pfx_def = Define`
     virtuals ++ bases ++ nsds
 `;
 
-val callterminate = ``FnApp (Var  (IDConstant (T, ["std"], "terminate")))
-                            []``
+val callterminate =
+    ``FnApp (Var  (IDConstant (T, [SFName "std"], SFName "terminate"))) []``
 
 val realise_destructor_calls_def = Define`
   (* parameters
@@ -691,14 +697,16 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: mem-addr-static-nonfn *)
 (* 5.3.1 p2 if the address is taken of a qualified-ident that is actually a
-   static member, then a normal address is generated *)
+   static member, then a normal address is generated.
+   As it's an object type, it must be an SFName.
+*)
 (!cname cenv fldname se s addr ty cinfo prot pth ptrval userdefs.
      cname IN defined_classes s /\
      object_type ty /\
      (lookup_class s cname = SOME cenv) /\
      ((item cenv).info = SOME (cinfo, userdefs)) /\
      MEM (FldDecl fldname ty, T, prot) cinfo.fields /\
-     (lookup_addr s (IDFld cname (SFName fldname)) = SOME (addr, pth)) /\
+     (lookup_addr s (mk_member cname (SFName fldname)) = SOME (addr, pth)) /\
      (SOME ptrval = ptr_encode s addr ty pth)
    ==>
      ^mng (mExpr (MemAddr cname (SFName fldname)) se) s
@@ -780,13 +788,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    up the field is most derived (calculation of mdp below).
 
 *)
-(!s cnm1 cnm2 fld ftype se offn a mdp p p'.
+(!s cnm1 cnm2 fldid ftype se offn a mdp p p'.
      s |- path (LAST p) to cnm2 via p' /\
      object_type ftype /\
      (mdp = (cnm1 = cnm2) /\ (p = [cnm1])) /\
-     (SOME offn = lookup_offset s mdp (IDFld cnm2 fld))
+     (class_part fldid = cnm2) /\
+     (SOME offn = lookup_offset s mdp fldid)
    ==>
-     ^mng (mExpr (SVar (LVal a (Class cnm1) p) (IDFld cnm2 fld)) se) s
+     ^mng (mExpr (SVar (LVal a (Class cnm1) p) fldid) se) s
           (s, ev (LVal (a + subobj_offset s (cnm1, p ^ p') + offn) ftype
                        (default_path ftype)) se))
 
@@ -807,8 +816,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
              (SFName fld) -: (static_retty,args0,body0) via Ds /\
      s |- (C,Cs ^ Ds) selects (SFName fld) -: (dyn_retty,args,body) via Cs'
    ==>
-     ^mng (mExpr (SVar (LVal a (Class C) Cs) (IDConstant(F, [], fld))) se) s
-          (s, ev (FVal (Member (LAST Cs') (SFName fld))
+     ^mng (mExpr (SVar (LVal a (Class C) Cs)
+                       (IDConstant(F, [], SFName fld))) se) s
+          (s, ev (FVal (mk_member (LAST Cs') (SFName fld))
                        (Function dyn_retty (MAP SND args))
                        (SOME (LVal a (Class C) Cs')))
                  se))

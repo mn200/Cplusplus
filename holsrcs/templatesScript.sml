@@ -98,7 +98,7 @@ val expr_ttypes_def = Define`
   (expr_ttypes (Addr e) = expr_ttypes e) /\
   (expr_ttypes (MemAddr cid sfld) = cidttypes cid) /\
   (expr_ttypes (Assign bopt e1 e2) = expr_ttypes e1 UNION expr_ttypes e2) /\
-  (expr_ttypes (SVar e sfld) = expr_ttypes e UNION sfld_ttypes sfld) /\
+  (expr_ttypes (SVar e cid) = expr_ttypes e UNION cidttypes cid) /\
   (expr_ttypes (FnApp e elist) = expr_ttypes e UNION exprl_ttypes elist) /\
   (expr_ttypes (CommaSep e1 e2) = expr_ttypes e1 UNION expr_ttypes e2) /\
   (expr_ttypes (Cast ty e) = ttypes ty UNION expr_ttypes e) /\
@@ -170,15 +170,17 @@ val stmt_ttypes_defn = Defn.Hol_defn "stmt_ttypes" `
        (case cinfo_opt of
            NONE -> {}
         || SOME cinfo -> cinfo_ttypes cinfo)
-     else {}) 
+     else {})
 
      /\
-   
-  (centry_ttypes (CFnDefn retty sfld params bodyopt) =
+
+  (centry_ttypes (CFnDefn virtp retty sfld params bodyoptopt) =
      if sfldfrees sfld = {} then
        ttypes retty UNION sfld_ttypes sfld UNION
        FOLDL (\a (nm,ty). a UNION ttypes ty) {} params UNION
-       (case bodyopt of NONE -> {} || SOME st -> stmt_ttypes st)
+       (case bodyoptopt of NONE -> {}
+                        || SOME NONE -> {}
+                        || SOME (SOME st) -> stmt_ttypes st)
      else {}) /\
   (centry_ttypes (FldDecl string ty) = ttypes ty) /\
   (centry_ttypes (Constructor params meminits bodyopt) =
@@ -188,7 +190,7 @@ val stmt_ttypes_defn = Defn.Hol_defn "stmt_ttypes" `
               a UNION mem_init_id_ttypes memid UNION
               exprlopt_ttypes argsopt)
            {} meminits) /\
-  (centry_ttypes (Destructor bodyopt) =
+  (centry_ttypes (Destructor virtp bodyopt) =
      case bodyopt of NONE -> {} || SOME s -> stmt_ttypes s) /\
 
   (cinfo_ttypes ci =
@@ -222,7 +224,7 @@ val _ = save_thm("stmt_ttypes_def", stmt_ttypes_def)
 val _ = save_thm("stmt_ttypes_ind", stmt_ttypes_ind)
 val _ = export_rewrites ["stmt_ttypes_def"]
 
-val extdecl_ttypes_def = Define`
+val extdecl_ttypes_defn = Defn.Hol_defn "extdecl_ttypes" `
   (extdecl_ttypes (FnDefn ty nm params body) =
      if cppidfrees nm = {} then
        ttypes ty UNION cidttypes nm UNION
@@ -236,9 +238,24 @@ val extdecl_ttypes_def = Define`
      else {}) /\
   (extdecl_ttypes (ClassDestDef id body) =
      if cppidfrees id = {} then
-       centry_ttypes (Destructor (SOME body))
-     else {})
+       centry_ttypes (Destructor T (SOME body))
+     else {}) /\
+  (extdecl_ttypes (NameSpace n edecs) =
+     FOLDL (\a ed. a UNION extdecl_ttypes ed) {} edecs)
 `;
+
+val (extdecl_ttypes_def, extdecl_ttypes_ind) = Defn.tprove(
+  extdecl_ttypes_defn,
+  WF_REL_TAC `measure ext_decl_size` THEN
+  Induct_on `edecs` THEN
+  SRW_TAC [][#2 (TypeBase.size_of ``:ext_decl``)] THEN
+  SRW_TAC [ARITH_ss][] THEN
+  FIRST_X_ASSUM (Q.SPECL_THEN [`n`, `ed`] MP_TAC) THEN
+  SRW_TAC [ARITH_ss][]);
+
+val _ = save_thm("extdecl_ttypes_def", extdecl_ttypes_def)
+val _ = save_thm("extdecl_ttypes_ind", extdecl_ttypes_ind)
+val _ = export_rewrites ["extdecl_ttypes_def"]
 
 
 (* ----------------------------------------------------------------------
@@ -665,13 +682,13 @@ val edec_ctxt_def = Define`
       ctxt with vars updated_by (\fm. fm |+ (nm,ty))) /\
   (edec_ctxt ctxt (Decl (VStrDec nm NONE)) = ctxt) /\
   (edec_ctxt ctxt (Decl (VStrDec nm (SOME ci))) =
-      ctxt with classes updated_by (\fm. fm |+ (nm, ci))) 
+      ctxt with classes updated_by (\fm. fm |+ (nm, ci)))
 `;
 
 
 
 
-(* create a context or name environment  for scanning a function body or 
+(* create a context or name environment  for scanning a function body or
    expression. The nm is the name of the function, which is used to determine
    the type of "this" *)
 val mk_initial_ctxt_def = Define`
@@ -699,26 +716,26 @@ val already_present_def = Define`
          (MAP SND params = ptypes)) /\
   (already_present residuals (CallDestructor id) =
       ?body. MEM (ClassDestDef id body) residuals) /\
-  (already_present residuals (StaticVar cnm fldname) = 
+  (already_present residuals (StaticVar cnm fldname) =
       ?ty init. MEM (Decl (VDecInit ty (IDFld cnm (SFName fldname)) init))
                     residuals)
 `;
 
-(* a comparison function for external declarations, lifting the order on 
+(* a comparison function for external declarations, lifting the order on
    identifiers *)
 val decl_comp_def = Define`
-  (decl_comp (FnDefn _ nm1 _ _) (FnDefn _ nm2 _ _) = 
+  (decl_comp (FnDefn _ nm1 _ _) (FnDefn _ nm2 _ _) =
      ?sub. cppID_inst sub nm1 = SOME nm2) /\
   (decl_comp (Decl d1) (Decl d2) = ?sub. vdec_inst sub d1 = SOME d2) /\
-  (decl_comp (ClassConDef nm1 _ _ _) (ClassConDef nm2 _ _ _) = 
+  (decl_comp (ClassConDef nm1 _ _ _) (ClassConDef nm2 _ _ _) =
      ?sub. cppID_inst sub nm1 = SOME nm2) /\
-  (decl_comp (ClassDestDef nm1 _) (ClassDestDef nm2 _) = 
+  (decl_comp (ClassDestDef nm1 _) (ClassDestDef nm2 _) =
      ?sub. cppID_inst sub nm1 = SOME nm2) /\
   (decl_comp _ _ = F)
 `;
 
 val setmax_def = Define`
-  setmax order s = if ?e. e IN s /\ (!e'. e' IN s ==> order e' e) then 
+  setmax order s = if ?e. e IN s /\ (!e'. e' IN s ==> order e' e) then
                      SOME (@e. e IN s /\ !e'. e' IN s ==> order e' e)
                    else NONE
 `;
@@ -726,7 +743,7 @@ val setmax_def = Define`
 val setmax_unique = store_thm(
   "setmax_unique",
   ``(!e f. order e f /\ order f e ==> (e = f)) /\
-    e IN s /\ (!e'. e' IN s ==> order e' e) ==> 
+    e IN s /\ (!e'. e' IN s ==> order e' e) ==>
     (setmax order s = SOME e)``,
   SRW_TAC [][setmax_def] THENL [
     SELECT_ELIM_TAC THEN CONJ_TAC THEN METIS_TAC [],
@@ -745,30 +762,30 @@ val best_class_match_def = Define`
 
 (* "returns" the uninstantiated decl for the given function identifier *)
 val best_function_match_def = Define`
-  best_function_match Temps id sub (id', decl) = 
+  best_function_match Temps id sub (id', decl) =
     (cppID_inst sub id' = SOME id) /\
-    ?retty ptys. 
+    ?retty ptys.
       (Decl (VDec (Function retty ptys) id) = decl) /\
       decl IN Temps /\
-      !retty' ptys' id2. 
-         Decl (VDec (Function retty' ptys') id2) IN Temps ==> 
+      !retty' ptys' id2.
+         Decl (VDec (Function retty' ptys') id2) IN Temps ==>
          ?sub'. cppID_inst sub' id2 = SOME id'
 `
 
 val fndefn_by_name_def = Define`
-  fndefn_by_name Templates fnm = 
+  fndefn_by_name Templates fnm =
     THEOPT d. ?r p b. (d = FnDefn r fnm p b) /\ d IN Templates
 `;
 
 val find_defn_def = Define`
   (find_defn Templates (FnCall id) =
       case id of
-         IDFld cnm sfld -> 
-          (let (sub, cnm', ci) = 
+         IDFld cnm sfld ->
+          (let (sub, cnm', ci) =
               (@(sub,cnm',ci). best_class_match Templates cnm sub (cnm', ci)) in
-           let (sfsub,sfld',decl0) = 
-               (@(sfsub,sfld',decl0). best_function_match 
-                                         Templates 
+           let (sfsub,sfld',decl0) =
+               (@(sfsub,sfld',decl0). best_function_match
+                                         Templates
                                          (IDFld cnm' sfld)
                                          sfsub
                                          (IDFld cnm' sfld', decl0)) in
@@ -777,56 +794,56 @@ val find_defn_def = Define`
              OPTION_MAP (THE o extdecl_inst (inst_comp sfsub sub))
                         (fndefn_by_name Templates best_declared_name))
       || IDVar s -> NONE (* can't happen *)
-      || IDConstant tn -> NONE (* this is a reference to a non-template 
-                                  function that doesn't have a definition in 
-                                  Residuals.  It's not going to have a 
-                                  Templates definition (TODO no implicit use of 
+      || IDConstant tn -> NONE (* this is a reference to a non-template
+                                  function that doesn't have a definition in
+                                  Residuals.  It's not going to have a
+                                  Templates definition (TODO no implicit use of
                                   template functions TODO) *)
-      || IDTempCall tid targs -> 
-           let (sub,id',decl0) = 
+      || IDTempCall tid targs ->
+           let (sub,id',decl0) =
                @(sub,id',decl0). best_function_match Templates
                                    id
                                    sub
-                                   (id', decl0) 
+                                   (id', decl0)
            in
-             OPTION_MAP (THE o extdecl_inst sub) 
+             OPTION_MAP (THE o extdecl_inst sub)
                         (fndefn_by_name Templates id')) /\
-  (find_defn Templates (CallConstructor cnm ptys) = 
-      let (sub,cnm',ci) = 
-         @(sub,cnm',ci). best_class_match Templates cnm sub (cnm',ci) 
+  (find_defn Templates (CallConstructor cnm ptys) =
+      let (sub,cnm',ci) =
+         @(sub,cnm',ci). best_class_match Templates cnm sub (cnm',ci)
       in
-         OPTION_MAP (THE o extdecl_inst sub) 
-                    (THEOPT d. ?params meminits body. 
+         OPTION_MAP (THE o extdecl_inst sub)
+                    (THEOPT d. ?params meminits body.
                         (d = ClassConDef cnm' params meminits body) /\
                         d IN Templates /\
                         (MAP (THE o type_inst sub o SND) params = ptys))) /\
-  (find_defn Templates (CallDestructor cnm) = 
-     let (sub,cnm',ci) = 
-         @(sub,cnm',ci). best_class_match Templates cnm sub (cnm',ci) 
-     in
-         OPTION_MAP (THE o extdecl_inst sub) 
-                    (THEOPT d. ?body. 
-                       (d = ClassDestDef cnm' body) /\ d IN Templates)) /\
-  (find_defn Templates (StaticVar cnm s) = 
-     let (sub,cnm',ci) = 
+  (find_defn Templates (CallDestructor cnm) =
+     let (sub,cnm',ci) =
          @(sub,cnm',ci). best_class_match Templates cnm sub (cnm',ci)
      in
          OPTION_MAP (THE o extdecl_inst sub)
-                    (THEOPT d. ?ty init. 
+                    (THEOPT d. ?body.
+                       (d = ClassDestDef cnm' body) /\ d IN Templates)) /\
+  (find_defn Templates (StaticVar cnm s) =
+     let (sub,cnm',ci) =
+         @(sub,cnm',ci). best_class_match Templates cnm sub (cnm',ci)
+     in
+         OPTION_MAP (THE o extdecl_inst sub)
+                    (THEOPT d. ?ty init.
                        (d = Decl (VDecInit ty (IDFld cnm' (SFName s)) init)) /\
                        d IN Templates))
 `
 
 (* given a ground external declaration that we're seeing for the first time,
-   extract any template types, and put them onto the work list, ahead of the 
+   extract any template types, and put them onto the work list, ahead of the
    original external declaration attached to 1 (rather than zero), to signify
    that this step has been performed *)
 val insert_type_requirements_def = Define`
-  insert_type_requirements Templates Residuals Needs edecs edec = 
+  insert_type_requirements Templates Residuals Needs edecs edec =
     let tys = extdecl_ttypes edec in
     let cmp id1 id2 = CPP_ID_size id1 <= CPP_ID_size id2 in
     let tyl = QSORT cmp
-                (SET_TO_LIST (IMAGE (\ (tid,targs). 
+                (SET_TO_LIST (IMAGE (\ (tid,targs).
                                        IDTempCall tid targs)
                                     tys))
     in
@@ -840,47 +857,47 @@ val insert_type_requirements_def = Define`
 (* first thing to do on seeing a function definition (could be member function
    or not), is to check if it's at a ground type, or a template definition.
    If the latter, just put it into the Templates field, and check to see
-   whether or not it might be needed.  
+   whether or not it might be needed.
 
    Otherwise, scan it for ground template types, and put these onto
    the work-list.  *)
 
 val fndefn0_def = Define`
   fndefn0 Templates Residuals Needs edecs edec =
-    let checkid = case edec of 
+    let checkid = case edec of
                      FnDefn ty nm ps b -> SOME nm
                   || ClassConDef nm params memints b -> SOME nm
                   || ClassDestDef nm b -> SOME nm
                   || Decl d -> NONE
     in
-      case checkid of 
-        SOME nm -> 
+      case checkid of
+        SOME nm ->
           if cppidfrees nm = {} then
             if MEM edec Residuals then
               Running (Templates, Residuals, Needs, edecs)
             else
               insert_type_requirements Templates Residuals Needs edecs edec
-          else (* here we could also check that edec is not a partial 
-                  specialisation occurring before the general pattern is 
+          else (* here we could also check that edec is not a partial
+                  specialisation occurring before the general pattern is
                   given *)
             (let newTemps = edec INSERT Templates in
-             let (new_instances, newNeeds) = 
+             let (new_instances, newNeeds) =
                   optimage (find_defn newTemps) Needs
              in
-               Running (newTemps, 
-                        Residuals, 
-                        newNeeds, 
+               Running (newTemps,
+                        Residuals,
+                        newNeeds,
                         MAP (\e. (e,0n)) (SET_TO_LIST new_instances) ++ edecs))
       || NONE -> Failed
 `;
 
 (* defining/initialising a variable is just like defining a function *)
 val var_init0_def = Define`
-  var_init0 Templates Residuals Needs edecs (ty,nm,init) = 
+  var_init0 Templates Residuals Needs edecs (ty,nm,init) =
     let edec = Decl (VDecInit ty nm init)
     in
-      if cppidfrees nm = {} then 
-        if MEM edec Residuals then 
+      if cppidfrees nm = {} then
+        if MEM edec Residuals then
           Running(Templates, Residuals, Needs, edecs)
         else
           insert_type_requirements Templates Residuals Needs edecs edec
@@ -889,26 +906,26 @@ val var_init0_def = Define`
         let newTemps = edec INSERT Templates in
         let (new_instances, newNeeds) = optimage (find_defn newTemps) Needs
         in
-          Running(newTemps, Residuals, newNeeds, 
+          Running(newTemps, Residuals, newNeeds,
                   MAP (\e. (e,0n)) (SET_TO_LIST new_instances) ++ edecs)
 `
 
 (* strip function definitions out of a cinfo *)
 val strip_centry_defs_def = Define`
-  (strip_centry_defs cnm (CFnDefn ty snm params (SOME body)) = 
+  (strip_centry_defs cnm (CFnDefn ty snm params (SOME body)) =
      (CFnDefn ty snm params NONE, [FnDefn ty (IDFld cnm snm) params body])) /\
-  (strip_centry_defs cnm (Constructor params meminits (SOME body)) = 
+  (strip_centry_defs cnm (Constructor params meminits (SOME body)) =
      (Constructor params [] NONE, [ClassConDef cnm params meminits body])) /\
-  (strip_centry_defs cnm (Destructor (SOME body)) = 
+  (strip_centry_defs cnm (Destructor (SOME body)) =
      (Destructor NONE, [ClassDestDef cnm body])) /\
   (strip_centry_defs cnm x = (x, []))
 `;
 val strip_cinfo_defs_def = Define`
-  strip_cinfo_defs cnm ci = 
-    let (newfields, extdefs) = 
-        FOLDL (\ (flds, defs) (e,b,p). 
+  strip_cinfo_defs cnm ci =
+    let (newfields, extdefs) =
+        FOLDL (\ (flds, defs) (e,b,p).
                let (fld, edefs) = strip_centry_defs cnm e
-               in 
+               in
                  (flds ++ [(fld,b,p)], defs ++ edefs))
               ([], [])
               ci.fields
@@ -918,61 +935,61 @@ val strip_cinfo_defs_def = Define`
 
 (* declaring/defining a class type - phase 0 *)
 val str_init0_def = Define`
-  (str_init0 Templates Residuals Needs edecs (cnm, NONE) = 
-     let edec = Decl (VStrDec cnm NONE) 
+  (str_init0 Templates Residuals Needs edecs (cnm, NONE) =
+     let edec = Decl (VStrDec cnm NONE)
      in
-       (* declaring a type, which may be requesting an instantiation if the 
+       (* declaring a type, which may be requesting an instantiation if the
           type-name is ground and a template form *)
-       if cppidfrees cnm = {} then 
-         if MEM edec Residuals then 
+       if cppidfrees cnm = {} then
+         if MEM edec Residuals then
            Running(Templates, Residuals, Needs, edecs)
-         else 
-           (* need to look this type up, and see if there is a generalised 
+         else
+           (* need to look this type up, and see if there is a generalised
               cinfo for it that we can instantiate. *)
-           case cnm of 
+           case cnm of
               IDVar v -> Failed (* can't happen *)
-           || IDConstant tn -> (* it's a forward declaration of a normal 
+           || IDConstant tn -> (* it's a forward declaration of a normal
                                   class *)
                 Running(Templates, edec :: Residuals, Needs, edecs)
            || IDFld id sfld -> Failed (* can't happen *)
-           || IDTempCall tid targs -> 
-                let (sub,cnm',ci) = 
-                  @(sub,cnm',ci). best_class_match Templates cnm sub (cnm',ci) 
+           || IDTempCall tid targs ->
+                let (sub,cnm',ci) =
+                  @(sub,cnm',ci). best_class_match Templates cnm sub (cnm',ci)
                 in
-                  case ci of 
+                  case ci of
                      NONE -> Failed
-                  || SOME cinfo -> 
-                      (* found something to instantiate.  Don't want to 
+                  || SOME cinfo ->
+                      (* found something to instantiate.  Don't want to
                          have member functions defined here though, so these
                          get stripped out *)
                       let cinfo' = THE (cinfo_inst sub cinfo) in
                       let cinfo'' = FST (strip_cinfo_defs cnm' cinfo')
                       in
-                          insert_type_requirements 
-                            Templates Residuals 
-                            Needs edecs 
+                          insert_type_requirements
+                            Templates Residuals
+                            Needs edecs
                             (Decl (VStrDec cnm (SOME cinfo'')))
        else (* forward declaration of a template type *)
          Running (edec INSERT Templates, Residuals, Needs, edecs)) /\
-  (str_init0 Templates Residuals Needs edecs (cnm, SOME cinfo) = 
+  (str_init0 Templates Residuals Needs edecs (cnm, SOME cinfo) =
      let edec = Decl (VStrDec cnm (SOME cinfo))
      in
-       if cppidfrees cnm = {} then 
-         if MEM edec Residuals then 
+       if cppidfrees cnm = {} then
+         if MEM edec Residuals then
            Running (Templates, Residuals, Needs, edecs)
          else
            let cinfo' = FST (strip_cinfo_defs cnm cinfo)
            in
-             insert_type_requirements Templates Residuals Needs edecs 
+             insert_type_requirements Templates Residuals Needs edecs
                                       (Decl(VStrDec cnm (SOME cinfo')))
        else
-         let (cinfo', newdefs) = strip_cinfo_defs cnm cinfo in 
+         let (cinfo', newdefs) = strip_cinfo_defs cnm cinfo in
          let new_edec = Decl (VStrDec cnm (SOME cinfo')) in
          let new_edecs = new_edec INSERT LIST_TO_SET newdefs
          in
            Running (new_edecs UNION Templates, Residuals, Needs, edecs))
 `
-                    
+
 (* if we get this far, we can be sure that all the ground type declarations
    are in scope, and that the function we're looking at is itself not a
    template.  Now we have to see what functions might also be required.
@@ -996,15 +1013,15 @@ val fndefn1_def = Define`
     let (NewlyInstantiated, NewNeeds) = optimage (find_defn Templates) newfns
     in
       Running(Templates, edec :: Residuals, NewNeeds UNION Needs,
-              MAP (\e. (e,0n)) (SET_TO_LIST NewlyInstantiated) ++ 
+              MAP (\e. (e,0n)) (SET_TO_LIST NewlyInstantiated) ++
               edecs)
 `;
 
-(* when a variable initialisation has had its referred-to types dealt with, 
-   we have to look at the initialising expression, which may involve 
+(* when a variable initialisation has had its referred-to types dealt with,
+   we have to look at the initialising expression, which may involve
    references to template things *)
 val var_init1_def = Define`
-  var_init1 Templates Residuals Needs edecs (ty,nm,init) = 
+  var_init1 Templates Residuals Needs edecs (ty,nm,init) =
     let vd = VDecInit ty nm init in
     let edec = Decl vd in
     let ctxt = mk_initial_ctxt Templates Residuals (IDConstant ARB) [] in
@@ -1013,55 +1030,55 @@ val var_init1_def = Define`
     let (NewlyInstantiated, NewNeeds) = optimage (find_defn Templates) newfns
     in
       Running (Templates, edec :: Residuals, NewNeeds UNION Needs,
-               MAP (\e. (e,0n)) (SET_TO_LIST NewlyInstantiated) ++ 
+               MAP (\e. (e,0n)) (SET_TO_LIST NewlyInstantiated) ++
                edecs)
 `
 
 (* the only thing that needs to be resolved after a struct's type dependencies
    have been dealt with is the struct's static data members.  *)
 val str_init1_def = Define`
-  str_init1 Templates Residuals Needs edecs (cnm, cinfo_opt) = 
-    let (sub,cnm',ci) = 
+  str_init1 Templates Residuals Needs edecs (cnm, cinfo_opt) =
+    let (sub,cnm',ci) =
         @(sub,cnm',ci). best_class_match Templates cnm sub (cnm',ci) in
     let cinfo = THE (cinfo_inst sub (THE ci)) in
-    let stat_flds = 
-        mapPartial 
-          ( \(ce,b,p). if b then 
-                         case ce of 
-                            FldDecl nm ty -> 
+    let stat_flds =
+        mapPartial
+          ( \(ce,b,p). if b then
+                         case ce of
+                            FldDecl nm ty ->
                                    if function_type ty then NONE
                                    else SOME (StaticVar cnm nm)
                          || _ -> NONE
                        else NONE)
           cinfo.fields in
-    let (NewlyInstantiated, NewNeeds) = optimage (find_defn Templates) 
+    let (NewlyInstantiated, NewNeeds) = optimage (find_defn Templates)
                                                  (LIST_TO_SET stat_flds)
     in
-      Running(Templates, Residuals, Needs UNION NewNeeds, 
+      Running(Templates, Residuals, Needs UNION NewNeeds,
               MAP (\e. (e,0n)) (SET_TO_LIST NewlyInstantiated) ++ edecs)
 `
-        
+
 
 val decl_instantiate_def = Define`
-  decl_instantiate Templates Residuals Needs edecs d m = 
-    case d of 
-       VDec ty nm -> 
-          if m = 0 then 
-            if cppidfrees nm = {} then 
-              insert_type_requirements Templates Residuals Needs edecs (Decl d) 
+  decl_instantiate Templates Residuals Needs edecs d m =
+    case d of
+       VDec ty nm ->
+          if m = 0 then
+            if cppidfrees nm = {} then
+              insert_type_requirements Templates Residuals Needs edecs (Decl d)
             else
               (* is a declaration of a template function *)
               Running(Decl d INSERT Templates, Residuals, Needs, edecs)
-          else 
+          else
             Running(Templates, Decl d :: Residuals, Needs, edecs)
-    || VDecInit ty nm init -> 
+    || VDecInit ty nm init ->
           if m = 0n then var_init0 Templates Residuals Needs edecs (ty,nm,init)
           else var_init1 Templates Residuals Needs edecs (ty,nm,init)
-    || VStrDec cnm cinfo -> 
+    || VStrDec cnm cinfo ->
           if m = 0 then str_init0 Templates Residuals Needs edecs (cnm, cinfo)
           else str_init1 Templates Residuals Needs edecs (cnm, cinfo)
     || _ -> Failed
-` 
+`
 
 
 val prog_inst_def = Define`
@@ -1071,13 +1088,13 @@ val prog_inst_def = Define`
     || ((edec,m) :: edecs) ->
           (case edec of
               Decl d -> decl_instantiate Templates Residuals Needs edecs d m
-           || _ -> 
+           || _ ->
                 if m = 0 then fndefn0 Templates Residuals Needs edecs edec
                 else fndefn1 Templates Residuals Needs edecs edec)
 `
 
 val program_instantiate_def = Define`
-  program_instantiate edecs = 
+  program_instantiate edecs =
     WHILE (\s. case s of Running x -> T || y -> F)
           (\s. case s of Running x -> prog_inst x)
           (Running({}, [], {}, MAP (\e. (e,0)) edecs))
