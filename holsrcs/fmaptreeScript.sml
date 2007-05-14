@@ -3,6 +3,17 @@ open BasicProvers
 
 open finite_mapTheory
 
+(* an fmaptree is a type of tree, where branching is controlled by a
+   finite-map.  The one constructor is
+   
+    FTNode : 'a -> ('k |-> ('a,'k)fmaptree) -> ('a,'k)fmaptree
+  
+   This is rather like a trie.
+
+   There is an induction principle (ft_ind), where you are able to assume
+   that your predicate P holds of every subtree.
+*)
+
 val _ = new_theory "fmaptree";
 
 val construct_def = Define`
