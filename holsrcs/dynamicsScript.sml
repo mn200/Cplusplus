@@ -131,8 +131,7 @@ val installfn_def = Define`
 
 (* installing a bunch of member functions *)
 val mk_member_def = Define`
-  mk_member (IDConstant(b, sfs, sf1)) sf2 =
-    IDConstant(b, sfs ++ [sf1], sf2)
+  mk_member (IDConstant b sfs sf1) sf2 = IDConstant b (sfs ++ [sf1]) sf2
 `;
 
 
@@ -279,7 +278,7 @@ val construct_ctor_pfx_def = Define`
 `;
 
 val callterminate =
-    ``FnApp (Var  (IDConstant (T, [SFName "std"], SFName "terminate"))) []``
+    ``FnApp (Var  (IDConstant T [SFName "std"] (SFName "terminate"))) []``
 
 val realise_destructor_calls_def = Define`
   (* parameters
@@ -817,7 +816,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      s |- (C,Cs ^ Ds) selects (SFName fld) -: (dyn_retty,args,body) via Cs'
    ==>
      ^mng (mExpr (SVar (LVal a (Class C) Cs)
-                       (IDConstant(F, [], SFName fld))) se) s
+                       (IDConstant F [] (SFName fld))) se) s
           (s, ev (FVal (mk_member (LAST Cs') (SFName fld))
                        (Function dyn_retty (MAP SND args))
                        (SOME (LVal a (Class C) Cs')))

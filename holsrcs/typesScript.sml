@@ -15,8 +15,7 @@ val _ = Hol_datatype `basic_integral_type = Char | Short | Int | Long`;
 val _ = Hol_datatype `
 
    (* a CPP_ID may denote a type or an object *)
-   CPP_ID = IDVar of string (* can have a type substituted for this *)
-          | IDConstant of bool # StaticField list # StaticField
+   CPP_ID = IDConstant of bool => StaticField list => StaticField
 
    ;
 
@@ -68,12 +67,7 @@ val _ = Hol_datatype `
 val _ = export_rewrites [ "CPP_ID_size_def" ]
 
 val Base_def = Define`
-  Base n = IDConstant (F, [], SFName n)
-`;
-
-val namespaces_def = Define`
-  (id_namespaces (IDConstant (b, list, n)) = (b, list)) /\
-  (id_namespaces (IDVar s) = (F, []))
+  Base n = IDConstant F [] (SFName n)
 `;
 
 val sfld_basename_def = Define`
@@ -82,79 +76,9 @@ val sfld_basename_def = Define`
 `;
 
 val is_abs_id_def = Define`
-  (is_abs_id (IDConstant(b, ns, n)) = b) /\
-  (is_abs_id (IDVar s) = F)
+  (is_abs_id (IDConstant b ns n) = b)
 `;
 
-
-val _ = Hol_datatype `tvar_sort = TempV of string
-                                | TypeV of string
-                                | ObjV of string`
-
-val type_free_vars_defn = Hol_defn "type_free_vars" `
-  (id_free_vars (IDConstant trip) = {}) /\
-  (id_free_vars (IDVar s) = {TypeV s})
-
-     /\
-
-  (sfld_free_vars (SFTempCall tname targs) =
-     FOLDL (\acc targ. acc UNION targ_free_vars targ) {} targs) /\
-  (sfld_free_vars (SFName nm) = {})
-
-     /\
-
-  (targ_free_vars (TType ty) = type_free_vars ty) /\
-  (targ_free_vars (TTemp tid) = id_free_vars tid) /\
-  (targ_free_vars (TVal tva) = tva_free_vars tva)
-
-     /\
-
-  (tva_free_vars (TNum i) = {}) /\
-  (tva_free_vars (TObj id) = id_free_vars id) /\
-  (tva_free_vars (TMPtr id ty) = id_free_vars id UNION type_free_vars ty) /\
-  (tva_free_vars (TVAVar s) = {ObjV s})
-
-     /\
-
-  (type_free_vars Void = {}) /\
-  (type_free_vars BChar = {}) /\
-  (type_free_vars Bool = {}) /\
-  (type_free_vars (Unsigned bit) = {}) /\
-  (type_free_vars (Signed bit) = {}) /\
-  (type_free_vars (Class id) = {}) /\ (* well-formedness assumption *)
-  (type_free_vars Float = {}) /\
-  (type_free_vars Double = {}) /\
-  (type_free_vars LDouble = {}) /\
-  (type_free_vars (Ptr ty) = type_free_vars ty) /\
-  (type_free_vars (MPtr id ty) = id_free_vars id UNION type_free_vars ty) /\
-  (type_free_vars (Ref ty) = type_free_vars ty) /\
-  (type_free_vars (Array ty n) = type_free_vars ty) /\ (* TODO: const-expr *)
-  (type_free_vars (Function ret args) =
-     type_free_vars ret UNION
-     FOLDL (\acc ty. acc UNION type_free_vars ty) {} args) /\
-  (type_free_vars (Const ty) = type_free_vars ty) /\
-  (type_free_vars (TypeID id) = id_free_vars id)
-`;
-
-val (type_free_vars_def, type_free_vars_ind) = Defn.tprove(
-  type_free_vars_defn,
-  WF_REL_TAC
-    `measure
-      (\sum.
-       case sum of
-          INL id -> CPP_ID_size id
-       || INR (INL sfld) -> StaticField_size sfld
-       || INR (INR (INL targ)) -> TemplateArg_size targ
-       || INR (INR (INR (INL tva))) -> TemplateValueArg_size tva
-       || INR (INR (INR (INR ty))) -> CPP_Type_size ty)` THEN
-  SRW_TAC [ARITH_ss][] THENL [
-    Induct_on `args` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
-    RES_TAC THEN DECIDE_TAC,
-    Induct_on `targs` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
-    RES_TAC THEN DECIDE_TAC
-  ]);
-val _ = save_thm("type_free_vars_def", type_free_vars_def)
-val _ = export_rewrites ["type_free_vars_def"]
 
 val ptrdiff_t = Rsyntax.new_specification {
   consts = [{const_name = "ptrdiff_t", fixity = Prefix}],

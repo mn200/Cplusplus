@@ -405,7 +405,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      object_type ty /\
      ~class_type (strip_array ty)
    ==>
-     declmng mng (VDec ty (IDConstant(F, [], SFName name)), s0) ([], s))
+     declmng mng (VDec ty (IDConstant F [] (SFName name)), s0) ([], s))
 
    /\
 
@@ -438,7 +438,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                                 base_se)))
                (array_size ty))
    ==>
-     declmng mng (VDec ty (IDConstant(F,[],SFName name)), s0)
+     declmng mng (VDec ty (IDConstant F [] (SFName name)), s0)
                  (subdecls, s))
 
    /\
@@ -464,7 +464,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
              (VDecInit ty
-                       (IDConstant(F,[],SFName name))
+                       (IDConstant F [] (SFName name))
                        (DirectInit0 args),
               s0)
              ([VDecInitA ty
@@ -517,7 +517,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
              (VDecInit ty
-                       (IDConstant(F,[],SFName name))
+                       (IDConstant F [] (SFName name))
                        (DirectInit0 [arg]), s0)
              ([VDecInitA ty loc (CopyInit (mExpr arg base_se))], s))
 
@@ -530,7 +530,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      (loc = if ref_type ty then RefPlace NONE (Base name) else ObjPlace a)
    ==>
      declmng mng
-             (VDecInit ty (IDConstant(F,[],SFName name)) (CopyInit arg), s0)
+             (VDecInit ty (IDConstant F [] (SFName name)) (CopyInit arg), s0)
              ([VDecInitA ty loc (CopyInit arg)], s))
 
    /\

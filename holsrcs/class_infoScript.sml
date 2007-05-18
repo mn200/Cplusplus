@@ -573,18 +573,18 @@ val field_type_def = Define`
 `;
 
 val class_part_def = Define`
-  class_part (IDConstant(b, h :: t, sf)) =
-             IDConstant(b, FRONT (h :: t), LAST (h :: t))
+  class_part (IDConstant b (h :: t) sf) =
+      IDConstant b (FRONT (h :: t)) (LAST (h :: t))
 `;
 
 (* looks up an identifier corresponding to an object, and returns its type *)
 val elookup_type_def = Define`
-  (elookup_type env (IDConstant (b, [], sf)) =
+  (elookup_type env (IDConstant b [] sf) =
      FLOOKUP (item env).typemap sf) /\
-  (elookup_type env (IDConstant (b, SFName h :: t, sf)) =
+  (elookup_type env (IDConstant b (SFName h :: t) sf) =
      if SFName h IN FDOM (item env).classenv then
        case celookup_class (item env).classenv
-                           (class_part (IDConstant(b, SFName h :: t, sf)))
+                           (class_part (IDConstant b (SFName h :: t) sf))
        of
           NONE -> NONE
        || SOME cenv -> (case (item cenv).info of
@@ -593,39 +593,38 @@ val elookup_type_def = Define`
      else
        case FLOOKUP (map env) h of
           NONE -> NONE
-       || SOME e' -> elookup_type e' (IDConstant (b, t, sf))) /\
-  (elookup_type env (IDConstant (b, sf1 :: t, sf)) =
+       || SOME e' -> elookup_type e' (IDConstant b t sf)) /\
+  (elookup_type env (IDConstant b (sf1 :: t) sf) =
      case celookup_class (item env).classenv
-                         (class_part (IDConstant(b, sf1 :: t, sf)))
+                         (class_part (IDConstant b (sf1 :: t) sf))
      of
         NONE -> NONE
      || SOME cenv -> (case (item cenv).info of
                          NONE -> NONE
-                      || SOME ci -> field_type ci sf)) /\
-  (elookup_type env _ = NONE)
+                      || SOME ci -> field_type ci sf))
 `;
 
 (* looks up an object identifier and returns its address *)
 val elookup_addr_def = Define`
   (* must be a SFName, a template id could only be to a function, which is
      not an object *)
-  (elookup_addr env (IDConstant (b, [], SFName n)) =
+  (elookup_addr env (IDConstant b [] (SFName n)) =
      FLOOKUP (item env).varmap n) /\
-  (elookup_addr env (IDConstant (b, SFName h::t, SFName n)) =
+  (elookup_addr env (IDConstant b (SFName h::t) (SFName n)) =
      if SFName h IN FDOM (item env).classenv then
        case celookup_class
               (item env).classenv
-              (class_part (IDConstant(b, SFName h::t, SFName n)))
+              (class_part (IDConstant b (SFName h::t) (SFName n)))
        of
           NONE -> NONE
        || SOME cenv -> FLOOKUP (item cenv).statvars n
      else
        case FLOOKUP (map env) h of
           NONE -> NONE
-       || SOME e' -> elookup_addr e' (IDConstant(b, t, SFName n))) /\
-  (elookup_addr env (IDConstant (b, sf1, SFName n)) =
+       || SOME e' -> elookup_addr e' (IDConstant b t (SFName n))) /\
+  (elookup_addr env (IDConstant b sf1 (SFName n)) =
      case celookup_class (item env).classenv
-                         (class_part (IDConstant(b, sf1, SFName n)))
+                         (class_part (IDConstant b sf1 (SFName n)))
      of
         NONE -> NONE
      || SOME cenv -> FLOOKUP (item cenv).statvars n) /\
@@ -647,9 +646,9 @@ val lookup_class_def = Define` lookup_class = lift_lookup elookup_class `;
 
 *)
 val lookup_offset_def = Define`
-  (lookup_offset s mdp (IDConstant(b, sfs, SFName fld)) =
+  (lookup_offset s mdp (IDConstant b sfs (SFName fld)) =
      let coffs = constituent_offsets s mdp
-                        (class_part (IDConstant(b,sfs,SFName fld)))
+                        (class_part (IDConstant b sfs (SFName fld)))
      in
        case FINDL (\ (cc, off). ?ty. cc = NSD fld ty) coffs of
           NONE -> NONE
@@ -660,13 +659,12 @@ val lookup_offset_def = Define`
 
 (* looks up a fully-qualified field (e.g., C::fld) and finds its type *)
 val lookup_field_type_def = Define`
-  (lookup_field_type s (IDConstant(b,sfs,sf)) =
-    case lookup_class s (class_part(IDConstant(b,sfs,sf))) of
+  lookup_field_type s (IDConstant b sfs sf) =
+    case lookup_class s (class_part(IDConstant b sfs sf)) of
        NONE -> NONE
     || SOME cenv -> (case (item cenv).info of
                         NONE -> NONE
-                     || SOME ce -> field_type ce sf)) /\
-  (lookup_field_type s _ = NONE)
+                     || SOME ce -> field_type ce sf)
 `;
 
 (* ----------------------------------------------------------------------

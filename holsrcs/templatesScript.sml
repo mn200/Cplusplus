@@ -37,6 +37,19 @@ val _ = new_theory "templates"
     templates of the relation.
    ---------------------------------------------------------------------- *)
 
+(* the top-level template calls occurring within an id *)
+val id_tcalls_def = Define`
+  (id_tcalls b sfs [] last =
+     case last of
+        SFName _ -> {}
+     || SFTempCall s targs -> {(IDConstant b sfs (SFName s), targs)}) /\
+  (id_tcalls b sfs (h :: t) last =
+     case h of
+        SFName _ -> id_tcalls b (sfs ++ [h]) t last
+     || SFTempCall s targs -> (IDConstant b sfs (SFName s), targs) INSERT
+                              id_tcalls b (sfs ++ [h]) t last)
+`;
+
 (* the template calls occurring within a concrete type *)
 val ttypes_def = Define`
   (ttypes Void = {}) /\
@@ -61,10 +74,8 @@ val ttypes_def = Define`
   (ttypesl [] = {}) /\
   (ttypesl (ty::tyl) = ttypes ty UNION ttypesl tyl) /\
 
-  (cidttypes (IDVar s) = {}) /\
-  (cidttypes (IDFld cid sfld) = cidttypes cid UNION sfld_ttypes sfld) /\
-  (cidttypes (IDTempCall tid targs) = {(tid,targs)} UNION talttypes targs) /\
-  (cidttypes (IDConstant _) = {}) /\
+  (cidttypes (IDConstant b sfs sf) = id_tcalls b [] sfs sf UNION
+                                     sfldl_ttypes sfs UNION sfld_ttypes sf) /\
 
   (sfld_ttypes (SFTempCall s tal) = talttypes tal) /\
   (sfld_ttypes (SFName s) = {}) /\
@@ -79,7 +90,10 @@ val ttypes_def = Define`
   (tvattypes (TNum i) = {}) /\
   (tvattypes (TObj cid) = cidttypes cid) /\
   (tvattypes (TMPtr cid ty) = cidttypes cid UNION ttypes ty) /\
-  (tvattypes (TVAVar s) = {})
+  (tvattypes (TVAVar s) = {}) /\
+
+  (sfldl_ttypes [] = {}) /\
+  (sfldl_ttypes (h::t) = sfld_ttypes h UNION sfldl_ttypes t)
 `;
 
 val expr_ttypes_def = Define`
@@ -131,6 +145,9 @@ val mem_init_id_ttypes_def = Define`
   (mem_init_id_ttypes (MI_fld s) = {})
 `;
 
+(* what template calls are made inside a statement?
+   This question is only asked of forms that are
+   entirely ground, and have had their names resolved  *)
 val stmt_ttypes_defn = Defn.Hol_defn "stmt_ttypes" `
   (stmt_ttypes (CLoop ee body) = eexpr_ttypes ee UNION stmt_ttypes body) /\
   (stmt_ttypes (CIf ee s1 s2) =
@@ -155,22 +172,19 @@ val stmt_ttypes_defn = Defn.Hol_defn "stmt_ttypes" `
   (eexpr_ttypes (NormE e se) = expr_ttypes e) /\
   (eexpr_ttypes (EStmt s c) = stmt_ttypes s) /\
 
-  (vd_ttypes (VDec ty nm) =
-     if cppidfrees nm = {} then
-       ttypes ty UNION cidttypes nm
-     else {}) /\
-  (vd_ttypes (VDecInit ty nm init) =
-     if cppidfrees nm = {} then
-       ttypes ty UNION cidttypes nm UNION init_ttypes init
-     else {}) /\
+  (* a forward declaration of a template function will cause its
+     instantiation, so look for template calls in the name as well as the
+     type *)
+  (vd_ttypes (VDec ty nm) = ttypes ty UNION cidttypes nm) /\
+
+  (* something that's initialised can't have a template name *)
+  (vd_ttypes (VDecInit ty nm init) = ttypes ty UNION init_ttypes init) /\
+
   (vd_ttypes (VDecInitA ty vl init) = {}) /\ (* dynamic value only *)
   (vd_ttypes (VStrDec cspec cinfo_opt) =
-     if cppidfrees cspec = {} then
-       cidttypes cspec UNION
        (case cinfo_opt of
            NONE -> {}
-        || SOME cinfo -> cinfo_ttypes cinfo)
-     else {})
+        || SOME ci -> cinfo_ttypes ci))
 
      /\
 
@@ -268,7 +282,7 @@ val _ = export_rewrites ["extdecl_ttypes_def"]
    declaration), and member function definitions.
 
    We have rather more complexity than this.  We have normal
-   functions, multiple members per class, and data field.  In
+   functions, multiple members per class, and data fields.  In
    addition, we can have template member functions, template
    functions, and template template parameters
 

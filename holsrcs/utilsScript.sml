@@ -235,6 +235,59 @@ val olmap_CONG = store_thm(
 
 val _ = DefnBase.export_cong "olmap_CONG"
 
+val option_case_EQ_SOME = store_thm(
+  "option_case_EQ_SOME",
+  ``(option_case NONE f v = SOME v0) =
+        ?v0'. (v = SOME v0') /\ (f v0' = SOME v0)``,
+  Cases_on `v` THEN SRW_TAC [][]);
+val _ = export_rewrites ["option_case_EQ_SOME"]
+
+val olmap_ALL_MEM = store_thm(
+  "olmap_ALL_MEM",
+  ``!list x f.
+        (olmap f list = SOME x) =
+          (LENGTH x = LENGTH list) /\
+          !i. i < LENGTH list ==>
+              (f (EL i list) = SOME (EL i x))``,
+  Induct_on `list` THEN SRW_TAC [][] THENL [
+    SRW_TAC [][listTheory.LENGTH_NIL] THEN METIS_TAC [],
+    Cases_on `x` THEN SRW_TAC [][] THEN
+    SRW_TAC [][EQ_IMP_THM] THENL [
+      Cases_on `i` THEN SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) [],
+      FIRST_X_ASSUM (Q.SPEC_THEN `0` MP_TAC) THEN SRW_TAC [][],
+      FIRST_X_ASSUM (Q.SPEC_THEN `SUC i` MP_TAC) THEN SRW_TAC [][]
+    ]
+  ]);
+
+val olmap_EQ_NONE = store_thm(
+  "olmap_EQ_NONE",
+  ``(olmap f list = NONE) = ?e. MEM e list /\ (f e = NONE)``,
+  Induct_on `list` THEN SRW_TAC [][] THEN Cases_on `f h` THEN
+  SRW_TAC [][] THEN METIS_TAC [TypeBase.distinct_of ``:'a option``]);
+
+val olmap_EQ_SOME = store_thm(
+  "olmap_EQ_SOME",
+  ``((olmap f list = SOME []) = (list = [])) /\
+    ((SOME [] = olmap f list) = (list = [])) /\
+    ((olmap f list = SOME (h::t)) =
+        ?h0 t0. (f h0 = SOME h) /\ (list = h0::t0) /\ (olmap f t0 = SOME t))``,
+  Cases_on `list` THEN SRW_TAC [][]);
+
+val olmap_APPEND = store_thm(
+  "olmap_APPEND",
+  ``olmap f (l1 ++ l2) =
+      case olmap f l1 of
+         NONE -> NONE
+      || SOME l1' -> case olmap f l2 of
+                        NONE -> NONE
+                     || SOME l2' -> SOME (l1' ++ l2')``,
+  Q.ID_SPEC_TAC `l2` THEN Induct_on`l1` THEN SRW_TAC [][] THENL [
+    Cases_on `olmap f l2` THEN SRW_TAC [][],
+    Cases_on `f h` THEN SRW_TAC [][] THEN
+    Cases_on `olmap f l1` THEN SRW_TAC [][] THEN
+    Cases_on `olmap f l2` THEN SRW_TAC [][]
+  ]);
+
 (* ----------------------------------------------------------------------
     OP2CMB : ('a -> 'b -> 'c) -> 'a option -> 'b option -> 'c option
    ---------------------------------------------------------------------- *)
@@ -307,7 +360,7 @@ val _ = add_binder("THEOPT", 0)
 val THEOPT_I = store_thm(
   "THEOPT_I",
   ``P x ==> P (THE ((THEOPT) P))``,
-  `P = (\x. P x)` by SRW_TAC [][FUN_EQ_THM] THEN 
+  `P = (\x. P x)` by SRW_TAC [][FUN_EQ_THM] THEN
   POP_ASSUM SUBST_ALL_TAC THEN SRW_TAC [][THEOPT_def] THENL [
     SELECT_ELIM_TAC THEN METIS_TAC [],
     METIS_TAC []

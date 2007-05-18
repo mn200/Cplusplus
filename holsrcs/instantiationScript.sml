@@ -14,7 +14,7 @@ local
 in end
 
 (* C++ ancestor theories  *)
-open statesTheory aggregatesTheory
+open statesTheory aggregatesTheory class_infoTheory utilsTheory
 
 val _ = new_theory "instantiation"
 
@@ -26,7 +26,7 @@ val _ = Hol_datatype`
 |>`
 
 val empty_inst_def = Define`
-  empty_inst = <| typemap := (\s. TypeID (IDConstant(F,[],SFName s)));
+  empty_inst = <| typemap := (\s. TypeID (IDConstant F [] (SFName s)));
                   tempmap := (\s. (F, [], s));
                   valmap := TVAVar |>
 `;
@@ -48,19 +48,18 @@ val typeid_def = Define`
 val _ = export_rewrites ["typeid_def"]
 
 val IDhd_def = Define`
-  (IDhd (IDConstant(b, [], sf)) = sf) /\
-  (IDhd (IDConstant(b, h::t, sf)) = h)
+  (IDhd (IDConstant b [] sf) = sf) /\
+  (IDhd (IDConstant b (h::t) sf) = h)
 `;
 val _ = export_rewrites ["IDhd_def"]
 
 val ID_updhd_def = Define`
-  (ID_updhd ty (IDConstant(b2, [], sf2)) = SOME ty) /\
-  (ID_updhd ty (IDConstant(b2, h::t, sf2)) =
+  (ID_updhd ty (IDConstant b2 [] sf2) = SOME ty) /\
+  (ID_updhd ty (IDConstant b2 (h::t) sf2) =
      case typeid ty of
         NONE -> NONE
-     || SOME (IDConstant(b1,sfs1,sf1)) ->
-          SOME (TypeID (IDConstant(b1, sfs1 ++ [sf1] ++ t, sf2)))
-     || SOME (IDVar _) -> NONE)
+     || SOME (IDConstant b1 sfs1 sf1) ->
+          SOME (TypeID (IDConstant b1 (sfs1 ++ [sf1] ++ t) sf2)))
 `;
 val _ = export_rewrites ["ID_updhd_def"]
 
@@ -70,86 +69,57 @@ val dest_sfname_def = Define`
 val _ = export_rewrites ["dest_sfname_def"]
 
 val ID_updtemphd_def = Define`
-  (ID_updtemphd (b1,sfs1,sfn) targs (IDConstant(b2,[],sf2)) =
-     SOME (TypeID (IDConstant(b1, sfs1, SFTempCall sfn targs)))) /\
-  (ID_updtemphd (b1,sfs1,sfn) targs (IDConstant(b2,h::t,sf2)) =
+  (ID_updtemphd (b1,sfs1,sfn) targs (IDConstant b2 [] sf2) =
+     SOME (TypeID (IDConstant b1 sfs1 (SFTempCall sfn targs)))) /\
+  (ID_updtemphd (b1,sfs1,sfn) targs (IDConstant b2 (h::t) sf2) =
      SOME (TypeID
-           (IDConstant(b1,
-                       sfs1 ++ [SFTempCall sfn targs] ++ t, sf2)))) /\
-  (ID_updtemphd _ _ _ = NONE)
+           (IDConstant b1
+                       (sfs1 ++ [SFTempCall sfn targs] ++ t) sf2)))
 `;
 val _ = export_rewrites ["ID_updtemphd_def"]
 
 val IDtl_def = Define`
-  IDtl (IDConstant(b, sfs, sf)) = sf
+  IDtl (IDConstant b sfs sf) = sf
 `;
-
-val option_case_EQ_SOME = store_thm(
-  "option_case_EQ_SOME",
-  ``(option_case NONE f v = SOME v0) =
-        ?v0'. (v = SOME v0') /\ (f v0' = SOME v0)``,
-  Cases_on `v` THEN SRW_TAC [][]);
-val _ = export_rewrites ["option_case_EQ_SOME"]
-
-val olmap_ALL_MEM = store_thm(
-  "olmap_ALL_MEM",
-  ``!list x f.
-        (olmap f list = SOME x) =
-          (LENGTH x = LENGTH list) /\
-          !i. i < LENGTH list ==>
-              (f (EL i list) = SOME (EL i x))``,
-  Induct_on `list` THEN SRW_TAC [][] THENL [
-    SRW_TAC [][listTheory.LENGTH_NIL] THEN METIS_TAC [],
-    Cases_on `x` THEN SRW_TAC [][] THEN
-    SRW_TAC [][EQ_IMP_THM] THENL [
-      Cases_on `i` THEN SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) [],
-      FIRST_X_ASSUM (Q.SPEC_THEN `0` MP_TAC) THEN SRW_TAC [][],
-      FIRST_X_ASSUM (Q.SPEC_THEN `SUC i` MP_TAC) THEN SRW_TAC [][]
-    ]
-  ]);
 
 val IDhd_inst_def = Define`
-  IDhd_inst sigma (b, sfs, sf) =
-     if b then SOME (TypeID (IDConstant(b, sfs, sf)))
+  IDhd_inst sigma b sfs sf =
+     if b then SOME (TypeID (IDConstant b sfs sf))
      else
-       case IDhd (IDConstant(F, sfs, sf)) of
-          SFName s -> ID_updhd (sigma.typemap s) (IDConstant(F,sfs,sf))
+       case IDhd (IDConstant F sfs sf) of
+          SFName s -> ID_updhd (sigma.typemap s) (IDConstant F sfs sf)
        || SFTempCall s targs ->
                       ID_updtemphd (sigma.tempmap s) targs
-                                   (IDConstant(F,sfs,sf))
+                                   (IDConstant F sfs sf)
 `;
 
-val IDcases = store_thm(
-  "IDcases",
-  ``!i. (?b sfs sf. i = IDConstant(b,sfs,sf)) \/ (?nm. i = IDVar nm)``,
-  Cases THEN SRW_TAC [][] THEN
-  Cases_on `p` THEN Cases_on `r` THEN SRW_TAC [][]);
-fun IDC_TAC q = Q.SPEC_THEN q FULL_STRUCT_CASES_TAC IDcases
+fun IDC_TAC q = Q.SPEC_THEN q FULL_STRUCT_CASES_TAC
+                            (TypeBase.nchotomy_of ``:CPP_ID``)
 fun FSRW_TAC l = FULL_SIMP_TAC (srw_ss()) l
 
 val IDhd_inst_EQ_SOME = store_thm(
   "IDhd_inst_EQ_SOME",
-  ``(IDhd_inst s (b,sfs,sf) = SOME ty) =
-       b /\ (ty = TypeID (IDConstant(T,sfs,sf))) \/
+  ``(IDhd_inst s b sfs sf = SOME ty) =
+       b /\ (ty = TypeID (IDConstant T sfs sf)) \/
        ~b /\ (sfs = []) /\
          (?s'. (sf = SFName s') /\ (ty = s.typemap s')) \/
        ~b /\ (sfs = []) /\
          (?s' tas b2 sfs2 sfn2.
              (sf = SFTempCall s' tas) /\
              (s.tempmap s' = (b2, sfs2, sfn2)) /\
-             (ty = TypeID (IDConstant(b2,sfs2, SFTempCall sfn2 tas)))) \/
+             (ty = TypeID (IDConstant b2 sfs2 (SFTempCall sfn2 tas)))) \/
        ~b /\
          (?s' sfs1 sfs2 sf1 b'.
              (sfs = SFName s' :: sfs2) /\
-             (s.typemap s' = TypeID (IDConstant(b',sfs1,sf1))) /\
-             (ty = TypeID (IDConstant(b',sfs1 ++ [sf1] ++ sfs2,sf)))) \/
+             (s.typemap s' = TypeID (IDConstant b' sfs1 sf1)) /\
+             (ty = TypeID (IDConstant b' (sfs1 ++ [sf1] ++ sfs2) sf))) \/
        ~b /\
          (?s' tas b2 sfs1 sfs2 sfn2.
              (sfs = SFTempCall s' tas :: sfs2) /\
              (s.tempmap s' = (b2,sfs1,sfn2)) /\
-             (ty = TypeID (IDConstant(b2,
-                                      sfs1 ++ [SFTempCall sfn2 tas] ++ sfs2,
-                                      sf))))``,
+             (ty = TypeID (IDConstant b2
+                                      (sfs1 ++ [SFTempCall sfn2 tas] ++ sfs2)
+                                      sf)))``,
   SRW_TAC [][IDhd_inst_def] THEN1 METIS_TAC [] THEN
   Cases_on `sfs` THENL [
     SRW_TAC [][] THEN Cases_on `sf` THEN SRW_TAC [][] THENL [
@@ -187,19 +157,18 @@ val type_inst_defn = Hol_defn "type_inst" `
 
   (* id instantiation returns a type.  The type may just be a TypeID,
      possibly representing no change, or a "real" type. *)
-  (cppid_inst (IDVar s) = SOME (TypeID (IDVar s))) /\
-  (cppid_inst (IDConstant(T,sfs,sf)) =
+  (cppid_inst (IDConstant T sfs sf) =
       case (olmap sfld_inst sfs, sfld_inst sf) of
          (NONE, NONE) -> NONE
       || (NONE, SOME sf') -> NONE
       || (SOME sfs', NONE) -> NONE
-      || (SOME sfs', SOME sf') -> SOME (TypeID (IDConstant(T,sfs',sf')))) /\
-  (cppid_inst (IDConstant(F, sfs, sf)) =
+      || (SOME sfs', SOME sf') -> SOME (TypeID (IDConstant T sfs' sf'))) /\
+  (cppid_inst (IDConstant F sfs sf) =
       case (olmap sfld_inst sfs, sfld_inst sf) of
          (NONE, NONE) -> NONE
       || (NONE, SOME sf') -> NONE
       || (SOME sfs', NONE) -> NONE
-      || (SOME sfs', SOME sf') -> IDhd_inst sigma (F,sfs',sf'))
+      || (SOME sfs', SOME sf') -> IDhd_inst sigma F sfs' sf')
 
     /\
 
@@ -253,22 +222,10 @@ val type_match_def = Define`
 `;
 val _ = overload_on ("<=", ``type_match``);
 
-val olmap_EQ_NONE = prove(
-  ``(olmap f list = NONE) = ?e. MEM e list /\ (f e = NONE)``,
-  Induct_on `list` THEN SRW_TAC [][] THEN Cases_on `f h` THEN
-  SRW_TAC [][] THEN METIS_TAC [TypeBase.distinct_of ``:'a option``]);
-
-val olmap_EQ_SOME = prove(
-  ``((olmap f list = SOME []) = (list = [])) /\
-    ((SOME [] = olmap f list) = (list = [])) /\
-    ((olmap f list = SOME (h::t)) =
-        ?h0 t0. (f h0 = SOME h) /\ (list = h0::t0) /\ (olmap f t0 = SOME t))``,
-  Cases_on `list` THEN SRW_TAC [][]);
-
 val IDhd_inst_empty = store_thm(
   "IDhd_inst_empty",
-  ``IDhd_inst empty_inst (b, sfs, sfld) =
-      SOME (TypeID (IDConstant(b, sfs, sfld)))``,
+  ``IDhd_inst empty_inst b sfs sfld =
+      SOME (TypeID (IDConstant b sfs sfld))``,
   SRW_TAC [][IDhd_inst_def] THEN Cases_on `sfs` THEN SRW_TAC [][] THENL [
     Cases_on `sfld` THEN SRW_TAC [][empty_inst_def],
     Cases_on `h` THEN SRW_TAC [][empty_inst_def]
@@ -307,11 +264,11 @@ val tempmap_comp_def = Define`
                  in
                    case typeid (THE (IDhd_inst
                                        sigma
-                                       (F, THE (olmap (sfld_inst sigma) sfs),
-                                        SFName sn)))
+                                       F
+                                       (THE (olmap (sfld_inst sigma) sfs))
+                                       (SFName sn)))
                     of
-                      SOME (IDConstant(b',sfs',SFName sn')) ->
-                        (b',sfs',sn')
+                      SOME (IDConstant b' sfs' (SFName sn')) -> (b',sfs',sn')
                    || _ -> ARB
 `;
 
@@ -332,28 +289,11 @@ val _ = export_rewrites ["option_case_NONE2"]
 val cppid_non_typeid = store_thm(
   "cppid_non_typeid",
   ``(cppid_inst s id = SOME ty) /\ (typeid ty = NONE) ==>
-    ?nm. (id = IDConstant(F,[],SFName nm)) /\ (s.typemap nm = ty)``,
-  IDC_TAC `id` THEN SRW_TAC [][] THENL [
-    Cases_on `b` THEN Cases_on `sfs` THEN FSRW_TAC [IDhd_inst_EQ_SOME] THEN
-    SRW_TAC [][] THEN FSRW_TAC [] THEN Cases_on `sf` THEN FSRW_TAC [],
-
-    Cases_on `ty` THEN SRW_TAC [][]
-  ]);
-
-val olmap_APPEND = store_thm(
-  "olmap_APPEND",
-  ``olmap f (l1 ++ l2) =
-      case olmap f l1 of
-         NONE -> NONE
-      || SOME l1' -> case olmap f l2 of
-                        NONE -> NONE
-                     || SOME l2' -> SOME (l1' ++ l2')``,
-  Q.ID_SPEC_TAC `l2` THEN Induct_on`l1` THEN SRW_TAC [][] THENL [
-    Cases_on `olmap f l2` THEN SRW_TAC [][],
-    Cases_on `f h` THEN SRW_TAC [][] THEN
-    Cases_on `olmap f l1` THEN SRW_TAC [][] THEN
-    Cases_on `olmap f l2` THEN SRW_TAC [][]
-  ]);
+    ?nm. (id = IDConstant F [] (SFName nm)) /\ (s.typemap nm = ty)``,
+  IDC_TAC `id` THEN SRW_TAC [][] THEN
+  Cases_on `b` THEN FSRW_TAC [IDhd_inst_EQ_SOME] THEN
+  SRW_TAC [][] THEN FSRW_TAC [] THEN Cases_on `S'` THEN
+  FSRW_TAC [olmap_EQ_SOME]);
 
 val SNOC_11 = store_thm(
   "SNOC_11",
@@ -391,7 +331,7 @@ val inst_comp_thm = store_thm(
   FTRY (FULL_SIMP_TAC (srw_ss()) []) THENL [
     (* TypeID *)
     Cases_on `typeid ty2` THENL [
-      `?nm. (id1 = IDConstant (F, [], SFName nm)) /\ (s1.typemap nm = ty2)`
+      `?nm. (id1 = IDConstant F [] (SFName nm)) /\ (s1.typemap nm = ty2)`
          by METIS_TAC [cppid_non_typeid] THEN
       SRW_TAC [][inst_comp_def, IDhd_inst_def],
       `ty2 = TypeID x` by (Cases_on `ty2` THEN FSRW_TAC []) THEN
@@ -408,9 +348,6 @@ val inst_comp_thm = store_thm(
                           (type_inst s2 ty2 = SOME (EL i y0'))`
           THEN1 METIS_TAC [] THEN
     SRW_TAC [][rich_listTheory.EL_IS_EL],
-
-    (* IDVar case ? *)
-    FSRW_TAC [] THEN SRW_TAC [][] THEN FSRW_TAC [],
 
     (* IDConstant case 1 *)
     FSRW_TAC [] THEN SRW_TAC [][] THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
@@ -596,7 +533,7 @@ val type_match_trans = store_thm(
 
 val is_renaming_def = Define`
   is_renaming s =
-    (!v. ?nm. s.typemap v = TypeID (IDConstant(F,[],SFName nm))) /\
+    (!v. ?nm. s.typemap v = TypeID (IDConstant F [] (SFName nm))) /\
     (!v. ?nm. s.tempmap v = (F,[],nm)) /\
     (!v. ?nm. s.valmap v = TVAVar nm)
 `;
@@ -627,8 +564,7 @@ val tyinst_sz_defn = Hol_defn "tyinst_sz" `
 
      /\
 
-  (cppidinst_sz (IDVar s) = 2) /\
-  (cppidinst_sz (IDConstant (b,sfs,sf)) =
+  (cppidinst_sz (IDConstant b sfs sf) =
      FOLDL (\a sf. a + sfldinst_sz sf)
            (sfldinst_sz sf + (if b then 1 else 0))
            sfs)
@@ -709,15 +645,15 @@ val _ = export_rewrites ["tvainst_sz_EQ_0"]
 
 val cppidinst_sz_EQ_1 = store_thm(
   "cppidinst_sz_EQ_1",
-  ``(cppidinst_sz id = 1) = ?nm b. id = IDConstant(F, [], SFName nm)``,
+  ``(cppidinst_sz id = 1) = ?nm b. id = IDConstant F [] (SFName nm)``,
   IDC_TAC `id` THEN SRW_TAC [][] THENL [
     Q.MATCH_ABBREV_TAC `~(x = 1n)` THEN
     Q_TAC SUFF_TAC `2 <= x` THEN1 DECIDE_TAC THEN
     Q.UNABBREV_ALL_TAC THEN MATCH_MP_TAC LEQ_FOLDL_I THEN
     SRW_TAC [][DECIDE ``2n <= x + 1 = 1 <= x``, one_leq_sfldinst_sz],
     SRW_TAC [][EQ_IMP_THM] THEN SRW_TAC [][] THEN
-    Cases_on `sfs` THEN FSRW_TAC [] THENL [
-      Cases_on `sf` THEN FSRW_TAC [] THEN
+    Cases_on `l` THEN FSRW_TAC [] THENL [
+      Cases_on `S'` THEN FSRW_TAC [] THEN
       POP_ASSUM MP_TAC THEN
       Q.MATCH_ABBREV_TAC `(x = 1n) ==> F` THEN
       Q_TAC SUFF_TAC `2 <= x` THEN1 DECIDE_TAC THEN
@@ -726,7 +662,7 @@ val cppidinst_sz_EQ_1 = store_thm(
       Q.MATCH_ABBREV_TAC `(x = 1n) ==> F` THEN
       Q_TAC SUFF_TAC `2 <= x` THEN1 DECIDE_TAC THEN
       Q.UNABBREV_ALL_TAC THEN MATCH_MP_TAC LEQ_FOLDL_I THEN
-      Q.SPEC_THEN `sf` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
+      Q.SPEC_THEN `S'` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
       Q.SPEC_THEN `h` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
       DECIDE_TAC
     ]
@@ -737,7 +673,7 @@ val lem = prove(``~(tyinst_sz x = 1) /\ ~(tyinst_sz x = 0)``,
                 DECIDE_TAC);
 val tyinst_sz_EQ_2 = store_thm(
   "tyinst_sz_EQ_2",
-  ``(tyinst_sz ty = 2) = ?nm. ty = TypeID(IDConstant(F, [], SFName nm))``,
+  ``(tyinst_sz ty = 2) = ?nm. ty = TypeID(IDConstant F [] (SFName nm))``,
   Cases_on `ty` THEN SRW_TAC [][DECIDE ``(1 + x = 2n) = (x = 1)``,
                                 cppidinst_sz_EQ_1, lem]
   THENL [
@@ -896,7 +832,7 @@ val valfree_sing_def = Define`
 val renaming_upto_def = Define`
   renaming_upto frees s =
     (!v. v IN frees.tyfvs ==>
-           ?nm. s.typemap v = TypeID (IDConstant(F,[],SFName nm))) /\
+           ?nm. s.typemap v = TypeID (IDConstant F [] (SFName nm))) /\
     (!v. v IN frees.tempfvs ==> ?nm. s.tempmap v = (F,[],nm)) /\
     (!v. v IN frees.valfvs ==> ?nm. s.valmap v = TVAVar nm)
 `;
@@ -935,12 +871,11 @@ val tyfrees_defn = Defn.Hol_defn "tyfrees" `
 
      /\
 
-  (cppidfrees (IDVar s) = {}) /\
-  (cppidfrees (IDConstant (b,sfs,sf)) =
+  (cppidfrees (IDConstant b sfs sf) =
      FOLDL (\a sf. a UNION sfldfrees sf)
            (sfldfrees sf UNION
             (if b then {}
-             else case IDhd (IDConstant(b,sfs,sf)) of
+             else case IDhd (IDConstant b sfs sf) of
                     SFName s -> tyfree_sing s
                  || SFTempCall s targs -> tempfree_sing s) )
            sfs)
@@ -1286,19 +1221,13 @@ val expr_inst_def = Define`
   (expr_inst sigma This = SOME This) /\
   (expr_inst sigma (Var id) =
      case id of
-        IDConstant (F,[], SFName s) ->
+        IDConstant F [] (SFName s) ->
            (case sigma.valmap s of
               TNum i -> SOME (Cnum i)
            || TObj id' -> SOME (Var id')
-           || TMPtr cid ty ->
-                        (case cid of
-                            IDConstant(b,sfs,sf) ->
-                              SOME (MemAddr (IDConstant(b,FRONT sfs, LAST sfs))
-                                            sf))
-           || TVAVar s' -> SOME (Var (IDConstant (F, [], SFName s'))))
-     || x -> (case cppID_inst sigma id of
-                 NONE -> NONE
-              || SOME id' -> SOME (Var id'))) /\
+           || TMPtr cid ty -> SOME (MemAddr (class_part cid) (IDtl cid))
+           || TVAVar s' -> SOME (Var (IDConstant F [] (SFName s'))))
+     || x -> OPTION_MAP Var (cppID_inst sigma id)) /\
   (expr_inst sigma (COr e1 e2) =
      OP2CMB COr (expr_inst sigma e1) (expr_inst sigma e2)) /\
   (expr_inst sigma (CAnd e1 e2) =

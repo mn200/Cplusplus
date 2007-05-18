@@ -22,6 +22,15 @@ in end
 
 val _ = new_theory "name_resolution";
 
+val lift_vdec_def = Define`
+  lift_vdec n (VDec
+
+val flatten_nspaces_def = Define`
+  (flatten_nspaces [] = []) /\
+  (flatten_nspaces (NameSpace n ds :: t) =
+     MAP (
+
+
 val _ = Hol_datatype`
   nameres_ctxt = <|
     objs : string -> CPP_ID # CPP_Type ;

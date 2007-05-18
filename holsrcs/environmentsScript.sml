@@ -90,27 +90,29 @@ val lookup_nspace_def = Define`
 `;
 
 val celookup_class_def = Define`
-  (celookup_class cenv (IDConstant(b, [], sf)) = FLOOKUP cenv sf) /\
-  (celookup_class cenv (IDConstant(b, h :: t, sf)) =
+  (celookup_class cenv (IDConstant b [] sf) = FLOOKUP cenv sf) /\
+  (celookup_class cenv (IDConstant b (h :: t) sf) =
      case FLOOKUP cenv h of
         NONE -> NONE
-     || SOME cei -> celookup_class (map cei) (IDConstant(b, t, sf))) /\
-  (celookup_class cenv _ = NONE)
+     || SOME cei -> celookup_class (map cei) (IDConstant b t sf))
 `;
 
 val elookup_class_def = Define`
-  (elookup_class env (IDConstant (b, [], sf)) =
+  (elookup_class env (IDConstant b [] sf) =
      FLOOKUP ((item env).classenv) sf) /\
-  (elookup_class env (IDConstant (b, SFName h :: t, sf)) =
+  (* if top name might be a namespace name or a class name, class names take
+     priority *)
+  (elookup_class env (IDConstant b (SFName h :: t) sf) =
       if SFName h IN FDOM (item env).classenv then
-        celookup_class (item env).classenv (IDConstant(b, SFName h :: t, sf))
+        celookup_class (item env).classenv (IDConstant b (SFName h :: t) sf)
       else
         case FLOOKUP (map env) h of
            NONE -> NONE
-        || SOME e' -> elookup_class e' (IDConstant(b, t, sf))) /\
-  (elookup_class env (IDConstant(b, sfs, sf2)) =
-      celookup_class (item env).classenv (IDConstant(b, sfs, sf2))) /\
-  (elookup_class _ _ = NONE)
+        || SOME e' -> elookup_class e' (IDConstant b t sf)) /\
+  (* otherwise, the head name is a template application, which must be a
+     class name rather than a namespace name *)
+  (elookup_class env (IDConstant b sfs sf2) =
+      celookup_class (item env).classenv (IDConstant b sfs sf2))
 `;
 
 val is_class_name_env_def = Define`
@@ -135,7 +137,7 @@ val update_classenv_def = Define`
 (* class id has no namespace constituents - i.e., this is OK for a local
    class, but not OK for a top-level declaration... *)
 val update_class_def = Define`
-  update_class (IDConstant(b, sfs, sf)) i env =
+  update_class (IDConstant b sfs sf) i env =
      case update_classenv (sfs ++ [sf]) i (item env).classenv of
         NONE -> NONE
      || SOME ce' -> SOME (FTNode (item env with classenv := ce')
