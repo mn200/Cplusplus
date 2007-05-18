@@ -22,12 +22,12 @@ val _ = new_theory "instantiation"
 val _ = Hol_datatype`
   inst_record = <| typemap : string -> CPP_Type ;
                    tempmap : string -> bool # StaticField list # string ;
-                   valmap  : string -> TemplateValueArg 
+                   valmap  : string -> TemplateValueArg
 |>`
 
 val empty_inst_def = Define`
   empty_inst = <| typemap := (\s. TypeID (IDConstant(F,[],SFName s)));
-                  tempmap := (\s. (F, [], s)); 
+                  tempmap := (\s. (F, [], s));
                   valmap := TVAVar |>
 `;
 
@@ -55,26 +55,26 @@ val _ = export_rewrites ["IDhd_def"]
 
 val ID_updhd_def = Define`
   (ID_updhd ty (IDConstant(b2, [], sf2)) = SOME ty) /\
-  (ID_updhd ty (IDConstant(b2, h::t, sf2)) = 
-     case typeid ty of 
+  (ID_updhd ty (IDConstant(b2, h::t, sf2)) =
+     case typeid ty of
         NONE -> NONE
-     || SOME (IDConstant(b1,sfs1,sf1)) -> 
-          SOME (TypeID (IDConstant(b1, sfs1 ++ [sf1] ++ t, sf2))) 
+     || SOME (IDConstant(b1,sfs1,sf1)) ->
+          SOME (TypeID (IDConstant(b1, sfs1 ++ [sf1] ++ t, sf2)))
      || SOME (IDVar _) -> NONE)
 `;
 val _ = export_rewrites ["ID_updhd_def"]
 
 val dest_sfname_def = Define`
-  (dest_sfname (SFName s) = s) 
+  (dest_sfname (SFName s) = s)
 `;
 val _ = export_rewrites ["dest_sfname_def"]
 
 val ID_updtemphd_def = Define`
-  (ID_updtemphd (b1,sfs1,sfn) targs (IDConstant(b2,[],sf2)) = 
+  (ID_updtemphd (b1,sfs1,sfn) targs (IDConstant(b2,[],sf2)) =
      SOME (TypeID (IDConstant(b1, sfs1, SFTempCall sfn targs)))) /\
-  (ID_updtemphd (b1,sfs1,sfn) targs (IDConstant(b2,h::t,sf2)) = 
-     SOME (TypeID 
-           (IDConstant(b1, 
+  (ID_updtemphd (b1,sfs1,sfn) targs (IDConstant(b2,h::t,sf2)) =
+     SOME (TypeID
+           (IDConstant(b1,
                        sfs1 ++ [SFTempCall sfn targs] ++ t, sf2)))) /\
   (ID_updtemphd _ _ _ = NONE)
 `;
@@ -93,14 +93,14 @@ val _ = export_rewrites ["option_case_EQ_SOME"]
 
 val olmap_ALL_MEM = store_thm(
   "olmap_ALL_MEM",
-  ``!list x f. 
-        (olmap f list = SOME x) = 
+  ``!list x f.
+        (olmap f list = SOME x) =
           (LENGTH x = LENGTH list) /\
           !i. i < LENGTH list ==>
               (f (EL i list) = SOME (EL i x))``,
   Induct_on `list` THEN SRW_TAC [][] THENL [
     SRW_TAC [][listTheory.LENGTH_NIL] THEN METIS_TAC [],
-    Cases_on `x` THEN SRW_TAC [][] THEN 
+    Cases_on `x` THEN SRW_TAC [][] THEN
     SRW_TAC [][EQ_IMP_THM] THENL [
       Cases_on `i` THEN SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss()) [],
       FIRST_X_ASSUM (Q.SPEC_THEN `0` MP_TAC) THEN SRW_TAC [][],
@@ -109,63 +109,63 @@ val olmap_ALL_MEM = store_thm(
   ]);
 
 val IDhd_inst_def = Define`
-  IDhd_inst sigma (b, sfs, sf) = 
+  IDhd_inst sigma (b, sfs, sf) =
      if b then SOME (TypeID (IDConstant(b, sfs, sf)))
-     else 
-       case IDhd (IDConstant(F, sfs, sf)) of 
+     else
+       case IDhd (IDConstant(F, sfs, sf)) of
           SFName s -> ID_updhd (sigma.typemap s) (IDConstant(F,sfs,sf))
-       || SFTempCall s targs -> 
-                      ID_updtemphd (sigma.tempmap s) targs 
+       || SFTempCall s targs ->
+                      ID_updtemphd (sigma.tempmap s) targs
                                    (IDConstant(F,sfs,sf))
 `;
 
 val IDcases = store_thm(
   "IDcases",
   ``!i. (?b sfs sf. i = IDConstant(b,sfs,sf)) \/ (?nm. i = IDVar nm)``,
-  Cases THEN SRW_TAC [][] THEN 
+  Cases THEN SRW_TAC [][] THEN
   Cases_on `p` THEN Cases_on `r` THEN SRW_TAC [][]);
 fun IDC_TAC q = Q.SPEC_THEN q FULL_STRUCT_CASES_TAC IDcases
 fun FSRW_TAC l = FULL_SIMP_TAC (srw_ss()) l
 
 val IDhd_inst_EQ_SOME = store_thm(
   "IDhd_inst_EQ_SOME",
-  ``(IDhd_inst s (b,sfs,sf) = SOME ty) = 
+  ``(IDhd_inst s (b,sfs,sf) = SOME ty) =
        b /\ (ty = TypeID (IDConstant(T,sfs,sf))) \/
-       ~b /\ (sfs = []) /\ 
+       ~b /\ (sfs = []) /\
          (?s'. (sf = SFName s') /\ (ty = s.typemap s')) \/
        ~b /\ (sfs = []) /\
-         (?s' tas b2 sfs2 sfn2. 
-             (sf = SFTempCall s' tas) /\ 
+         (?s' tas b2 sfs2 sfn2.
+             (sf = SFTempCall s' tas) /\
              (s.tempmap s' = (b2, sfs2, sfn2)) /\
              (ty = TypeID (IDConstant(b2,sfs2, SFTempCall sfn2 tas)))) \/
-       ~b /\ 
-         (?s' sfs1 sfs2 sf1 b'. 
+       ~b /\
+         (?s' sfs1 sfs2 sf1 b'.
              (sfs = SFName s' :: sfs2) /\
              (s.typemap s' = TypeID (IDConstant(b',sfs1,sf1))) /\
              (ty = TypeID (IDConstant(b',sfs1 ++ [sf1] ++ sfs2,sf)))) \/
-       ~b /\ 
+       ~b /\
          (?s' tas b2 sfs1 sfs2 sfn2.
              (sfs = SFTempCall s' tas :: sfs2) /\
              (s.tempmap s' = (b2,sfs1,sfn2)) /\
              (ty = TypeID (IDConstant(b2,
                                       sfs1 ++ [SFTempCall sfn2 tas] ++ sfs2,
                                       sf))))``,
-  SRW_TAC [][IDhd_inst_def] THEN1 METIS_TAC [] THEN 
+  SRW_TAC [][IDhd_inst_def] THEN1 METIS_TAC [] THEN
   Cases_on `sfs` THENL [
     SRW_TAC [][] THEN Cases_on `sf` THEN SRW_TAC [][] THENL [
-      Cases_on `s.tempmap s'` THEN Cases_on `r` THEN 
+      Cases_on `s.tempmap s'` THEN Cases_on `r` THEN
       SRW_TAC [][] THEN METIS_TAC [],
       METIS_TAC []
     ],
     SRW_TAC [][] THEN Cases_on `h` THEN SRW_TAC [][] THENL [
-      Cases_on `s.tempmap s'` THEN Cases_on `r` THEN SRW_TAC [][] THEN 
+      Cases_on `s.tempmap s'` THEN Cases_on `r` THEN SRW_TAC [][] THEN
       METIS_TAC [],
-      Cases_on `s.typemap s'` THEN SRW_TAC [][] THEN 
+      Cases_on `s.typemap s'` THEN SRW_TAC [][] THEN
       IDC_TAC `C''` THEN SRW_TAC [][] THEN METIS_TAC []
     ]
   ]);
-      
-(* the schema variable sigma is left out in order to get a nicer 
+
+(* the schema variable sigma is left out in order to get a nicer
    termination proof and induction principle *)
 val type_inst_defn = Hol_defn "type_inst" `
   (type_inst (TypeID cid) = cppid_inst cid) /\
@@ -188,14 +188,14 @@ val type_inst_defn = Hol_defn "type_inst" `
   (* id instantiation returns a type.  The type may just be a TypeID,
      possibly representing no change, or a "real" type. *)
   (cppid_inst (IDVar s) = SOME (TypeID (IDVar s))) /\
-  (cppid_inst (IDConstant(T,sfs,sf)) = 
-      case (olmap sfld_inst sfs, sfld_inst sf) of 
-         (NONE, NONE) -> NONE 
+  (cppid_inst (IDConstant(T,sfs,sf)) =
+      case (olmap sfld_inst sfs, sfld_inst sf) of
+         (NONE, NONE) -> NONE
       || (NONE, SOME sf') -> NONE
       || (SOME sfs', NONE) -> NONE
       || (SOME sfs', SOME sf') -> SOME (TypeID (IDConstant(T,sfs',sf')))) /\
-  (cppid_inst (IDConstant(F, sfs, sf)) = 
-      case (olmap sfld_inst sfs, sfld_inst sf) of 
+  (cppid_inst (IDConstant(F, sfs, sf)) =
+      case (olmap sfld_inst sfs, sfld_inst sf) of
          (NONE, NONE) -> NONE
       || (NONE, SOME sf') -> NONE
       || (SOME sfs', NONE) -> NONE
@@ -232,7 +232,7 @@ val type_inst_defn = Hol_defn "type_inst" `
 `
 
 val (type_inst_def, type_inst_ind) = Defn.tprove(type_inst_defn,
-  WF_REL_TAC `^(last (TotalDefn.guessR type_inst_defn))` THEN 
+  WF_REL_TAC `^(last (TotalDefn.guessR type_inst_defn))` THEN
   SRW_TAC [ARITH_ss][] THENL [
     Induct_on `tylist` THEN SRW_TAC [][] THEN
     SRW_TAC [ARITH_ss][] THEN FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
@@ -261,13 +261,13 @@ val olmap_EQ_NONE = prove(
 val olmap_EQ_SOME = prove(
   ``((olmap f list = SOME []) = (list = [])) /\
     ((SOME [] = olmap f list) = (list = [])) /\
-    ((olmap f list = SOME (h::t)) = 
+    ((olmap f list = SOME (h::t)) =
         ?h0 t0. (f h0 = SOME h) /\ (list = h0::t0) /\ (olmap f t0 = SOME t))``,
   Cases_on `list` THEN SRW_TAC [][]);
 
 val IDhd_inst_empty = store_thm(
   "IDhd_inst_empty",
-  ``IDhd_inst empty_inst (b, sfs, sfld) = 
+  ``IDhd_inst empty_inst (b, sfs, sfld) =
       SOME (TypeID (IDConstant(b, sfs, sfld)))``,
   SRW_TAC [][IDhd_inst_def] THEN Cases_on `sfs` THEN SRW_TAC [][] THENL [
     Cases_on `sfld` THEN SRW_TAC [][empty_inst_def],
@@ -283,7 +283,7 @@ val type_inst_empty = store_thm(
     (!tva. temp_valarg_inst empty_inst tva = SOME tva) /\
     (!sfld. sfld_inst empty_inst sfld = SOME sfld)``,
   HO_MATCH_MP_TAC type_inst_ind THEN
-  SRW_TAC [][] THEN SRW_TAC [][olmap_ALL_MEM, rich_listTheory.EL_IS_EL] THEN 
+  SRW_TAC [][] THEN SRW_TAC [][olmap_ALL_MEM, rich_listTheory.EL_IS_EL] THEN
   SRW_TAC [][empty_inst_def]);
 
 val type_match_refl = store_thm(
@@ -298,19 +298,19 @@ val cppID_inst_def = Define`
 `;
 
 val tempmap_comp_def = Define`
-  tempmap_comp sigma (b,sfs,sn) = 
-    case sfs of 
+  tempmap_comp sigma (b,sfs,sn) =
+    case sfs of
        [] -> if b then (T, [], sn) else sigma.tempmap sn
-    || h::t -> if b then (T, THE (olmap (sfld_inst sigma) sfs), sn) 
-               else 
+    || h::t -> if b then (T, THE (olmap (sfld_inst sigma) sfs), sn)
+               else
                  let sfs' = THE (olmap (sfld_inst sigma) sfs)
                  in
-                   case typeid (THE (IDhd_inst 
-                                       sigma 
-                                       (F, THE (olmap (sfld_inst sigma) sfs), 
+                   case typeid (THE (IDhd_inst
+                                       sigma
+                                       (F, THE (olmap (sfld_inst sigma) sfs),
                                         SFName sn)))
-                    of 
-                      SOME (IDConstant(b',sfs',SFName sn')) -> 
+                    of
+                      SOME (IDConstant(b',sfs',SFName sn')) ->
                         (b',sfs',sn')
                    || _ -> ARB
 `;
@@ -324,7 +324,7 @@ val inst_comp_def = Define`
 fun FTRY tac = TRY (tac THEN NO_TAC)
 
 val option_case_NONE2 = store_thm(
-  "option_case_NONE2", 
+  "option_case_NONE2",
   ``(option_case NONE (\x. NONE) y = NONE)``,
   Cases_on `y` THEN SRW_TAC [][]);
 val _ = export_rewrites ["option_case_NONE2"]
@@ -334,24 +334,24 @@ val cppid_non_typeid = store_thm(
   ``(cppid_inst s id = SOME ty) /\ (typeid ty = NONE) ==>
     ?nm. (id = IDConstant(F,[],SFName nm)) /\ (s.typemap nm = ty)``,
   IDC_TAC `id` THEN SRW_TAC [][] THENL [
-    Cases_on `b` THEN Cases_on `sfs` THEN FSRW_TAC [IDhd_inst_EQ_SOME] THEN 
+    Cases_on `b` THEN Cases_on `sfs` THEN FSRW_TAC [IDhd_inst_EQ_SOME] THEN
     SRW_TAC [][] THEN FSRW_TAC [] THEN Cases_on `sf` THEN FSRW_TAC [],
-        
+
     Cases_on `ty` THEN SRW_TAC [][]
   ]);
 
 val olmap_APPEND = store_thm(
   "olmap_APPEND",
-  ``olmap f (l1 ++ l2) = 
-      case olmap f l1 of 
+  ``olmap f (l1 ++ l2) =
+      case olmap f l1 of
          NONE -> NONE
-      || SOME l1' -> case olmap f l2 of 
+      || SOME l1' -> case olmap f l2 of
                         NONE -> NONE
                      || SOME l2' -> SOME (l1' ++ l2')``,
   Q.ID_SPEC_TAC `l2` THEN Induct_on`l1` THEN SRW_TAC [][] THENL [
     Cases_on `olmap f l2` THEN SRW_TAC [][],
-    Cases_on `f h` THEN SRW_TAC [][] THEN 
-    Cases_on `olmap f l1` THEN SRW_TAC [][] THEN 
+    Cases_on `f h` THEN SRW_TAC [][] THEN
+    Cases_on `olmap f l1` THEN SRW_TAC [][] THEN
     Cases_on `olmap f l2` THEN SRW_TAC [][]
   ]);
 
@@ -362,7 +362,7 @@ val SNOC_11 = store_thm(
     Cases_on `l2` THEN SRW_TAC [][],
     Cases_on `l2` THEN SRW_TAC [][] THEN METIS_TAC []
   ]);
-    
+
 val inst_comp_thm = store_thm(
   "inst_comp_thm",
   ``(!ty1 s1 ty2 ty3 s2.
@@ -402,112 +402,112 @@ val inst_comp_thm = store_thm(
     FSRW_TAC [] THEN PROVE_TAC [],
 
     (* Function (type) case *)
-    FSRW_TAC [olmap_ALL_MEM] THEN REPEAT STRIP_TAC THEN 
+    FSRW_TAC [olmap_ALL_MEM] THEN REPEAT STRIP_TAC THEN
     Q_TAC SUFF_TAC `MEM (EL i tylist) tylist /\
                     ?ty2. (type_inst s1 (EL i tylist) = SOME ty2) /\
                           (type_inst s2 ty2 = SOME (EL i y0'))`
-          THEN1 METIS_TAC [] THEN 
+          THEN1 METIS_TAC [] THEN
     SRW_TAC [][rich_listTheory.EL_IS_EL],
 
     (* IDVar case ? *)
     FSRW_TAC [] THEN SRW_TAC [][] THEN FSRW_TAC [],
 
     (* IDConstant case 1 *)
-    FSRW_TAC [] THEN SRW_TAC [][] THEN FSRW_TAC [] THEN SRW_TAC [][] THEN 
-    FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN 
-    RULE_ASSUM_TAC (SIMP_RULE (bool_ss ++ DNF_ss) [AND_IMP_INTRO]) THEN 
+    FSRW_TAC [] THEN SRW_TAC [][] THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
+    FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN
+    RULE_ASSUM_TAC (SIMP_RULE (bool_ss ++ DNF_ss) [AND_IMP_INTRO]) THEN
     FIRST_X_ASSUM MATCH_MP_TAC THEN SRW_TAC [][rich_listTheory.EL_IS_EL],
 
     (* IDConstant case 2 *)
     FSRW_TAC [IDhd_inst_EQ_SOME] THEN SRW_TAC [][] THEN FSRW_TAC [] THENL [
-      FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN 
-      Q.EXISTS_TAC `SFName s'` THEN SRW_TAC [][] THEN 
-      SRW_TAC [][inst_comp_def] THEN 
+      FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
+      Q.EXISTS_TAC `SFName s'` THEN SRW_TAC [][] THEN
+      SRW_TAC [][inst_comp_def] THEN
       Cases_on `s1.typemap s'` THEN FSRW_TAC [],
 
-      SRW_TAC [][] THEN FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN 
+      SRW_TAC [][] THEN FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
       Cases_on `b2` THENL [
-        FSRW_TAC [] THEN SRW_TAC [][] THEN 
-        Q.EXISTS_TAC `SFTempCall s' z` THEN SRW_TAC [][] THEN 
-        SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN 
+        FSRW_TAC [] THEN SRW_TAC [][] THEN
+        Q.EXISTS_TAC `SFTempCall s' z` THEN SRW_TAC [][] THEN
+        SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN
         Cases_on `sfs2` THEN FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [],
-        FSRW_TAC [] THEN SRW_TAC [][] THEN 
+        FSRW_TAC [] THEN SRW_TAC [][] THEN
         FSRW_TAC [IDhd_inst_EQ_SOME] THEN SRW_TAC [][] THENL [
-          FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_EQ_SOME] THEN 
-          SRW_TAC [][] THEN Q.EXISTS_TAC `SFTempCall s' z` THEN 
+          FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_EQ_SOME] THEN
+          SRW_TAC [][] THEN Q.EXISTS_TAC `SFTempCall s' z` THEN
           SRW_TAC [][] THENL [
-            FIRST_X_ASSUM MATCH_MP_TAC THEN 
-            Q.EXISTS_TAC `SFTempCall s' tas` THEN 
+            FIRST_X_ASSUM MATCH_MP_TAC THEN
+            Q.EXISTS_TAC `SFTempCall s' tas` THEN
             SRW_TAC [ETA_ss][],
             SRW_TAC [][inst_comp_def, tempmap_comp_def]
           ],
-          Q.EXISTS_TAC `SFTempCall s' z` THEN SRW_TAC [][] THEN 
-          FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN 
-          FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN 
-          SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN 
+          Q.EXISTS_TAC `SFTempCall s' z` THEN SRW_TAC [][] THEN
+          FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
+          FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN
+          SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN
           Q.UNABBREV_ALL_TAC THEN SRW_TAC [][IDhd_inst_def],
-          FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_EQ_SOME] THEN 
-          SRW_TAC [][] THEN Q.EXISTS_TAC `SFTempCall s' z` THEN 
+          FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_EQ_SOME] THEN
+          SRW_TAC [][] THEN Q.EXISTS_TAC `SFTempCall s' z` THEN
           SRW_TAC [][] THENL [
-            FIRST_X_ASSUM MATCH_MP_TAC THEN 
-            Q.EXISTS_TAC `SFTempCall s' tas` THEN 
+            FIRST_X_ASSUM MATCH_MP_TAC THEN
+            Q.EXISTS_TAC `SFTempCall s' tas` THEN
             SRW_TAC [ETA_ss][],
-            SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN 
+            SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN
             Q.UNABBREV_ALL_TAC THEN SRW_TAC [][IDhd_inst_def]
           ]
         ]
       ],
 
-      SRW_TAC [][] THEN 
+      SRW_TAC [][] THEN
       FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
-      Cases_on `a` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN 
+      Cases_on `a` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
       SRW_TAC [DNF_ss][] THEN Cases_on `b'` THEN FSRW_TAC [] THENL [
-        SRW_TAC [][] THEN SRW_TAC [DNF_ss][] THEN 
-        FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_APPEND] THEN 
-        SRW_TAC [][] THEN 
-        MAP_EVERY Q.EXISTS_TAC [`l2''`, `l1''`, `h`] THEN 
-        SRW_TAC [][] THENL [ 
+        SRW_TAC [][] THEN SRW_TAC [DNF_ss][] THEN
+        FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_APPEND] THEN
+        SRW_TAC [][] THEN
+        MAP_EVERY Q.EXISTS_TAC [`l2''`, `l1''`, `h`] THEN
+        SRW_TAC [][] THENL [
           FULL_SIMP_TAC (srw_ss() ++ DNF_ss) [AND_IMP_INTRO, olmap_ALL_MEM] THEN
-          SRW_TAC [][] THEN FIRST_X_ASSUM MATCH_MP_TAC THEN 
+          SRW_TAC [][] THEN FIRST_X_ASSUM MATCH_MP_TAC THEN
           METIS_TAC [rich_listTheory.EL_IS_EL],
           SRW_TAC [ETA_ss][inst_comp_def]
         ],
         FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_APPEND] THEN SRW_TAC [][] THEN
-        MAP_EVERY Q.EXISTS_TAC [`l2''`,`sf'''`] THEN SRW_TAC [][] THEN 
+        MAP_EVERY Q.EXISTS_TAC [`l2''`,`sf'''`] THEN SRW_TAC [][] THEN
         FULL_SIMP_TAC (srw_ss() ++ DNF_ss)
-                      [IDhd_inst_EQ_SOME, AND_IMP_INTRO] 
+                      [IDhd_inst_EQ_SOME, AND_IMP_INTRO]
         THENL [
           SRW_TAC [][] THEN Cases_on `l1''` THENL [
-            FSRW_TAC [] THEN SRW_TAC [][] THEN 
-            FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN 
-            MAP_EVERY Q.EXISTS_TAC [`sfs1'`, `sf1'`] THEN 
+            FSRW_TAC [] THEN SRW_TAC [][] THEN
+            FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
+            MAP_EVERY Q.EXISTS_TAC [`sfs1'`, `sf1'`] THEN
             SRW_TAC [][] THENL [
-              FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN 
-              FIRST_X_ASSUM MATCH_MP_TAC THEN 
+              FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN
+              FIRST_X_ASSUM MATCH_MP_TAC THEN
               METIS_TAC [rich_listTheory.EL_IS_EL],
               SRW_TAC [][inst_comp_def, IDhd_inst_def]
             ],
-            FSRW_TAC [] THEN SRW_TAC [][] THEN 
-            FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN 
-            MAP_EVERY Q.EXISTS_TAC [`sfs1' ++ [sf1'] ++ t`, `h`] THEN 
+            FSRW_TAC [] THEN SRW_TAC [][] THEN
+            FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
+            MAP_EVERY Q.EXISTS_TAC [`sfs1' ++ [sf1'] ++ t`, `h`] THEN
             SRW_TAC [][] THENL [
-              FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN 
+              FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN
               METIS_TAC [rich_listTheory.EL_IS_EL],
               SRW_TAC [ETA_ss][inst_comp_def, IDhd_inst_def]
             ]
           ],
           SRW_TAC [][] THEN Cases_on `l1''` THENL [
-            FSRW_TAC [] THEN SRW_TAC [][] THEN 
-            FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN 
+            FSRW_TAC [] THEN SRW_TAC [][] THEN
+            FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
             SRW_TAC [][SNOC_11] THENL [
-              FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN 
+              FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN
               METIS_TAC [rich_listTheory.EL_IS_EL],
               SRW_TAC [ETA_ss][inst_comp_def, IDhd_inst_def]
             ],
-            FSRW_TAC [] THEN SRW_TAC [][] THEN 
-            FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN 
+            FSRW_TAC [] THEN SRW_TAC [][] THEN
+            FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
             REWRITE_TAC [SNOC_11] THEN SRW_TAC [][] THENL [
-              FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN 
+              FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN
               METIS_TAC [rich_listTheory.EL_IS_EL],
               SRW_TAC [ETA_ss][inst_comp_def, IDhd_inst_def]
             ]
@@ -515,48 +515,48 @@ val inst_comp_thm = store_thm(
         ]
       ],
 
-      SRW_TAC [][] THEN 
-      FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_EQ_SOME] THEN 
-      SRW_TAC [][] THEN SRW_TAC [DNF_ss][] THEN 
+      SRW_TAC [][] THEN
+      FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_EQ_SOME] THEN
+      SRW_TAC [][] THEN SRW_TAC [DNF_ss][] THEN
       Cases_on `b2` THEN FSRW_TAC [] THENL [
-        SRW_TAC [][] THEN 
-        FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_APPEND] THEN 
-        SRW_TAC [][] THEN DISJ2_TAC THEN 
-        MAP_EVERY Q.EXISTS_TAC [`l2''`, `s'`, `z`, `l1''`, `sfn2`] THEN 
+        SRW_TAC [][] THEN
+        FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_APPEND] THEN
+        SRW_TAC [][] THEN DISJ2_TAC THEN
+        MAP_EVERY Q.EXISTS_TAC [`l2''`, `s'`, `z`, `l1''`, `sfn2`] THEN
         SRW_TAC [][] THENL [
-          Cases_on `a` THEN FSRW_TAC [] THEN SRW_TAC [ETA_ss][] THEN 
+          Cases_on `a` THEN FSRW_TAC [] THEN SRW_TAC [ETA_ss][] THEN
           FULL_SIMP_TAC (srw_ss() ++ DNF_ss ++ ETA_ss) [],
-          FULL_SIMP_TAC (srw_ss() ++ DNF_ss ++ ETA_ss) [olmap_ALL_MEM] THEN 
+          FULL_SIMP_TAC (srw_ss() ++ DNF_ss ++ ETA_ss) [olmap_ALL_MEM] THEN
           METIS_TAC [rich_listTheory.EL_IS_EL],
-          SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN 
-          Cases_on `sfs1` THEN SRW_TAC [][] THEN 
+          SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN
+          Cases_on `sfs1` THEN SRW_TAC [][] THEN
           FSRW_TAC [olmap_EQ_SOME]
         ],
-        Cases_on `a` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN 
-        FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_APPEND] THEN 
+        Cases_on `a` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
+        FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_APPEND] THEN
         SRW_TAC [][] THEN FSRW_TAC [IDhd_inst_EQ_SOME] THENL [
-          Q.EXISTS_TAC `l2''` THEN 
-          Cases_on `l1''` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN 
+          Q.EXISTS_TAC `l2''` THEN
+          Cases_on `l1''` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
           SRW_TAC [][SNOC_11] THENL [
             FULL_SIMP_TAC (srw_ss() ++ DNF_ss ++ ETA_ss) [],
             FSRW_TAC [olmap_ALL_MEM] THEN METIS_TAC [rich_listTheory.EL_IS_EL],
-            SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN 
-            FSRW_TAC [olmap_EQ_SOME] THEN 
+            SRW_TAC [][inst_comp_def, tempmap_comp_def] THEN
+            FSRW_TAC [olmap_EQ_SOME] THEN
             SRW_TAC [][LET_THM, IDhd_inst_def]
           ],
-          SRW_TAC [][] THEN Q.EXISTS_TAC `l2''` THEN 
+          SRW_TAC [][] THEN Q.EXISTS_TAC `l2''` THEN
           Cases_on `l1''` THENL [
             FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][SNOC_11] THENL [
               FULL_SIMP_TAC (srw_ss() ++ DNF_ss ++ ETA_ss) [],
-              FSRW_TAC [olmap_ALL_MEM] THEN 
+              FSRW_TAC [olmap_ALL_MEM] THEN
               METIS_TAC [rich_listTheory.EL_IS_EL],
               SRW_TAC [][inst_comp_def, tempmap_comp_def]
             ],
             FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][SNOC_11] THENL [
               FULL_SIMP_TAC (srw_ss() ++ DNF_ss ++ ETA_ss) [],
-              FSRW_TAC [olmap_ALL_MEM] THEN 
+              FSRW_TAC [olmap_ALL_MEM] THEN
               METIS_TAC [rich_listTheory.EL_IS_EL],
-              SRW_TAC [][inst_comp_def, tempmap_comp_def, LET_THM, 
+              SRW_TAC [][inst_comp_def, tempmap_comp_def, LET_THM,
                          IDhd_inst_def]
             ]
           ]
@@ -570,19 +570,19 @@ val inst_comp_thm = store_thm(
     (* TOBj case *)
     FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN METIS_TAC [],
 
-    (* TMPtr case *) 
-    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN 
+    (* TMPtr case *)
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
     Q.EXISTS_TAC `ty'` THEN SRW_TAC [][],
 
     (* some tva case *)
-    Cases_on `s1.valmap s` THEN FULL_SIMP_TAC (srw_ss()) [] THEN 
+    Cases_on `s1.valmap s` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
     SRW_TAC [][inst_comp_def],
 
     (* SFTEmpCall case *)
-    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN 
-    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_ALL_MEM] THEN 
-    RULE_ASSUM_TAC (SIMP_RULE (bool_ss ++ DNF_ss) [AND_IMP_INTRO]) THEN 
-    SRW_TAC [][] THEN FIRST_X_ASSUM MATCH_MP_TAC THEN 
+    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [olmap_ALL_MEM] THEN
+    RULE_ASSUM_TAC (SIMP_RULE (bool_ss ++ DNF_ss) [AND_IMP_INTRO]) THEN
+    SRW_TAC [][] THEN FIRST_X_ASSUM MATCH_MP_TAC THEN
     SRW_TAC [][rich_listTheory.EL_IS_EL]
   ]);
 
@@ -595,7 +595,7 @@ val type_match_trans = store_thm(
   SRW_TAC [][inst_comp_thm]);
 
 val is_renaming_def = Define`
-  is_renaming s = 
+  is_renaming s =
     (!v. ?nm. s.typemap v = TypeID (IDConstant(F,[],SFName nm))) /\
     (!v. ?nm. s.tempmap v = (F,[],nm)) /\
     (!v. ?nm. s.valmap v = TVAVar nm)
@@ -606,32 +606,36 @@ val empty_inst_is_renaming = store_thm(
   ``is_renaming empty_inst``,
   SRW_TAC [][empty_inst_def, is_renaming_def]);
 
-val tyinst_sz_def = Define`
-  (tyinst_sz (Class cid) = 2n) /\
+val tyinst_sz_defn = Hol_defn "tyinst_sz" `
+  (tyinst_sz (Class cid) = 3n) /\
   (tyinst_sz (Ptr ty) = 1 + tyinst_sz ty) /\
   (tyinst_sz (MPtr id ty) = 1 + cppidinst_sz id + tyinst_sz ty) /\
   (tyinst_sz (Ref ty) = 1 + tyinst_sz ty) /\
   (tyinst_sz (Array ty n) = 1 + tyinst_sz ty) /\
-  (tyinst_sz (Function ty tyl) = 1 + tyinst_sz ty + tylinst_sz tyl) /\
+  (tyinst_sz (Function ty tyl) =
+     FOLDL (\a ty. a + tyinst_sz ty) (1 + tyinst_sz ty) tyl) /\
   (tyinst_sz (Const ty) = 1 + tyinst_sz ty) /\
-  (tyinst_sz (TypeID id) = 1) /\
-  (tyinst_sz Void = 2) /\
-  (tyinst_sz BChar = 2) /\
-  (tyinst_sz Bool = 2) /\
-  (tyinst_sz (Unsigned _) = 2) /\
-  (tyinst_sz (Signed _) = 2) /\
-  (tyinst_sz Float = 2) /\
-  (tyinst_sz Double = 2) /\
-  (tyinst_sz LDouble = 2)
+  (tyinst_sz (TypeID id) = 1 + cppidinst_sz id) /\
+  (tyinst_sz Void = 3) /\
+  (tyinst_sz BChar = 3) /\
+  (tyinst_sz Bool = 3) /\
+  (tyinst_sz (Unsigned _) = 3) /\
+  (tyinst_sz (Signed _) = 3) /\
+  (tyinst_sz Float = 3) /\
+  (tyinst_sz Double = 3) /\
+  (tyinst_sz LDouble = 3)
 
      /\
 
-  (cppidinst_sz (IDVar s) = 1) /\
-  (cppidinst_sz (IDConstant tn) = 1)
+  (cppidinst_sz (IDVar s) = 2) /\
+  (cppidinst_sz (IDConstant (b,sfs,sf)) =
+     FOLDL (\a sf. a + sfldinst_sz sf)
+           (sfldinst_sz sf + (if b then 1 else 0))
+           sfs)
 
      /\
 
-  (sfldinst_sz (SFTempCall s tal) = 1 + talinst_sz tal) /\
+  (sfldinst_sz (SFTempCall s tal) = FOLDL (\a ta. a + tainst_sz ta) 2 tal) /\
   (sfldinst_sz (SFName s) = 1)
 
      /\
@@ -646,37 +650,56 @@ val tyinst_sz_def = Define`
   (tvainst_sz (TObj id) = 1 + cppidinst_sz id) /\
   (tvainst_sz (TMPtr id ty) = 1 + cppidinst_sz id + tyinst_sz ty) /\
   (tvainst_sz (TVAVar s) = 0)
-
-     /\
-
-  (talinst_sz [] = 0) /\
-  (talinst_sz (ta::tal) = 1 + tainst_sz ta + talinst_sz tal)
-
-     /\
-
-  (tylinst_sz [] = 0) /\
-  (tylinst_sz (ty::tyl) = 1 + tyinst_sz ty + tylinst_sz tyl)
 `
+
+val (tyinst_sz_def, tyinst_sz_ind) = Defn.tprove(
+  tyinst_sz_defn,
+  WF_REL_TAC `^(last (TotalDefn.guessR tyinst_sz_defn))` THEN
+  SRW_TAC [ARITH_ss][] THENL [
+    Induct_on `tyl` THEN SRW_TAC [ARITH_ss][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `sfs` THEN SRW_TAC [ARITH_ss][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `tal` THEN SRW_TAC [ARITH_ss][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []
+  ]);
+val _ = save_thm("tyinst_sz_def", tyinst_sz_def)
+val _ = save_thm("tyinst_sz_ind", tyinst_sz_ind)
 val _ = export_rewrites ["tyinst_sz_def"]
 
-val typeid_size = store_thm(
-  "typeid_size",
-  ``(typeid ty = SOME id) ==> (tyinst_sz ty = 1)``,
-  Cases_on `ty` THEN SRW_TAC [][]);
+val ACC_LEQ_FOLDL = store_thm(
+  "ACC_LEQ_FOLDL",
+  ``!l acc f. (acc:num) <= FOLDL (\a x. a + f x) acc l``,
+  Induct THEN SRW_TAC [][] THEN
+  `acc + f h <= FOLDL (\a x. a + f x) (acc + f h) l` by METIS_TAC [] THEN
+  DECIDE_TAC);
 
-val zero_lt_tysize = store_thm(
-  "zero_lt_tysize",
-  ``0 < tyinst_sz ty``,
-  Cases_on `ty` THEN SRW_TAC [ARITH_ss][]);
+val LEQ_FOLDL_I = store_thm(
+  "LEQ_FOLDL_I",
+  ``x <= (acc:num) ==> x <= FOLDL (\a x. a + f x) acc l``,
+  METIS_TAC [DECIDE ``x:num <= y /\ y <= z ==> x <= z``, ACC_LEQ_FOLDL]);
 
-val tyinst_sz_EQ_1 = store_thm(
-  "tyinst_sz_EQ_1",
-  ``(tyinst_sz ty = 1) = ?id. ty = TypeID id``,
-  Cases_on `ty` THEN SRW_TAC [][] THEN
-  MP_TAC (Q.INST [`ty` |-> `C''`] zero_lt_tysize) THEN
-  TRY DECIDE_TAC THEN
-  MP_TAC (Q.INST [`ty` |-> `C0`] zero_lt_tysize) THEN DECIDE_TAC);
-val _ = export_rewrites ["tyinst_sz_EQ_1"]
+val LT_FOLDL_I = store_thm(
+  "LT_FOLDL_I",
+  ``!acc. (x:num) < acc ==> x < FOLDL (\a x. a + f x) acc l``,
+  Induct_on `l` THEN SRW_TAC [ARITH_ss][] THEN
+  FIRST_X_ASSUM MATCH_MP_TAC THEN DECIDE_TAC);
+
+val one_leq_sfldinst_sz = store_thm(
+  "one_leq_sfldinst_sz",
+  ``1 <= sfldinst_sz sf``,
+  Cases_on `sf` THEN SRW_TAC [][LEQ_FOLDL_I]);
+
+val one_leq_cppidinst_sz = store_thm(
+  "one_leq_cppidinst_sz",
+  ``1 <= cppidinst_sz id``,
+  IDC_TAC `id` THEN SRW_TAC [ARITH_ss][LEQ_FOLDL_I, one_leq_sfldinst_sz]);
+
+val one_lt_tysize = store_thm(
+  "one_lt_tysize",
+  ``!ty. 1 < tyinst_sz ty``,
+  Induct THEN SRW_TAC [ARITH_ss][LT_FOLDL_I] THEN
+  SRW_TAC [][DECIDE ``0n < x = 1 <= x``, one_leq_cppidinst_sz])
 
 val tvainst_sz_EQ_0 = store_thm(
   "tvainst_sz_EQ_0",
@@ -684,42 +707,159 @@ val tvainst_sz_EQ_0 = store_thm(
   Cases THEN SRW_TAC [][]);
 val _ = export_rewrites ["tvainst_sz_EQ_0"]
 
+val cppidinst_sz_EQ_1 = store_thm(
+  "cppidinst_sz_EQ_1",
+  ``(cppidinst_sz id = 1) = ?nm b. id = IDConstant(F, [], SFName nm)``,
+  IDC_TAC `id` THEN SRW_TAC [][] THENL [
+    Q.MATCH_ABBREV_TAC `~(x = 1n)` THEN
+    Q_TAC SUFF_TAC `2 <= x` THEN1 DECIDE_TAC THEN
+    Q.UNABBREV_ALL_TAC THEN MATCH_MP_TAC LEQ_FOLDL_I THEN
+    SRW_TAC [][DECIDE ``2n <= x + 1 = 1 <= x``, one_leq_sfldinst_sz],
+    SRW_TAC [][EQ_IMP_THM] THEN SRW_TAC [][] THEN
+    Cases_on `sfs` THEN FSRW_TAC [] THENL [
+      Cases_on `sf` THEN FSRW_TAC [] THEN
+      POP_ASSUM MP_TAC THEN
+      Q.MATCH_ABBREV_TAC `(x = 1n) ==> F` THEN
+      Q_TAC SUFF_TAC `2 <= x` THEN1 DECIDE_TAC THEN
+      Q.UNABBREV_ALL_TAC THEN SRW_TAC [][LEQ_FOLDL_I],
+      POP_ASSUM MP_TAC THEN
+      Q.MATCH_ABBREV_TAC `(x = 1n) ==> F` THEN
+      Q_TAC SUFF_TAC `2 <= x` THEN1 DECIDE_TAC THEN
+      Q.UNABBREV_ALL_TAC THEN MATCH_MP_TAC LEQ_FOLDL_I THEN
+      Q.SPEC_THEN `sf` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
+      Q.SPEC_THEN `h` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
+      DECIDE_TAC
+    ]
+  ]);
+
+val lem = prove(``~(tyinst_sz x = 1) /\ ~(tyinst_sz x = 0)``,
+                Q.SPEC_THEN `x` MP_TAC (GEN_ALL one_lt_tysize) THEN
+                DECIDE_TAC);
+val tyinst_sz_EQ_2 = store_thm(
+  "tyinst_sz_EQ_2",
+  ``(tyinst_sz ty = 2) = ?nm. ty = TypeID(IDConstant(F, [], SFName nm))``,
+  Cases_on `ty` THEN SRW_TAC [][DECIDE ``(1 + x = 2n) = (x = 1)``,
+                                cppidinst_sz_EQ_1, lem]
+  THENL [
+    SRW_TAC [][DECIDE ``((1n + x) + y = 2) = (x + y = 1)``,
+               DECIDE ``(x + y = 1n) =
+                          (x = 1) /\ (y = 0) \/ (x = 0) /\ (y = 1)``,
+               lem],
+    Q.MATCH_ABBREV_TAC `~(x = 2n)` THEN
+    Q_TAC SUFF_TAC `2 < x` THEN1 DECIDE_TAC THEN
+    Q.UNABBREV_ALL_TAC THEN MATCH_MP_TAC LT_FOLDL_I THEN
+    Q.SPEC_THEN `C''` MP_TAC (GEN_ALL one_lt_tysize) THEN DECIDE_TAC
+  ]);
+
+val sfldinst_sz_EQ_1 = store_thm(
+  "sfldinst_sz_EQ_1",
+  ``(sfldinst_sz sf = 1) = ?nm. sf = SFName nm``,
+  Cases_on `sf` THEN SRW_TAC [][] THEN
+  Q.MATCH_ABBREV_TAC `~(x = 1n)` THEN
+  Q_TAC SUFF_TAC `2 <= x` THEN1 DECIDE_TAC THEN
+  SRW_TAC [][Abbr`x`, LEQ_FOLDL_I]);
+
+val FOLDL_LEQ_FOLDL = prove(
+  ``!list1 list2 acc1 acc2 f.
+       acc1 <= acc2 /\ (LENGTH list1 = LENGTH list2) /\
+       (!i. i < LENGTH list1 ==> f (EL i list1) <= f (EL i list2)) ==>
+       FOLDL (\a x. a + f x) (acc1:num) list1
+      <=
+       FOLDL (\a x. a + f x) (acc2:num) list2``,
+  Induct THEN SRW_TAC [][] THEN
+  Cases_on `list2` THEN FSRW_TAC [] THEN
+  FIRST_X_ASSUM MATCH_MP_TAC THEN
+  FIRST_X_ASSUM (fn th => Q.SPEC_THEN `0` MP_TAC th THEN
+                          Q.SPEC_THEN `SUC n` (MP_TAC o GEN_ALL) th) THEN
+  SRW_TAC [ARITH_ss][]);
+
+
+val FOLDL_APPEND = store_thm(
+  "FOLDL_APPEND",
+  ``!l1 l2 f acc. FOLDL f acc (l1 ++ l2) = FOLDL f (FOLDL f acc l1) l2``,
+  Induct THEN SRW_TAC [][]);
+
 val type_match_size_increase = store_thm(
   "type_match_size_increase",
-  ``(!id1 s ty2. (cppid_inst s id1 = SOME ty2) ==>
-                 cppidinst_sz id1 <= tyinst_sz ty2) /\
-    (!sfld1 s sfld2. (sfld_inst s sfld1 = SOME sfld2) ==>
-                     sfldinst_sz sfld1 <= sfldinst_sz sfld2) /\
+  ``(!ty1 s ty2. (type_inst s ty1 = SOME ty2) ==>
+                 tyinst_sz ty1 <= tyinst_sz ty2) /\
+    (!id1 s ty2. (cppid_inst s id1 = SOME ty2) ==>
+                 1 + cppidinst_sz id1 <= tyinst_sz ty2) /\
     (!ta1 s ta2. (temparg_inst s ta1 = SOME ta2) ==>
                  tainst_sz ta1 <= tainst_sz ta2) /\
     (!tva1 s tva2. (temp_valarg_inst s tva1 = SOME tva2) ==>
                    tvainst_sz tva1 <= tvainst_sz tva2) /\
-    (!ty1 s ty2. (type_inst s ty1 = SOME ty2) ==>
-                 tyinst_sz ty1 <= tyinst_sz ty2) /\
-    (!tal1 s tal2. (olmap (temparg_inst s) tal1 = SOME tal2) ==>
-                   talinst_sz tal1 <= talinst_sz tal2) /\
-    (!tyl1 s tyl2. (olmap (type_inst s) tyl1 = SOME tyl2) ==>
-                   (tylinst_sz tyl1 <= tylinst_sz tyl2))``,
-  Induct THEN SRW_TAC [][] THEN SRW_TAC [][] THEN
-  FTRY (RES_TAC THEN DECIDE_TAC) THEN
-  FTRY (IMP_RES_TAC typeid_size THEN RES_TAC THEN DECIDE_TAC) THENL [
-    Cases_on `p` THEN Case
-    MATCH_ACCEPT_TAC (GEN_ALL zero_lt_tysize),
+    (!sfld1 s sfld2. (sfld_inst s sfld1 = SOME sfld2) ==>
+                     sfldinst_sz sfld1 <= sfldinst_sz sfld2)``,
+  HO_MATCH_MP_TAC type_inst_ind THEN SRW_TAC [][] THEN SRW_TAC [][] THEN
+  FTRY (RES_TAC THEN DECIDE_TAC) THENL [
+    RES_TAC THEN Cases_on `ty` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
+    DECIDE_TAC,
+    MATCH_MP_TAC FOLDL_LEQ_FOLDL THEN FSRW_TAC [olmap_ALL_MEM] THEN
+    METIS_TAC [rich_listTheory.EL_IS_EL],
+    MATCH_MP_TAC FOLDL_LEQ_FOLDL THEN FSRW_TAC [olmap_ALL_MEM] THEN
+    METIS_TAC [rich_listTheory.EL_IS_EL],
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [IDhd_inst_EQ_SOME] THENL [
+      SRW_TAC [][] THEN FSRW_TAC [olmap_EQ_SOME] THEN
+      Cases_on `sfld1` THEN FSRW_TAC [] THEN
+      SRW_TAC [][one_lt_tysize, DECIDE ``2n <= x = 1 < x``],
 
-    Cases_on `p` THEN Cases_on `r` THEN Cases_on `q` THEN 
-    FULL_SIMP_TAC (srw_ss()) [] THEN SRW_TAC [][] THEN 
-    FSRW_TAC [IDhd_inst_EQ_SOME] THEN SRW_TAC [][] THEN 
-    Cases_on `s.typemap s'` THEN SRW_TAC [ARITH_ss][zero_lt_tysize] THENL [
-      Q.SPEC_THEN `C0` MP_TAC (GEN_ALL zero_lt_tysize) THEN DECIDE_TAC,
-      Q.SPEC_THEN `C''` MP_TAC (GEN_ALL zero_lt_tysize) THEN DECIDE_TAC,
-      
-      
-    
+      SRW_TAC [][] THEN FSRW_TAC [olmap_EQ_SOME] THEN
+      Cases_on `sfld1` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
+      FULL_SIMP_TAC (srw_ss() ++ ETA_ss ++ DNF_ss) [] THEN
+      MATCH_MP_TAC LEQ_FOLDL_I THEN RES_TAC THEN DECIDE_TAC,
 
-    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN RES_TAC,
+      SRW_TAC [][] THEN FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
+      SRW_TAC [][FOLDL_APPEND] THEN MATCH_MP_TAC FOLDL_LEQ_FOLDL THEN
+      FSRW_TAC [olmap_ALL_MEM] THEN SRW_TAC [][] THEN
+      Cases_on `h0` THEN FSRW_TAC [] THEN SRW_TAC [][] THENL [
+        MATCH_MP_TAC
+          (DECIDE ``x1:num <= x2 /\ y1 <= y2 ==> x1 + y1 <= x2 + y2``) THEN
+        CONJ_TAC THENL [
+          METIS_TAC [LEQ_FOLDL_I, DECIDE ``x:num <= y ==> x <= y + 1``],
+          SRW_TAC [][one_leq_sfldinst_sz]
+        ],
+        METIS_TAC [rich_listTheory.EL_IS_EL],
+        MATCH_MP_TAC
+          (DECIDE ``x1:num <= x2 /\ y1 <= y2 ==> x1 + y1 <= x2 + y2``) THEN
+        CONJ_TAC THENL [
+          METIS_TAC [LEQ_FOLDL_I],
+          SRW_TAC [][one_leq_sfldinst_sz]
+        ],
+        METIS_TAC [rich_listTheory.EL_IS_EL]
+      ],
 
-    FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THEN RES_TAC THEN DECIDE_TAC
+      SRW_TAC [][] THEN FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
+      SRW_TAC [][FOLDL_APPEND] THEN MATCH_MP_TAC FOLDL_LEQ_FOLDL THEN
+      FSRW_TAC [olmap_ALL_MEM] THEN CONJ_TAC THENL [
+        MATCH_MP_TAC LESS_EQ_LESS_EQ_MONO THEN CONJ_TAC THENL [
+          MATCH_MP_TAC LEQ_FOLDL_I THEN
+          METIS_TAC [DECIDE ``x:num <= y ==> x <= y + 1``],
+          Cases_on `h0` THEN FSRW_TAC [] THEN
+          FULL_SIMP_TAC (srw_ss() ++ DNF_ss ++ ETA_ss) [] THEN
+          METIS_TAC []
+        ],
+        METIS_TAC [rich_listTheory.EL_IS_EL],
+        MATCH_MP_TAC LESS_EQ_LESS_EQ_MONO THEN CONJ_TAC THENL [
+          MATCH_MP_TAC LEQ_FOLDL_I THEN
+          METIS_TAC [DECIDE ``x:num <= y ==> x <= y + 1``],
+          Cases_on `h0` THEN FSRW_TAC [] THEN
+          FULL_SIMP_TAC (srw_ss() ++ DNF_ss ++ ETA_ss) [] THEN
+          METIS_TAC []
+        ],
+        METIS_TAC [rich_listTheory.EL_IS_EL]
+      ]
+    ],
+
+    RES_TAC THEN Cases_on `ty` THEN FSRW_TAC [] THEN SRW_TAC [][],
+    RES_TAC THEN Cases_on `ty` THEN FSRW_TAC [] THEN SRW_TAC [][],
+    RES_TAC THEN Cases_on `ty` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
+    DECIDE_TAC,
+
+    MATCH_MP_TAC FOLDL_LEQ_FOLDL THEN
+    FSRW_TAC [olmap_ALL_MEM] THEN METIS_TAC [rich_listTheory.EL_IS_EL]
   ]);
+
 val _ = Hol_datatype`frees_record = <| tyfvs : string set ;
                                        tempfvs : string set ;
                                        valfvs : string set |>`
@@ -736,6 +876,13 @@ val freerec_UNION_def = Define`
 `;
 val _ = overload_on ("UNION", ``freerec_UNION``)
 
+val freerec_UNION_empty = store_thm(
+  "freerec_UNION_empty",
+  ``(freerec_UNION fr1 {} = fr1) /\ (freerec_UNION {} fr2 = fr2)``,
+  SRW_TAC [][freerec_UNION_def, empty_freerec_def,
+             theorem "frees_record_component_equality"]);
+val _ = export_rewrites ["freerec_UNION_empty"]
+
 val tyfree_sing_def = Define`
   tyfree_sing s = <| tyfvs := {s}; tempfvs := {}; valfvs := {} |>
 `;
@@ -747,12 +894,11 @@ val valfree_sing_def = Define`
 `
 
 val renaming_upto_def = Define`
-  renaming_upto frees s = (!v. v IN frees.tyfvs ==>
-                               ?nm. s.typemap v = TypeID (IDVar nm)) /\
-                          (!v. v IN frees.tempfvs ==>
-                               ?nm. s.tempmap v = IDVar nm) /\
-                          (!v. v IN frees.valfvs ==>
-                               ?nm. s.valmap v = TVAVar nm)
+  renaming_upto frees s =
+    (!v. v IN frees.tyfvs ==>
+           ?nm. s.typemap v = TypeID (IDConstant(F,[],SFName nm))) /\
+    (!v. v IN frees.tempfvs ==> ?nm. s.tempmap v = (F,[],nm)) /\
+    (!v. v IN frees.valfvs ==> ?nm. s.valmap v = TVAVar nm)
 `;
 
 val renaming_upto_empty = store_thm(
@@ -774,7 +920,7 @@ val tyfrees_defn = Defn.Hol_defn "tyfrees" `
   (tyfrees (MPtr id ty) = cppidfrees id UNION tyfrees ty) /\
   (tyfrees (Ref ty) = tyfrees ty) /\
   (tyfrees (Array ty n) = tyfrees ty) /\
-  (tyfrees (Function ty tyl) = 
+  (tyfrees (Function ty tyl) =
      FOLDL (\a ty.  a UNION tyfrees ty) (tyfrees ty) tyl) /\
   (tyfrees (Const ty) = tyfrees ty) /\
   (tyfrees (TypeID id) = cppidfrees id) /\
@@ -789,9 +935,15 @@ val tyfrees_defn = Defn.Hol_defn "tyfrees" `
 
      /\
 
-  (cppidfrees (IDVar s) = tyfree_sing s) /\
-  (cppidfrees (IDConstant (b,sfs,sf)) = 
-     FOLDL (\a sf. a UNION sfldfrees sf) (sfldfrees sf) sfs)
+  (cppidfrees (IDVar s) = {}) /\
+  (cppidfrees (IDConstant (b,sfs,sf)) =
+     FOLDL (\a sf. a UNION sfldfrees sf)
+           (sfldfrees sf UNION
+            (if b then {}
+             else case IDhd (IDConstant(b,sfs,sf)) of
+                    SFName s -> tyfree_sing s
+                 || SFTempCall s targs -> tempfree_sing s) )
+           sfs)
 
      /\
 
@@ -813,15 +965,15 @@ val tyfrees_defn = Defn.Hol_defn "tyfrees" `
 `
 
 val (tyfrees_def, tyfrees_ind) = Defn.tprove(
-  tyfrees_defn, 
-  WF_REL_TAC 
-    `^(last (TotalDefn.guessR tyfrees_defn))` THEN 
+  tyfrees_defn,
+  WF_REL_TAC
+    `^(last (TotalDefn.guessR tyfrees_defn))` THEN
   SRW_TAC [ARITH_ss][] THENL [
-    Induct_on `tyl` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN 
+    Induct_on `tyl` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
     FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
-    Induct_on `sfs` THEN SRW_TAC [][] THEN 
+    Induct_on `sfs` THEN SRW_TAC [][] THEN
     FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
-    Induct_on `tal` THEN SRW_TAC [][] THEN 
+    Induct_on `tal` THEN SRW_TAC [][] THEN
     FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []
   ]);
 val _ = save_thm("tyfrees_def", tyfrees_def)
@@ -830,163 +982,289 @@ val _ = export_rewrites ["tyfrees_def"]
 
 val renaming_upto_FOLDL = store_thm(
   "renaming_upto_FOLDL",
-  ``!list acc s. 
+  ``!list acc s.
        (!e. MEM e list ==> renaming_upto (f e) s) /\
-       renaming_upto acc s ==> 
+       renaming_upto acc s ==>
        renaming_upto (FOLDL (\a e. a UNION f e) acc list) s``,
   Induct THEN SRW_TAC [][]);
 
-val tylinst_sz_leq = prove(
-  ``!xl yl x y. 
-      (x + tylinst_sz xl = y + tylinst_sz yl) /\ x <= y /\
-      (LENGTH xl = LENGTH yl) /\
-      (!i. i < LENGTH xl ==> tyinst_sz (EL i xl) <= tyinst_sz (EL i yl)) ==>
-      (x = y) /\ (tylinst_sz xl = tylinst_sz yl)``,
-  Induct THEN1 SRW_TAC [ARITH_ss][] THEN 
-  Cases_on `yl` THEN SIMP_TAC (srw_ss()) [] THEN 
-  REPEAT GEN_TAC THEN STRIP_TAC THEN
-  `tyinst_sz h' <= tyinst_sz h`
-      by (FIRST_X_ASSUM (Q.SPEC_THEN `0` MP_TAC) THEN SRW_TAC [][]) THEN 
-  FIRST_X_ASSUM (Q.SPEC_THEN `SUC i` (MP_TAC o Q.GEN `i`)) THEN 
-  SIMP_TAC (srw_ss()) [] THEN 
-  `x + tyinst_sz h' + 1 + tylinst_sz xl = 
-     y + tyinst_sz h + 1 + tylinst_sz t` by DECIDE_TAC THEN 
-  `x + tyinst_sz h' + 1 <= y + tyinst_sz h + 1` by DECIDE_TAC THEN 
-  STRIP_TAC THEN 
-  `(x + tyinst_sz h' + 1 = y + tyinst_sz h + 1) /\ 
-   (tylinst_sz xl = tylinst_sz t)`
-     by METIS_TAC [] THEN 
-  DECIDE_TAC);
-  
+val FOLDL_EQ_E = store_thm(
+  "FOLDL_EQ_E",
+  ``!list1 list2 b1 b2.
+      (FOLDL (\a:num x. a + f x) b1 list1 = FOLDL (\a x. a + f x) b2 list2) /\
+      (LENGTH list1 = LENGTH list2) /\ b1 <= b2 /\
+      (!i. i < LENGTH list1 ==> f (EL i list1) <= f (EL i list2)) ==>
+      (b1 = b2) /\
+      !i. i < LENGTH list1 ==> (f (EL i list1) = f (EL i list2))``,
+  Induct THENL [
+    SRW_TAC [][] THEN Cases_on `list2` THEN FSRW_TAC [],
+    SIMP_TAC (srw_ss()) [] THEN REPEAT GEN_TAC THEN
+    Cases_on `list2` THEN SIMP_TAC (srw_ss()) [] THEN
+    REPEAT (DISCH_THEN STRIP_ASSUME_TAC) THEN
+    `f h <= f h'`
+       by (FIRST_X_ASSUM (Q.SPEC_THEN `0` MP_TAC) THEN
+           SIMP_TAC (srw_ss()) []) THEN
+    `b1 + f h <= b2 + f h'` by DECIDE_TAC THEN
+    FIRST_X_ASSUM (Q.SPEC_THEN `SUC i` (MP_TAC o GEN_ALL)) THEN
+    SIMP_TAC (srw_ss()) [] THEN STRIP_TAC THEN
+    `(b1 + f h = b2 + f h') /\
+     !i. i < LENGTH list1' ==> (f (EL i list1') = f (EL i t))`
+       by METIS_TAC [] THEN
+    `(b1 = b2) /\ (f h = f h')` by DECIDE_TAC THEN
+    ASM_REWRITE_TAC [] THEN
+    Cases THEN SIMP_TAC (srw_ss()) [] THEN METIS_TAC []
+  ]);
+
+val FOLDL_LEQ_FOLDL_I = store_thm(
+  "FOLDL_LEQ_FOLDL_I",
+  ``!list1 list2 b1:num b2:num.
+       (LENGTH list1 = LENGTH list2) /\ b1 <= b2 /\
+       (!i. i < LENGTH list1 ==> f (EL i list1) <= f (EL i list2)) ==>
+       FOLDL (\a x. a + f x) b1 list1 <= FOLDL (\a x. a + f x) b2 list2``,
+  Induct THEN SRW_TAC [][] THEN Cases_on `list2` THEN FSRW_TAC [] THEN
+  FIRST_X_ASSUM MATCH_MP_TAC THEN SRW_TAC [][] THENL [
+    FIRST_X_ASSUM (Q.SPEC_THEN `0` MP_TAC) THEN SRW_TAC [ARITH_ss][],
+    FIRST_X_ASSUM (Q.SPEC_THEN `SUC i` MP_TAC) THEN SRW_TAC [ARITH_ss][]
+  ]);
+
+fun sym t = mk_eq(rhs t, lhs t)
+
 val type_match_size_eq_renaming = store_thm(
   "type_match_size_eq_renaming",
-  ``(!s ty1 ty2. (type_inst s ty1 = SOME ty2) /\
+  ``(!ty1 s ty2. (type_inst s ty1 = SOME ty2) /\
                  (tyinst_sz ty2 = tyinst_sz ty1) ==>
                  renaming_upto (tyfrees ty1) s) /\
-    (!s id1 ty2. (cppid_inst s id1 = SOME ty2) /\
+    (!id1 s ty2. (cppid_inst s id1 = SOME ty2) /\
                  (tyinst_sz ty2 = 1 + cppidinst_sz id1) ==>
                  renaming_upto (cppidfrees id1) s) /\
-    (!s ta1 ta2. (temparg_inst s ta1 = SOME ta2) /\
+    (!ta1 s ta2. (temparg_inst s ta1 = SOME ta2) /\
                  (tainst_sz ta2 = tainst_sz ta1) ==>
                  renaming_upto (tafrees ta1) s) /\
-    (!s tva1 tva2. (temp_valarg_inst s tva1 = SOME tva2) /\
+    (!tva1 s tva2. (temp_valarg_inst s tva1 = SOME tva2) /\
                    (tvainst_sz tva2 = tvainst_sz tva1) ==>
                    renaming_upto (tvalfrees tva1) s) /\
-    (!s sfld1 sfld2. (sfld_inst s sfld1 = SOME sfld2) /\
+    (!sfld1 s sfld2. (sfld_inst s sfld1 = SOME sfld2) /\
                      (sfldinst_sz sfld2 = sfldinst_sz sfld1) ==>
                      renaming_upto (sfldfrees sfld1) s) ``,
-  HO_MATCH_MP_TAC type_inst_ind THEN SRW_TAC [][] THEN 
-  FULL_SIMP_TAC (srw_ss()) [] THENL [
-    `cppidinst_sz id1 < tyinst_sz ty /\ tyinst_sz ty1 <= tyinst_sz y0` 
-       by METIS_TAC [type_match_size_increase] THEN 
-    IMP_RES_TAC typeid_size THEN 
+  HO_MATCH_MP_TAC type_inst_ind THEN REPEAT CONJ_TAC THEN
+  SIMP_TAC (srw_ss()) [] THEN REPEAT (GEN_TAC ORELSE DISCH_TAC) THEN
+  REPEAT VAR_EQ_TAC THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  REPEAT VAR_EQ_TAC THEN FSRW_TAC [] THENL [
+    (* MPtr *)
+    Cases_on `ty` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
+    FIRST_X_ASSUM MATCH_MP_TAC THEN
+    `tyinst_sz ty1 <= tyinst_sz y0 /\
+     1 + cppidinst_sz id1 <= tyinst_sz (TypeID C'')`
+       by METIS_TAC [type_match_size_increase] THEN
+    FSRW_TAC [] THEN DECIDE_TAC,
+
+    (* Function *)
+    `tyinst_sz ty1 <= tyinst_sz x0`
+       by METIS_TAC [type_match_size_increase] THEN
+    FULL_SIMP_TAC (srw_ss()) [olmap_ALL_MEM] THEN
+    `!i. i < LENGTH tylist ==>
+         (tyinst_sz (EL i tylist) <= tyinst_sz (EL i y0))`
+       by METIS_TAC [type_match_size_increase] THEN
+    `1 + tyinst_sz ty1 <= 1 + tyinst_sz x0` by DECIDE_TAC THEN
+    `(1 + tyinst_sz x0 = 1 + tyinst_sz ty1) /\
+     !i. i < LENGTH tylist ==>
+         (tyinst_sz (EL i tylist) = tyinst_sz (EL i y0))`
+       by METIS_TAC [FOLDL_EQ_E] THEN
+    MATCH_MP_TAC renaming_upto_FOLDL THEN
+    FULL_SIMP_TAC (srw_ss() ++ ETA_ss ++ DNF_ss) [AND_IMP_INTRO] THEN
+    METIS_TAC [listTheory.MEM_EL],
+
+    (* IDConstant 1 *)
+    MATCH_MP_TAC renaming_upto_FOLDL THEN FSRW_TAC [olmap_ALL_MEM] THEN
+    `sfldinst_sz sfld1 <= sfldinst_sz sf''`
+       by METIS_TAC [type_match_size_increase] THEN
+    `sfldinst_sz sfld1 + 1 <= sfldinst_sz sf'' + 1` by DECIDE_TAC THEN
+    `(sfldinst_sz sf'' + 1 = sfldinst_sz sfld1 + 1) /\
+     !i. i < LENGTH sfs ==> (sfldinst_sz (EL i sfs') = sfldinst_sz (EL i sfs))`
+       by METIS_TAC [type_match_size_increase, FOLDL_EQ_E] THEN
+    METIS_TAC [listTheory.MEM_EL, DECIDE ``(x + 1n = y + 1) = (x = y)``],
+
+    FSRW_TAC [IDhd_inst_EQ_SOME] THEN SRW_TAC [][] THENL [
+      FSRW_TAC [olmap_EQ_SOME] THEN Cases_on `sfld1` THEN FSRW_TAC [] THEN
+      SRW_TAC [][] THEN FSRW_TAC [] THEN
+      SRW_TAC [][renaming_upto_def] THEN
+      FSRW_TAC [tyfree_sing_def] THEN SRW_TAC [][] THEN
+      FSRW_TAC [tyinst_sz_EQ_2],
+
+      FSRW_TAC [olmap_EQ_SOME] THEN Cases_on `sfld1` THEN FSRW_TAC [] THEN
+      SRW_TAC [][] THENL [
+        FIRST_X_ASSUM MATCH_MP_TAC THEN
+        SRW_TAC [DNF_ss][] THEN FSRW_TAC [] THEN
+        Cases_on `sfs2` THEN FSRW_TAC [] THENL [
+          Cases_on `b2` THEN FSRW_TAC [] THEN
+          FSRW_TAC [olmap_ALL_MEM] THEN
+          `!i. i < LENGTH tas ==> tainst_sz (EL i l) <= tainst_sz (EL i tas)`
+             by METIS_TAC [type_match_size_increase] THEN
+          `FOLDL (\a ta. a + tainst_sz ta) 2 l <=
+           FOLDL (\a ta. a + tainst_sz ta) 2 tas`
+             by METIS_TAC [DECIDE ``x:num <= x``, FOLDL_LEQ_FOLDL_I] THEN
+          DECIDE_TAC,
+          (**)POP_ASSUM MP_TAC THEN
+          Q.MATCH_ABBREV_TAC `(FOLDL g (x + y + z) l1 = x':num) ==> X` THEN
+          `x < FOLDL g (x + y + z) l1`
+             by (Q.UNABBREV_TAC `g` THEN MATCH_MP_TAC LT_FOLDL_I THEN
+                 Q.UNABBREV_ALL_TAC THEN SRW_TAC [ARITH_ss][] THEN
+                 SRW_TAC [][DECIDE ``0n < x = 1 <= x``,
+                            one_leq_sfldinst_sz]) THEN
+          Q_TAC SUFF_TAC `x' <= x` THEN1 DECIDE_TAC THEN
+          Q.UNABBREV_ALL_TAC THEN MATCH_MP_TAC FOLDL_LEQ_FOLDL_I THEN
+          FSRW_TAC [olmap_ALL_MEM] THEN METIS_TAC [type_match_size_increase]
+        ],
+        FULL_SIMP_TAC (srw_ss() ++ DNF_ss) [] THEN POP_ASSUM MP_TAC THEN
+        Cases_on `sfs2` THEN FSRW_TAC [] THENL [
+          Cases_on `b2` THEN
+          FSRW_TAC [renaming_upto_def, tempfree_sing_def] THEN
+          Q.PAT_ASSUM `(!) P` (K ALL_TAC) THEN
+          FSRW_TAC [olmap_ALL_MEM] THEN
+          Q.MATCH_ABBREV_TAC `~(X + 1n = X')` THEN
+          Q_TAC SUFF_TAC `X' <= X` THEN1 DECIDE_TAC THEN
+          Q.UNABBREV_ALL_TAC THEN MATCH_MP_TAC FOLDL_LEQ_FOLDL_I THEN
+          SRW_TAC [][] THEN METIS_TAC [type_match_size_increase],
+
+          Q.MATCH_ABBREV_TAC `(FOLDL g (x + y + z) l1 = x':num) ==> X` THEN
+          `x < FOLDL g (x + y + z) l1`
+             by (Q.UNABBREV_TAC `g` THEN MATCH_MP_TAC LT_FOLDL_I THEN
+                 Q.UNABBREV_ALL_TAC THEN SRW_TAC [ARITH_ss][] THEN
+                 SRW_TAC [][DECIDE ``0n < x = 1 <= x``,
+                            one_leq_sfldinst_sz]) THEN
+          Q_TAC SUFF_TAC `x' <= x`
+             THEN1 (REPEAT STRIP_TAC THEN
+                    `x' < FOLDL g (x + y + z) l1` by DECIDE_TAC THEN
+                    `F` by DECIDE_TAC) THEN
+          Q.UNABBREV_ALL_TAC THEN MATCH_MP_TAC FOLDL_LEQ_FOLDL_I THEN
+          FSRW_TAC [olmap_ALL_MEM] THEN METIS_TAC [type_match_size_increase]
+        ]
+      ],
+
+      FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
+      FSRW_TAC [FOLDL_APPEND] THEN
+      Cases_on `a` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
+      FIRST_ASSUM
+        (fn th => MP_TAC (PART_MATCH
+                            (fn t => hd (strip_conj (#1 (dest_imp t))))
+                            FOLDL_EQ_E
+                            (sym (concl th)))) THEN
+      IMP_RES_TAC type_match_size_increase THEN
+      FSRW_TAC [olmap_ALL_MEM] THEN
+      `!i. i < LENGTH t0 ==>
+           sfldinst_sz (EL i t0) <= sfldinst_sz (EL i sfs2)`
+         by METIS_TAC [type_match_size_increase] THEN
+      Q.SPEC_THEN `sf1`  ASSUME_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
+      ASM_REWRITE_TAC [] THEN
+      `sfldinst_sz sfld1 <= FOLDL (\a sf. a + sfldinst_sz sf)
+                                  (sfldinst_sz sf'' + (if b' then 1 else 0))
+                                  sfs1`
+          by SRW_TAC [ARITH_ss][LEQ_FOLDL_I] THEN
+      Q.MATCH_ABBREV_TAC `(P ==> Q) ==> R` THEN
+      `P`  by (Q.UNABBREV_TAC `P` THEN
+               MATCH_MP_TAC LESS_EQ_LESS_EQ_MONO THEN
+               ASM_REWRITE_TAC []) THEN
+      POP_ASSUM (fn th => REWRITE_TAC [th]) THEN
+      Q.UNABBREV_ALL_TAC THEN STRIP_TAC THEN
+      `sfldinst_sz sfld1 = FOLDL (\a sf. a + sfldinst_sz sf)
+                                 (sfldinst_sz sf'' + (if b' then 1 else 0))
+                                 sfs1`
+         by DECIDE_TAC THEN
+      Cases_on `b'` THEN RULE_ASSUM_TAC (SIMP_RULE (srw_ss()) []) THENL [
+        POP_ASSUM MP_TAC THEN
+        Q.MATCH_ABBREV_TAC `(x = y) ==> Z` THEN
+        Q_TAC SUFF_TAC `x < y` THEN1 (REPEAT STRIP_TAC THEN
+                                      `F` by DECIDE_TAC) THEN
+        Q.UNABBREV_ALL_TAC THEN SRW_TAC [ARITH_ss][LT_FOLDL_I],
+        Cases_on `sfs1` THENL [
+          FSRW_TAC [] THEN MATCH_MP_TAC renaming_upto_FOLDL THEN
+          SRW_TAC [][] THENL [
+            METIS_TAC [listTheory.MEM_EL],
+            SRW_TAC [][renaming_upto_def, tyfree_sing_def] THEN
+            FSRW_TAC [sfldinst_sz_EQ_1]
+          ],
+          RULE_ASSUM_TAC (SIMP_RULE (srw_ss()) []) THEN
+          POP_ASSUM MP_TAC THEN
+          Q.MATCH_ABBREV_TAC `(x = y) ==> Z` THEN
+          Q_TAC SUFF_TAC `x < y` THEN1 (REPEAT STRIP_TAC THEN
+                                        `F` by DECIDE_TAC) THEN
+          Q.UNABBREV_ALL_TAC THEN
+          Q.SPEC_THEN `h` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
+          SRW_TAC [ARITH_ss][LT_FOLDL_I]
+        ]
+      ],
+
+      FSRW_TAC [olmap_EQ_SOME] THEN SRW_TAC [][] THEN
+      FSRW_TAC [FOLDL_APPEND] THEN Cases_on `a` THEN FSRW_TAC [] THEN
+      SRW_TAC [][] THEN
+      FIRST_ASSUM
+        (fn th => MP_TAC (PART_MATCH
+                            (fn t => hd (strip_conj (#1 (dest_imp t))))
+                            FOLDL_EQ_E
+                            (sym (concl th)))) THEN
+      IMP_RES_TAC type_match_size_increase THEN
+      FSRW_TAC [olmap_ALL_MEM] THEN
+      `!i. i < LENGTH t0 ==>
+           sfldinst_sz (EL i t0) <= sfldinst_sz (EL i sfs2)`
+         by METIS_TAC [type_match_size_increase] THEN
+      Q.SPEC_THEN `sf1`  ASSUME_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
+      ASM_REWRITE_TAC [] THEN
+      `sfldinst_sz sfld1 <= FOLDL (\a sf. a + sfldinst_sz sf)
+                                  (sfldinst_sz sf'' + (if b2 then 1 else 0))
+                                  sfs1`
+          by SRW_TAC [ARITH_ss][LEQ_FOLDL_I] THEN
+      `FOLDL (\a ta. a + tainst_sz ta) 2 l <=
+       FOLDL (\a ta. a + tainst_sz ta) 2 tas`
+         by (MATCH_MP_TAC FOLDL_LEQ_FOLDL_I THEN
+             SRW_TAC [][] THEN METIS_TAC [type_match_size_increase]) THEN
+      ASM_SIMP_TAC (srw_ss() ++ ARITH_ss) [] THEN
+      STRIP_TAC THEN
+      `sfldinst_sz sfld1 = FOLDL (\a sf. a + sfldinst_sz sf)
+                                 (sfldinst_sz sf'' + (if b2 then 1 else 0))
+                                 sfs1`
+          by DECIDE_TAC THEN
+      Cases_on `b2` THEN RULE_ASSUM_TAC (SIMP_RULE (srw_ss()) []) THENL [
+        POP_ASSUM MP_TAC THEN Q.MATCH_ABBREV_TAC `(x = y) ==> Z` THEN
+        Q_TAC SUFF_TAC `x < y` THEN1 (REPEAT STRIP_TAC THEN
+                                      `F` by DECIDE_TAC) THEN
+        Q.UNABBREV_ALL_TAC THEN SRW_TAC [ARITH_ss][LT_FOLDL_I],
+        Cases_on `sfs1` THENL [
+          FSRW_TAC [] THEN MATCH_MP_TAC renaming_upto_FOLDL THEN
+          SRW_TAC [][] THENL [
+            METIS_TAC [listTheory.MEM_EL],
+            SRW_TAC [][renaming_upto_def, tempfree_sing_def],
+            FULL_SIMP_TAC (srw_ss() ++ DNF_ss ++ ETA_ss) [] THEN
+            FIRST_X_ASSUM MATCH_MP_TAC THEN SRW_TAC [][olmap_ALL_MEM] THEN
+            METIS_TAC []
+          ],
+          RULE_ASSUM_TAC (SIMP_RULE (srw_ss()) []) THEN
+          POP_ASSUM MP_TAC THEN
+          Q.MATCH_ABBREV_TAC `(x = y) ==> Z` THEN
+          Q_TAC SUFF_TAC `x < y` THEN1 (REPEAT STRIP_TAC THEN
+                                        `F` by DECIDE_TAC) THEN
+          Q.UNABBREV_ALL_TAC THEN
+          Q.SPEC_THEN `h` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
+          SRW_TAC [ARITH_ss][LT_FOLDL_I]
+        ]
+      ]
+    ],
+
+    Cases_on `ty` THEN FSRW_TAC [],
+    Cases_on `ty` THEN FSRW_TAC [],
+    `tyinst_sz ty1 <= tyinst_sz y0 /\ 1 + cppidinst_sz id1 <= tyinst_sz ty`
+       by METIS_TAC [type_match_size_increase] THEN
+    Cases_on `ty` THEN FSRW_TAC [] THEN
     SRW_TAC [ARITH_ss][],
-
-    `cppidinst_sz id1 < tyinst_sz ty /\ tyinst_sz ty1 <= tyinst_sz y0` 
-       by METIS_TAC [type_match_size_increase] THEN 
-    IMP_RES_TAC typeid_size THEN 
-    SRW_TAC [ARITH_ss][],
-
-    FULL_SIMP_TAC (srw_ss() ++ DNF_ss) [AND_IMP_INTRO, olmap_ALL_MEM] THEN
-    `(!i. i < LENGTH tylist ==> 
-          (tyinst_sz (EL i tylist) <= tyinst_sz (EL i y0))) /\
-     tyinst_sz ty1 <= tyinst_sz x0`
-       by METIS_TAC [type_match_size_increase] THEN 
-    
-    
-      
-    MATCH_MP_TAC renaming_upto_FOLDL THEN SRW_TAC [][] THENL [
-
-    SRW_TAC [][renaming_upto_def, tyfree_sing_def],
-
-    
-
-    
-      
-    `tyinst_sz ty = 1 + cppidinst_sz id` by 
-
-
-    (!tal1 s tal2. (olmap (temparg_inst s) tal1 = SOME tal2) /\
-                   (talinst_sz tal2 = talinst_sz tal1) ==>
-                   renaming_upto (talfrees tal1) s) /\
-    (!tyl1 s tyl2. (olmap (type_inst s) tyl1 = SOME tyl2) /\
-                   (tylinst_sz tyl2 = tylinst_sz tyl1) ==>
-                   renaming_upto (tylfrees tyl1) s)``,
-  Induct THEN SRW_TAC [][] THEN FULL_SIMP_TAC (srw_ss() ++ ETA_ss) [] THENL [
-    SRW_TAC [][renaming_upto_def, tyfree_sing_def],
-
-    `sfldinst_sz sfld1 <= sfldinst_sz y0 /\
-     cppidinst_sz id1 < tyinst_sz ty`
-       by METIS_TAC [type_match_size_increase] THEN
-    IMP_RES_TAC typeid_size THEN
-    `tyinst_sz ty = 1 + cppidinst_sz id1` by DECIDE_TAC THEN
-    METIS_TAC [],
-
-    `sfldinst_sz sfld1 <= sfldinst_sz y0 /\
-     cppidinst_sz id1 < tyinst_sz ty`
-       by METIS_TAC [type_match_size_increase] THEN
-    IMP_RES_TAC typeid_size THEN
-    `sfldinst_sz y0 = sfldinst_sz sfld1` by DECIDE_TAC THEN
-    METIS_TAC [],
-
-    `tidinst_sz T' <= tidinst_sz (tempid_inst s T') /\
-     talinst_sz tal1 <= talinst_sz z`
-       by METIS_TAC [tempid_inst_size, type_match_size_increase] THEN
-    `tidinst_sz (tempid_inst s T') = tidinst_sz T'` by DECIDE_TAC THEN
-    METIS_TAC [inst_size_tidrenaming],
-
-    `tidinst_sz T' <= tidinst_sz (tempid_inst s T') /\
-     talinst_sz tal1 <= talinst_sz z`
-       by METIS_TAC [tempid_inst_size, type_match_size_increase] THEN
-    `talinst_sz z = talinst_sz tal1` by DECIDE_TAC THEN
-    METIS_TAC [],
-
-    METIS_TAC [inst_size_tidrenaming],
-
-    METIS_TAC [typeid_size],
-
-    `tyinst_sz ty1 <= tyinst_sz y0 /\ cppidinst_sz id1 < tyinst_sz ty`
-       by METIS_TAC [type_match_size_increase] THEN
-    IMP_RES_TAC typeid_size THEN
-    `tyinst_sz ty = 1 + cppidinst_sz id1` by DECIDE_TAC THEN
-    METIS_TAC [],
-
-    `cppidinst_sz id1 < tyinst_sz ty /\ tyinst_sz ty1 <= tyinst_sz y0`
-       by METIS_TAC [type_match_size_increase] THEN
-    IMP_RES_TAC typeid_size THEN
-    `tyinst_sz y0 = tyinst_sz ty1` by DECIDE_TAC THEN
-    METIS_TAC [],
 
     SRW_TAC [][renaming_upto_def, valfree_sing_def],
 
-    `cppidinst_sz id1 < tyinst_sz ty /\ tyinst_sz ty1 <= tyinst_sz y0`
+    MATCH_MP_TAC renaming_upto_FOLDL THEN SRW_TAC [][] THEN
+    FSRW_TAC [olmap_ALL_MEM] THEN
+    `!i. i < LENGTH targs ==> tainst_sz (EL i targs) <= tainst_sz (EL i z)`
        by METIS_TAC [type_match_size_increase] THEN
-    IMP_RES_TAC typeid_size THEN
-    `tyinst_sz ty = 1 + cppidinst_sz id1` by DECIDE_TAC THEN
-    METIS_TAC [],
-
-    `cppidinst_sz id1 < tyinst_sz ty /\ tyinst_sz ty1 <= tyinst_sz y0`
-       by METIS_TAC [type_match_size_increase] THEN
-    IMP_RES_TAC typeid_size THEN
-    `tyinst_sz y0 = tyinst_sz ty1` by DECIDE_TAC THEN METIS_TAC [],
-
-    IMP_RES_TAC type_match_size_increase THEN
-    `tyinst_sz x0 = tyinst_sz ty1` by DECIDE_TAC THEN METIS_TAC [],
-
-    IMP_RES_TAC type_match_size_increase THEN
-    `tylinst_sz y0 = tylinst_sz tyl1` by DECIDE_TAC THEN METIS_TAC [],
-
-    IMP_RES_TAC type_match_size_increase THEN
-    `tainst_sz h = tainst_sz ta1` by DECIDE_TAC THEN METIS_TAC [],
-
-    IMP_RES_TAC type_match_size_increase THEN
-    `talinst_sz z = talinst_sz tal1` by DECIDE_TAC THEN METIS_TAC [],
-
-    IMP_RES_TAC type_match_size_increase THEN
-    `tyinst_sz h = tyinst_sz ty1` by DECIDE_TAC THEN METIS_TAC [],
-
-    IMP_RES_TAC type_match_size_increase THEN
-    `tylinst_sz z = tylinst_sz tyl1` by DECIDE_TAC THEN METIS_TAC []
+    `!i. i < LENGTH targs ==> (tainst_sz (EL i targs) = tainst_sz (EL i z))`
+       by METIS_TAC [FOLDL_EQ_E, LESS_EQ_REFL] THEN
+    METIS_TAC [listTheory.MEM_EL]
   ]);
 
 val type_match_antisym = store_thm(
@@ -1008,15 +1286,19 @@ val expr_inst_def = Define`
   (expr_inst sigma This = SOME This) /\
   (expr_inst sigma (Var id) =
      case id of
-        IDConstant (F,[],s) ->
+        IDConstant (F,[], SFName s) ->
            (case sigma.valmap s of
               TNum i -> SOME (Cnum i)
            || TObj id' -> SOME (Var id')
            || TMPtr cid ty ->
                         (case cid of
-                            IDFld cnm fldname -> SOME (MemAddr cnm fldname))
-           || TVAVar s' -> SOME (Var (IDConstant (F, [], s'))))
-     || x -> SOME (Var id)) /\
+                            IDConstant(b,sfs,sf) ->
+                              SOME (MemAddr (IDConstant(b,FRONT sfs, LAST sfs))
+                                            sf))
+           || TVAVar s' -> SOME (Var (IDConstant (F, [], SFName s'))))
+     || x -> (case cppID_inst sigma id of
+                 NONE -> NONE
+              || SOME id' -> SOME (Var id'))) /\
   (expr_inst sigma (COr e1 e2) =
      OP2CMB COr (expr_inst sigma e1) (expr_inst sigma e2)) /\
   (expr_inst sigma (CAnd e1 e2) =
@@ -1236,21 +1518,9 @@ val stmt_inst_defn = Hol_defn "stmt_inst" `
      OPTION_MAP CopyInit (eexpr_inst sigma ee))
 `;
 
-val size_def = DB.fetch "statements" "CStmt_size_def"
-val _ = augment_srw_ss [rewrites [size_def]]
-
 val (stmt_inst_def, stmt_inst_ind) = Defn.tprove(
   stmt_inst_defn,
-  WF_REL_TAC
-    `measure
-      (\s.
-        case s of
-           INL (_, st) -> CStmt_size st
-        || INR (INL (_, ee)) -> ExtE_size ee
-        || INR (INR (INL (_, vd))) -> var_decl_size vd
-        || INR (INR (INR (INL (_, ce)))) -> class_entry_size ce
-        || INR (INR (INR (INR (INL (_, ci))))) -> class_info_size ci
-        || INR (INR (INR (INR (INR (_, i))))) -> initializer_size i)` THEN
+  WF_REL_TAC `^(last (TotalDefn.guessR stmt_inst_defn))` THEN
   SRW_TAC [ARITH_ss][] THENL [
     Induct_on `handlers` THEN SRW_TAC [][] THEN SRW_TAC [ARITH_ss][] THEN
     RES_TAC THEN DECIDE_TAC,
