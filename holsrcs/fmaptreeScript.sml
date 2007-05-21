@@ -5,9 +5,9 @@ open finite_mapTheory
 
 (* an fmaptree is a type of tree, where branching is controlled by a
    finite-map.  The one constructor is
-   
+
     FTNode : 'a -> ('k |-> ('a,'k)fmaptree) -> ('a,'k)fmaptree
-  
+
    This is rather like a trie.
 
    There is an induction principle (ft_ind), where you are able to assume
@@ -192,6 +192,53 @@ val apply_path_SNOC = store_thm(
              || SOME ft' -> FLOOKUP (map ft') x``,
   Induct_on `p` THEN
   SRW_TAC [][apply_path_def, finite_mapTheory.FLOOKUP_DEF]);
+
+(* ----------------------------------------------------------------------
+    recursion principle
+   ---------------------------------------------------------------------- *)
+
+val (relrec_rules, relrec_ind, relrec_cases) = Hol_reln`
+  !i fm rfm. (FDOM rfm = FDOM fm) /\
+             (!d. d IN FDOM fm ==> relrec h (fm ' d) (rfm ' d))
+          ==>
+             relrec h (FTNode i fm) (h i rfm fm)
+`;
+
+val relrec_fn = prove(
+  ``!ft r1. relrec h ft r1 ==> !r2. relrec h ft r2 ==> (r1 = r2)``,
+  HO_MATCH_MP_TAC relrec_ind THEN REPEAT GEN_TAC THEN STRIP_TAC THEN
+  ONCE_REWRITE_TAC [relrec_cases] THEN SRW_TAC [][] THEN
+  Q_TAC SUFF_TAC `rfm = rfm'` THEN1 SRW_TAC [][] THEN
+  SRW_TAC [][fmap_EXT]);
+
+val relrec_total = prove(
+  ``!ft. ?r. relrec h ft r``,
+  HO_MATCH_MP_TAC ft_ind THEN REPEAT STRIP_TAC THEN
+  ONCE_REWRITE_TAC [relrec_cases] THEN SRW_TAC [][] THEN
+  `?f. !k. k IN FDOM fm ==> relrec h (fm ' k) (f k)`
+     by METIS_TAC [] THEN
+  Q.EXISTS_TAC `FUN_FMAP f (FDOM fm)` THEN
+  SRW_TAC [][FUN_FMAP_DEF]);
+
+val fmtreerec_def = Define`
+  fmtreerec h ft = @r. relrec h ft r
+`;
+
+val fmtreerec_thm = store_thm(
+  "fmtreerec_thm",
+  ``fmtreerec h (FTNode i fm) = h i (fmtreerec h o_f fm) fm``,
+  SRW_TAC [][fmtreerec_def] THEN
+  ONCE_REWRITE_TAC [relrec_cases] THEN SRW_TAC [][] THEN
+  SELECT_ELIM_TAC THEN SRW_TAC [][] THENL [
+    Q.EXISTS_TAC `FUN_FMAP (\k. @r. relrec h (fm ' k) r) (FDOM fm)` THEN
+    SRW_TAC [][FUN_FMAP_DEF] THEN SELECT_ELIM_TAC THEN
+    METIS_TAC [relrec_total],
+    `fmtreerec h = \ft. @r. relrec h ft r`
+       by SRW_TAC [][FUN_EQ_THM, fmtreerec_def] THEN
+    POP_ASSUM SUBST_ALL_TAC THEN
+    REPEAT (AP_TERM_TAC ORELSE AP_THM_TAC) THEN
+    SRW_TAC [][fmap_EXT, o_f_DEF] THEN METIS_TAC [relrec_fn]
+  ]);
 
 val _ = export_theory()
 
