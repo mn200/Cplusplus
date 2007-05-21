@@ -371,5 +371,19 @@ val THEOPT_EQ_NONE = store_thm(
   ``(!x. ~P x) ==> ((THEOPT x. P x) = NONE)``,
   SRW_TAC [][THEOPT_def]);
 
+(* ----------------------------------------------------------------------
+    SETFN_APPLY
+   ---------------------------------------------------------------------- *)
+
+val SETFN_APPLY_def = Define`
+  SETFN_APPLY s x = @y. (x,y) IN s
+`;
+val _ = overload_on ("'", ``SETFN_APPLY``)
+
+val SETFN_UNIQUE = store_thm(
+  "SETFN_UNIQUE",
+  ``(x,y) IN s /\ (!y'. (x,y') IN s ==> (y' = y)) ==> (s ' x = y)``,
+  SRW_TAC [][SETFN_APPLY_def] THEN SELECT_ELIM_TAC THEN METIS_TAC []);
+
 val _ = export_theory()
 
