@@ -315,7 +315,7 @@ val MEM_splits = prove(
 (* SANITY *)
 val hasfld_imp_lfi = store_thm(
   "hasfld_imp_lfi",
-  ``s |- C has least fld -: ftype via p' /\ object_type ftype ==>
+  ``s |- C has least fld -: (ftype,stat) via p' /\ object_type ftype ==>
     ?i. lookup_field_info
           (MAP (\ (n,ty). (SFName n, ty))
                (THE (nsdmembers s (LAST p'))))

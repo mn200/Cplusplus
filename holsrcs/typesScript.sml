@@ -79,6 +79,14 @@ val is_abs_id_def = Define`
   (is_abs_id (IDConstant b ns n) = b)
 `;
 
+val IDtl_def = Define`
+  IDtl (IDConstant b sfs sf) = sf
+`;
+
+val is_qualified_def = Define`
+  is_qualified (IDConstant b sfs sf) = ~(sfs = [])
+`;
+val _ = export_rewrites ["is_qualified_def"]
 
 val ptrdiff_t = Rsyntax.new_specification {
   consts = [{const_name = "ptrdiff_t", fixity = Prefix}],

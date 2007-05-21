@@ -260,9 +260,10 @@ val okfield_def = Define`
 
 val FieldDecls_def = Define`
   FieldDecls s C fnm =
-     { (Cs, ty) | (C,Cs) IN subobjs s /\
+     { (Cs, ty, staticp)
+               | (C,Cs) IN subobjs s /\
                   LAST Cs IN defined_classes s /\
-                  ?centry staticp prot.
+                  ?centry prot.
                       MEM (centry,staticp,prot) (cinfo s (LAST Cs)).fields /\
                       ~staticp /\
                       okfield centry /\
@@ -285,17 +286,17 @@ val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
                                  BreakSpace(1,0), TOK "via", BreakSpace(1,0)],
                   term_name = "fieldty_via"}
 val fieldty_via_def = Define`
-  s |- C has least fld -: ty via Cs =
-         (Cs,ty) IN FieldDecls s C fld /\
-         !Cs' ty'. (Cs',ty') IN FieldDecls s C fld ==>
+  s |- C has least fld -: (ty,statp) via Cs =
+         (Cs,ty,statp) IN FieldDecls s C fld /\
+         !Cs' ty'. (Cs',ty',statp) IN FieldDecls s C fld ==>
                    RTC (pord1 (s,C)) Cs Cs'
 `
 
 val MethodDefs_def = Define`
   MethodDefs s cnm mthnm =
-    { (Cs,(rettype,ps,body)) |
+    { (Cs,(rettype,statp,ps,body)) |
          (cnm,Cs) IN subobjs s /\
-         ?prot virtp statp.
+         ?prot virtp.
              MEM (CFnDefn virtp rettype mthnm ps body, statp, prot)
                  (cinfo s (LAST Cs)).fields }
 `
@@ -317,7 +318,7 @@ val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
 val methodty_via_def = Define`
   s |- C has least method mname -: minfo via Cs =
          (Cs,minfo) IN MethodDefs s C mname /\
-         !Cs' ty'. (Cs',ty') IN MethodDefs s C mname ==>
+         !Cs' m'. (Cs',m') IN MethodDefs s C mname ==>
                    RTC (pord1 (s,C)) Cs Cs'
 `
 

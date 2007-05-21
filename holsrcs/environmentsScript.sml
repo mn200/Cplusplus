@@ -69,8 +69,7 @@ val _ = type_abbrev ("class_env", ``:(StaticField,class_envinfo)fmaptree``)
 val _ = Hol_datatype`
   envinfo = <| varmap   : string |-> addr # CPP_ID list ;
                typemap  : StaticField |-> CPP_Type ;
-               classenv : StaticField |-> class_env ;
-               nspaces : string set (* as opposed to a class *)
+               classenv : StaticField |-> class_env
 |>`;
 
 (* strings are the keys here, because these are ever-deepening

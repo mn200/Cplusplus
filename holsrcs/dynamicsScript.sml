@@ -786,17 +786,62 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    and we have to also determine if the class in which we are looking
    up the field is most derived (calculation of mdp below).
 
+   The call to "has least" gets us both the field's type, and also whether
+   or not it is static.  (In this case, it has to be not.)
+
 *)
-(!s cnm1 cnm2 fldid ftype se offn a mdp p p'.
+(!s cnm1 cnm2 fldid ty se offn a mdp p p'.
      s |- path (LAST p) to cnm2 via p' /\
-     object_type ftype /\
+     s |- LAST p' has least (IDtl fldid) -: (ty, F) via [LAST p'] /\
+     object_type ty /\
      (mdp = (cnm1 = cnm2) /\ (p = [cnm1])) /\
+     is_qualified fldid /\
      (class_part fldid = cnm2) /\
      (SOME offn = lookup_offset s mdp fldid)
    ==>
      ^mng (mExpr (SVar (LVal a (Class cnm1) p) fldid) se) s
-          (s, ev (LVal (a + subobj_offset s (cnm1, p ^ p') + offn) ftype
-                       (default_path ftype)) se))
+          (s, ev (LVal (a + subobj_offset s (cnm1, p ^ p') + offn) ty
+                       (default_path ty)) se))
+
+   /\
+
+(* RULE-ID: static-data-member-field-selection *)
+(!s se cnm1 p p' fldid ty a statpath.
+     s |- path (LAST p) to (class_part fldid) via p' /\
+     s |- LAST p' has least (IDtl fldid) -: (ty, T) via [LAST p'] /\
+     (lookup_addr s fldid = SOME (a, statpath))
+   ==>
+     ^mng (mExpr (SVar (LVal a (Class cnm1) p) fldid) se) s
+          (s, ev (LVal a ty statpath) se))
+
+   /\
+
+(* RULE-ID: nonstatic-function-member-select *)
+(* this is very similar to the above, because this is a non-virtual function
+   that is being looked up.  We can tell it's not virtual because the
+   identifier is structured (making the call to class_part well-formed) *)
+(!se s a fldid ftype Cs Ds cnm retty ps body.
+     s |- path (LAST Cs) to class_part fldid via Ds /\
+     s |- LAST Ds has least method (IDtl fldid) -: (retty,F,ps,body)
+            via [LAST Ds] /\
+     (ftype = Function retty (MAP SND ps)) /\
+     is_qualified fldid
+   ==>
+     ^mng (mExpr (SVar (LVal a (Class cnm) Cs) fldid) se) s
+          (s, ev (FVal fldid ftype (SOME (LVal a (Class cnm) (Cs ^ Ds)))) se))
+
+   /\
+
+(* RULE-ID: static-function-member-select *)
+(!se s a fldid ftype Cs Ds cnm retty ps body.
+     s |- path (LAST Cs) to class_part fldid via Ds /\
+     s |- LAST Ds has least method (IDtl fldid) -: (retty,T,ps,body)
+            via [LAST Ds] /\
+     (ftype = Function retty (MAP SND ps)) /\
+     is_qualified fldid
+   ==>
+     ^mng (mExpr (SVar (LVal a (Class cnm) Cs) fldid) se) s
+          (s, ev (FVal fldid ftype NONE) se))
 
    /\
 
@@ -809,11 +854,15 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* the IDConstant reflects the fact that a call to a virtual function will
    be via an unadorned name (the provision of a class qualification would
    force a particular function to be called).  Virtual functions can not
-   be templates (14.5.2 p3), so the function name must just be a string *)
+   be templates (14.5.2 p3), so the function name must just be a string.
+
+   Similarly, the F in the "least method" call is the static-ness predicate,
+   which must be false as this is a virtual method
+ *)
 (!a C Cs Cs' Ds fld dyn_retty se s static_retty body0 args0 args body.
      s |- LAST Cs has least method
-             (SFName fld) -: (static_retty,args0,body0) via Ds /\
-     s |- (C,Cs ^ Ds) selects (SFName fld) -: (dyn_retty,args,body) via Cs'
+             (SFName fld) -: (static_retty,F,args0,body0) via Ds /\
+     s |- (C,Cs ^ Ds) selects (SFName fld) -: (dyn_retty,F,args,body) via Cs'
    ==>
      ^mng (mExpr (SVar (LVal a (Class C) Cs)
                        (IDConstant F [] (SFName fld))) se) s

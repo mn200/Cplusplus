@@ -78,10 +78,6 @@ val ID_updtemphd_def = Define`
 `;
 val _ = export_rewrites ["ID_updtemphd_def"]
 
-val IDtl_def = Define`
-  IDtl (IDConstant b sfs sf) = sf
-`;
-
 val IDhd_inst_def = Define`
   IDhd_inst sigma b sfs sf =
      if b then SOME (TypeID (IDConstant b sfs sf))
