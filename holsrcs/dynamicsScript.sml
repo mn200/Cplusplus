@@ -130,10 +130,6 @@ val installfn_def = Define`
 
 
 (* installing a bunch of member functions *)
-val mk_member_def = Define`
-  mk_member (IDConstant b sfs sf1) sf2 = IDConstant b (sfs ++ [sf1]) sf2
-`;
-
 
 (* imemfn is where the real work gets done - it takes a list of function
    definitions from with a class_info and "relationally" installs them into
@@ -348,7 +344,7 @@ val unamb_public_base_def = Define`
   (* ignore public-ness constraint for the moment (TODO) *)
   unamb_public_base s ty1 ty2 =
     ?c1 c2. (ty1 = Class c1) /\ (ty2 = Class c2) /\
-            s |- path c2 to c1 unique
+            (s,{}) |- path c2 to c1 unique
 `;
 
 
@@ -791,8 +787,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 *)
 (!s cnm1 cnm2 fldid ty se offn a mdp p p'.
-     s |- path (LAST p) to cnm2 via p' /\
-     s |- LAST p' has least (IDtl fldid) -: (ty, F) via [LAST p'] /\
+     (s,{}) |- path (LAST p) to cnm2 via p' /\
+     (s,{}) |- LAST p' has least (IDtl fldid) -: (ty, F) via [LAST p'] /\
      object_type ty /\
      (mdp = (cnm1 = cnm2) /\ (p = [cnm1])) /\
      is_qualified fldid /\
@@ -807,8 +803,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: static-data-member-field-selection *)
 (!s se cnm1 p p' fldid ty a statpath.
-     s |- path (LAST p) to (class_part fldid) via p' /\
-     s |- LAST p' has least (IDtl fldid) -: (ty, T) via [LAST p'] /\
+     (s,{}) |- path (LAST p) to (class_part fldid) via p' /\
+     (s,{}) |- LAST p' has least (IDtl fldid) -: (ty, T) via [LAST p'] /\
      (lookup_addr s fldid = SOME (a, statpath))
    ==>
      ^mng (mExpr (SVar (LVal a (Class cnm1) p) fldid) se) s
@@ -821,8 +817,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    that is being looked up.  We can tell it's not virtual because the
    identifier is structured (making the call to class_part well-formed) *)
 (!se s a fldid ftype Cs Ds cnm retty ps body.
-     s |- path (LAST Cs) to class_part fldid via Ds /\
-     s |- LAST Ds has least method (IDtl fldid) -: (retty,F,ps,body)
+     (s,{}) |- path (LAST Cs) to class_part fldid via Ds /\
+     (s,{}) |- LAST Ds has least method (IDtl fldid) -: (retty,F,ps,body)
             via [LAST Ds] /\
      (ftype = Function retty (MAP SND ps)) /\
      is_qualified fldid
@@ -834,8 +830,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: static-function-member-select *)
 (!se s a fldid ftype Cs Ds cnm retty ps body.
-     s |- path (LAST Cs) to class_part fldid via Ds /\
-     s |- LAST Ds has least method (IDtl fldid) -: (retty,T,ps,body)
+     (s,{}) |- path (LAST Cs) to class_part fldid via Ds /\
+     (s,{}) |- LAST Ds has least method (IDtl fldid) -: (retty,T,ps,body)
             via [LAST Ds] /\
      (ftype = Function retty (MAP SND ps)) /\
      is_qualified fldid
@@ -860,9 +856,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    which must be false as this is a virtual method
  *)
 (!a C Cs Cs' Ds fld dyn_retty se s static_retty body0 args0 args body.
-     s |- LAST Cs has least method
+     (s,{}) |- LAST Cs has least method
              (SFName fld) -: (static_retty,F,args0,body0) via Ds /\
-     s |- (C,Cs ^ Ds) selects (SFName fld) -: (dyn_retty,F,args,body) via Cs'
+     (s,{}) |- (C,Cs ^ Ds) selects (SFName fld) -: (dyn_retty,F,args,body)
+         via Cs'
    ==>
      ^mng (mExpr (SVar (LVal a (Class C) Cs)
                        (IDConstant F [] (SFName fld))) se) s

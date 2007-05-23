@@ -133,7 +133,7 @@ val nonclass_conversion_def = Define`
       (?c1 c2 addr pth1 pth2.  (* this is an upcast *)
           (ty1 = Ptr (Class (LAST pth1))) /\ (ty2 = Ptr (Class c2)) /\
           (SOME v1 = ptr_encode s addr (Class c1) pth1) /\
-          s |- c2 casts pth1 into pth2 /\
+          (s,{}) |- c2 casts pth1 into pth2 /\
           (SOME v2 = ptr_encode s addr (Class c1) pth2))
 `;
 
@@ -491,7 +491,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
        (* note how argnm is ignored, used here just to establish that
           the type of the argument really is of class type.  argnm gives
           the dynamic type, and we're interested in the static type *)
-     s0 |- path (LAST pth) to cnm unique
+     (s0,{}) |- path (LAST pth) to cnm unique
        (* arg is equal to or a derived class *)
    ==>
      declmng mng
@@ -579,7 +579,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      is_null_se se /\
      ((f = CopyInit) \/ (f = DirectInit)) /\
      (if class_type ty1 then
-        s0 |- dest_class ty1 casts p into p'
+        (s0,{}) |- dest_class ty1 casts p into p'
       else (p' = p)) /\
      (s = s0 with varmap updated_by (\fm. fm |+ (nm, (a,p'))))
    ==>

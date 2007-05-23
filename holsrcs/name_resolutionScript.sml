@@ -18,9 +18,234 @@ open typesTheory memoryTheory expressionsTheory staticsTheory class_infoTheory
 open aggregatesTheory declaration_dynamicsTheory
 local
   open side_effectsTheory statesTheory operatorsTheory overloadingTheory
+       instantiationTheory
 in end
 
 val _ = new_theory "name_resolution";
+
+val _ = Hol_datatype`
+  P1_action = P1Decl of ext_decl
+            | EnterNS of string
+            | ExitNS of string
+`;
+
+(* the "others" field stores 'objects' (functions and variables), as well
+   as namespace names *)
+val _ = Hol_datatype`
+  P1state = <| current_nspath : string list ;
+               dynclasses : string |-> (TemplateArg list # CPP_ID) ;
+               dynothers : string |-> (TemplateArg list # CPP_ID) ;
+               global : state ;
+               accdecls : ext_decl list |>
+`;
+
+val breakup_fmap_def = Define`
+  breakup_fmap f fm =
+    FUN_FMAP (\x. SND (f x))
+
+
+val break_sfld_def = Define`
+  (break_sfld abs sfs (SFName s) = ([], IDConstant abs sfs (SFName s))) /\
+  (break_sfld abs sfs (SFTempCall s targs) =
+     (targs, IDConstant abs sfs (SFName s)))
+`;
+
+val sfldmap_strings_def = Define`
+  sfldmap_strings sfm = IMAGE (\sf. case sf of SFName s -> s
+                                            || SFTempCall s _ -> s)
+                              (FDOM sfm)
+`;
+
+(* ----------------------------------------------------------------------
+    empty_p1 : state -> P1state
+
+    the "empty" p1-state that has empty dynamic maps for classes and
+    others, but which embodies a particular state.
+   ---------------------------------------------------------------------- *)
+
+val empty_p1_def = Define`
+  empty_p1 s = <| current_nspath := [] ;
+                dynclasses := FEMPTY ;
+                dynothers := FEMPTY ;
+                global := s ;
+                accdecls := [] |>
+`;
+
+
+(* ----------------------------------------------------------------------
+    open_ftnode : string list -> P1state -> P1state
+
+    given a P1state (containing dynamic maps for "others" and classes,
+    and global environment values (stored in a state, and the gtemps
+    field) override the dynamics maps with entries from the global
+    environment, according to the provided path, which is of
+    namespaces
+
+   ---------------------------------------------------------------------- *)
+val open_ftnode_def = Define`
+  open_ftnode pth s =
+    let env_at_pth = THE (apply_path pth s.global.genv) in
+    let sfpth = MAP SFName pth
+    in
+      s with <| dynclasses :=
+                  FUNION (FUN_FMAP (break_sfld abs sfpth)
+                                   (sfldmap_strings
+                                      (item env_at_pth).classenv))
+                         s.dynclasses;
+                dynothers := FUNION (FUN_FMAP
+                                       (break_sfld abs sfpth)
+                                       (FDOM (item env_at_pth).typemap UNION
+                                        IMAGE SFName (FDOM (map env_at_pth))))
+                                    s.dynothers |>
+`;
+
+(* ----------------------------------------------------------------------
+    open_classnode : CPP_ID -> P1state -> P1state
+
+    given a class name (i.e., of type :CPP_ID), and a P1state
+    (including maps for "others" and "classes"), update the maps to
+    reflect the information in the class.  This is moderately
+    complicated because ancestor classes have to have their names
+    added too.  If multiple ancestors at the same level try to add the
+    same name this is a statically detectable ambiguity.
+
+    We also need a state about so that we can look up information for
+    the ancestor classes.  (Imagine you have class C : public ::D {
+    ... }, names in C's environment might actually be references to
+    stuff in ::D.)
+   ---------------------------------------------------------------------- *)
+
+val open_classnode_def = Define`
+  open_classnode cnm p1s =
+    let s = p1s.global in
+    let objflds =
+           { (sf,fpth) | ?tyst. s |- cnm has least sf -: tyst via fpth } in
+    let objmap = FUN_FMAP (\sf. mk_member (LAST (objflds ' sf)) sf)
+                          (IMAGE FST objflds) in
+    let funflds =
+           { (sf,fpthopt) |
+                (?ret stat ps bod fpth. (* non-virtual case *)
+                     s |- cnm has least method sf -: (ret,stat,ps,bod)
+                            via fpth /\
+                     ~is_virtual s cnm sf ret (MAP SND ps) /\
+                     (fpthopt = SOME fpth)) \/
+                (?ret stat ps bod pth.
+                     s |- cnm has least method sf -: (ret,stat,ps,bod)
+                            via pth /\
+                     is_virtual s cnm sf ret (MAP SND ps) /\
+                     (fpthopt = NONE)) } in
+    let funmap = FUN_FMAP (\sf. case funflds ' sf of
+                                    NONE -> IDConstant F [] sf
+                                 || SOME pths -> mk_member (LAST pths) sf)
+                           (IMAGE FST funflds)
+    in
+       p1s with <| dynothers := FUNION objmap (FUNION funmap p1s.dynothers) |>
+`;
+
+val open_classpath_def = Define`
+  open_classpath p1s sofar sfs =
+    case sfs of
+       [] -> p1s
+    || sf :: rest -> open_classpath (open_classnode (mk_member sofar sf) p1s)
+                                    (mk_member sofar sf)
+                                    rest
+`;
+
+
+(* ----------------------------------------------------------------------
+    open_path : bool -> StaticField list -> P1state -> P1state
+
+    The boolean records whether we're opening from the global root (::).
+    If it's false, then we'll be looking at a local variables and classes
+
+    The input P1state is assumed to be "dynamically open" at the level
+    of its current_nspath.
+
+   ---------------------------------------------------------------------- *)
+
+val open_path_def = Define`
+  open_path absp todo ps =
+    let s = ps.global in
+    let env0 = if absp then s.genv else s.env in
+    let env = THE (apply_path ps.current_nspath env0)
+    in
+      case todo of
+         [] -> ps
+      || h::t -> if h IN FDOM (item env).classenv then
+                   let root = IDConstant absp (MAP SFName ps.current_nspath) h
+                   in
+                     open_classpath (open_classnode root ps) root t
+                 else
+                   let pth = ps.current_nspath ++ [dest_sfname h] in
+                   let ps' = open_ftnode pth ps in
+                   let ps'' = ps' with current_nspath := pth
+                   in
+                     open_path absp t ps''
+`;
+
+val EnterNSpace_def = Define`
+  EnterNSpace n s = open_path T [SFName n] s
+`
+
+val ExitNSpace_def = Define`
+  ExitNSpace s =
+    open_path T (FRONT (MAP SFName s.current_nspath)) (empty_p1 s.global)
+`;
+
+val rewrite_types_def = Define`
+  rewrites_types ps ty =
+    let inst =
+         <| typemap := (\s. if SFName s IN FDOM ps.dynclasses then
+                              TypeID (ps.dynclasses ' SFName s)
+                            else TypeID (SFName s)) ;
+            valmap := TVAVar ;
+            tempmap := (\s. if ?targs. SFTempCall s targs IN
+                                       FDOM ps.dynclasses
+                            then
+                              @(b,sfs,sf).
+                              IDConstant b sfs sf = ps.dynclasses '
+
+
+
+
+val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
+  (* RULE-ID: [phase1-namepace] *)
+  (!n ds pas s.
+     T
+   ==>
+     phase1 (P1Decl (NameSpace n ds) :: pas, s)
+            (EnterNS n :: (MAP P1Decl ds ++ (ExitNS n :: pas)), s))
+
+      /\
+
+  (* RULE-ID: [phase1-enter-namespace] *)
+  (!n ds s.
+     T
+   ==>
+     phase1 (EnterNS n :: ds, s) (ds, EnterNSpace n s))
+
+     /\
+
+  (* RULE-ID: [phase1-exit-namespace] *)
+  (!n ds s t.
+     (s.current_nspath = n :: t)
+   ==>
+     phase1 (ExitNS n :: ds, s) (ds, ExitNSpace s))
+
+   /\
+
+  (* RULE-ID: [phase1-decl-vdec] *)
+  (* note there is effectively no circumstance in which a simple variable
+     declaration can be of a structured name.   One can redeclare functions
+     with structured names, but this achieves absolutely nothing. *)
+  (
+     T
+   ==>
+     phase1 (Decl (VDec ty (SFName s)), s)
+
+`;
+
+
 
 val lift_vdec_def = Define`
   lift_vdec n (VDec

@@ -88,6 +88,37 @@ val is_qualified_def = Define`
 `;
 val _ = export_rewrites ["is_qualified_def"]
 
+val mk_member_def = Define`
+  mk_member (IDConstant b sfs sf1) sf2 = IDConstant b (sfs ++ [sf1]) sf2
+`;
+
+val is_var_type_def = Define`
+  (is_var_type (TypeID cid) = T) /\
+  (is_var_type _ = F)
+`;
+
+val dest_var_type_def = Define`
+  (dest_var_type (TypeID cid) = cid)
+`;
+
+val typeid_def = Define`
+  (typeid (TypeID cid) = SOME cid) /\
+  (typeid _ = NONE)
+`;
+val _ = export_rewrites ["typeid_def"]
+
+val IDhd_def = Define`
+  (IDhd (IDConstant b [] sf) = sf) /\
+  (IDhd (IDConstant b (h::t) sf) = h)
+`;
+val _ = export_rewrites ["IDhd_def"]
+
+val dest_sfname_def = Define`
+  (dest_sfname (SFName s) = s)
+`;
+val _ = export_rewrites ["dest_sfname_def"]
+
+
 val ptrdiff_t = Rsyntax.new_specification {
   consts = [{const_name = "ptrdiff_t", fixity = Prefix}],
   name = "ptrdiff_t",

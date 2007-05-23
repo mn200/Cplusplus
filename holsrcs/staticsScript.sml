@@ -209,7 +209,7 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
 
   (!s e c1 c2 fldid ty.
        expr_type s LValue e (Class c1) /\
-       s |- c2 <= c1 /\
+       (s,{}) |- c2 <= c1 /\
        (class_part fldid = c2) /\
        (lookup_field_type s fldid = SOME ty)
      ==>
@@ -217,7 +217,7 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
 
   (!s e c1 c2 fldid ty.
        expr_type s RValue e (Class c1) /\
-       s |- c2 <= c1 /\
+       (s,{}) |- c2 <= c1 /\
        (class_part fldid = c2) /\
        (lookup_field_type s fldid = SOME ty) /\
        ~array_type ty
@@ -315,7 +315,9 @@ val MEM_splits = prove(
 (* SANITY *)
 val hasfld_imp_lfi = store_thm(
   "hasfld_imp_lfi",
-  ``s |- C has least fld -: (ftype,stat) via p' /\ object_type ftype ==>
+  ``(s,{}) |- C has least fld -: (ftype,stat) via p' /\
+    object_type ftype /\
+    ~stat ==>
     ?i. lookup_field_info
           (MAP (\ (n,ty). (SFName n, ty))
                (THE (nsdmembers s (LAST p'))))

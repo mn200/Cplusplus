@@ -321,6 +321,7 @@ val _ = Hol_datatype`
                             CStmt
            | ClassDestDef of CPP_ID => CStmt
            | NameSpace of string => ext_decl list
+           | TemplateDef of TemplateArg list => ext_decl
 `;
 
 

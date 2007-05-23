@@ -77,7 +77,7 @@ val cinfo_state1_c = Save_thm(
 
 val RTC_class_lt_cname = Store_thm(
   "RTC_class_lt_cname",
-  ``state1 |- b <= cname = (b = cname)``,
+  ``(state1,{}) |- b <= cname = (b = cname)``,
   SRW_TAC [][EQ_IMP_THM, RTC_class_lt_def, relationTheory.RTC_RULES] THEN
   POP_ASSUM (MP_TAC o ONCE_REWRITE_RULE [relationTheory.RTC_CASES2]) THEN
   SRW_TAC [][is_direct_base_def, get_direct_bases_def, is_virtual_base_def,
@@ -88,8 +88,6 @@ val is_abstract_cname = Store_thm(
   ``is_abstract state1 cname = F``,
   SRW_TAC [][is_abstract_def] THEN
   Cases_on `bnm = cname` THEN SRW_TAC [][]);
-
-
 
 val nsdmembers_state1 = SIMP_CONV (srw_ss()) [nsdmembers_def]
                            ``nsdmembers state1 cname``

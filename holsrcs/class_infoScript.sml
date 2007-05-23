@@ -17,6 +17,8 @@ in end
 (* C++ ancestor theories  *)
 open statesTheory aggregatesTheory
 
+local open freesTheory in end
+
 val _ = new_theory "class_info";
 
 (* even when names have all been resolved, you need two maps at runtime
@@ -58,8 +60,9 @@ val get_direct_bases_def = Define`
 
 (* c2 is a direct base of c1 *)
 val is_direct_base_def = Define`
-  is_direct_base s c1 c2 =
-    c1 IN defined_classes s /\ MEM c1 (get_direct_bases s c2)
+  is_direct_base (s,avoids) c1 c2 =
+    c1 IN defined_classes s /\ MEM c1 (get_direct_bases s c2) /\
+    DISJOINT (cppidfrees c1).tyfvs avoids
 `;
 
 val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
@@ -78,8 +81,9 @@ val get_virtual_bases_def = Define`
 
 (* c2 is a virtual base of c1 *)
 val is_virtual_base_def = Define`
-  is_virtual_base s c1 c2 =
-    c1 IN defined_classes s /\ MEM c1 (get_virtual_bases s c2)
+  is_virtual_base (s,avoids) c1 c2 =
+    c1 IN defined_classes s /\ MEM c1 (get_virtual_bases s c2) /\
+    DISJOINT (cppidfrees c1).tyfvs avoids
 `;
 
 val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
@@ -158,7 +162,7 @@ val _ = overload_on("^", ``path_app``)
 
 (* See the Subjobjs_R relation of Wasserab et al. *)
 val (rsubobjs_rules, rsubobjs_ind, rsubobjs_cases) = Hol_reln`
-  (!C s. C IN defined_classes s ==> rsubobjs s (C, [C]))
+  (!C s. C IN defined_classes (FST s) ==> rsubobjs s (C, [C]))
 
     /\
 
@@ -171,7 +175,7 @@ val (rsubobjs_rules, rsubobjs_ind, rsubobjs_cases) = Hol_reln`
 val calc_rsubobjs = store_thm(
   "calc_rsubobjs",
   ``(C,Cs) IN rsubobjs s =
-       (Cs = [C]) /\ C IN defined_classes s \/
+       (Cs = [C]) /\ C IN defined_classes (FST s) \/
        ?D Cs'. s |- C < D /\ (D,Cs') IN rsubobjs s /\
                  (Cs = C::Cs')``,
   SRW_TAC [][SPECIFICATION] THEN
@@ -259,13 +263,12 @@ val okfield_def = Define`
 `;
 
 val FieldDecls_def = Define`
-  FieldDecls s C fnm =
+  FieldDecls (s,avoids) C fnm =
      { (Cs, ty, staticp)
-               | (C,Cs) IN subobjs s /\
+               | (C,Cs) IN subobjs (s,avoids) /\
                   LAST Cs IN defined_classes s /\
                   ?centry prot.
                       MEM (centry,staticp,prot) (cinfo s (LAST Cs)).fields /\
-                      ~staticp /\
                       okfield centry /\
                       (fieldname centry = fnm) /\
                       (fieldtype centry = ty) }
@@ -298,7 +301,7 @@ val MethodDefs_def = Define`
          (cnm,Cs) IN subobjs s /\
          ?prot virtp.
              MEM (CFnDefn virtp rettype mthnm ps body, statp, prot)
-                 (cinfo s (LAST Cs)).fields }
+                 (cinfo (FST s) (LAST Cs)).fields }
 `
 
 (* s |- C has least method -: ty via Cs *)
@@ -685,13 +688,13 @@ val covariant_def = Define`
        (strip_const ty2 = Ptr ty2') /\
        (strip_const ty1' = Class c1) /\
        (strip_const ty2' = Class c2) /\
-       s |- c1 <= c2) \/
+       (s,{}) |- c1 <= c2) \/
     (?ty1' ty2' c1 c2.
        (strip_const ty1 = Ref ty1') /\
        (strip_const ty2 = Ref ty2') /\
        (strip_const ty1' = Class c1) /\
        (strip_const ty2' = Class c2) /\
-       s |- c1 <= c2)
+       (s,{}) |- c1 <= c2)
 `;
 
 (* true if the given member function cnm::fnm, with specified return-type and
@@ -701,7 +704,7 @@ val covariant_def = Define`
 val is_virtual_def = Define`
   is_virtual s cnm fnm retty paramtys =
     ?bnm params body prot retty'.
-       s |- bnm <= cnm  /\
+       (s,{}) |- bnm <= cnm  /\
        MEM (CFnDefn T retty' fnm params body, F, prot)
            (cinfo s bnm).fields /\
        (MAP SND params = paramtys) /\
@@ -712,18 +715,16 @@ val is_virtual_def = Define`
 val is_abstract_def = Define`
   is_abstract s cnm =
     ?fnm bnm retty params prot.
-       s |- bnm <= cnm  /\
+       (s,{}) |- bnm <= cnm  /\
        MEM (CFnDefn T retty fnm params (SOME NONE), F, prot)
            (cinfo s bnm).fields /\
        !b' virtp prot' params' retty' body.
-          s |- bnm <= b' /\
-          s |- b' <= cnm /\
+          (s,{}) |- bnm <= b' /\
+          (s,{}) |- b' <= cnm /\
           covariant s retty retty' /\
           (MAP SND params' = MAP SND params) ==>
           ~MEM (CFnDefn virtp retty' fnm params' (SOME (SOME body)), F, prot')
                (cinfo s b').fields
 `;
-
-
 
 val _ = export_theory();
