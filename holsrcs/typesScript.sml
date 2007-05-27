@@ -74,6 +74,8 @@ val sfld_basename_def = Define`
   (sfld_basename (SFName s) = s) /\
   (sfld_basename (SFTempCall s args) = s)
 `;
+val _ = overload_on ("sfld_string", ``sfld_basename``)
+val _ = export_rewrites ["sfld_basename_def"]
 
 val is_abs_id_def = Define`
   (is_abs_id (IDConstant b ns n) = b)
@@ -82,6 +84,7 @@ val is_abs_id_def = Define`
 val IDtl_def = Define`
   IDtl (IDConstant b sfs sf) = sf
 `;
+val _ = export_rewrites ["IDtl_def"]
 
 val is_qualified_def = Define`
   is_qualified (IDConstant b sfs sf) = ~(sfs = [])

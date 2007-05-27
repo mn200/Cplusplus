@@ -84,7 +84,11 @@ val tyfrees_defn = Defn.Hol_defn "tyfrees" `
      /\
 
   (tafrees (TType ty) = tyfrees ty) /\
-  (tafrees (TTemp tid) = cppidfrees tid) /\
+  (tafrees (TTemp (IDConstant b sfs sf)) =
+     case sf of
+       SFName s -> if (sfs = []) /\ ~b then tempfree_sing s
+                   else cppidfrees (IDConstant b sfs sf)
+    || SFTempCall s targs -> {}) /\
   (tafrees (TVal tva) = tvalfrees tva)
 
      /\

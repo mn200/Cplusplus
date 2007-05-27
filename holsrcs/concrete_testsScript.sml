@@ -1,7 +1,7 @@
 open HolKernel Parse boolLib boolSimps
 open bossLib finite_mapTheory class_infoTheory pred_setTheory utilsTheory
 
-open aggregatesTheory memoryTheory
+open aggregatesTheory memoryTheory name_resolutionTheory
 
 val _ = new_theory "concrete_tests"
 
@@ -188,5 +188,183 @@ val sizeof_c = store_thm(
   ONCE_REWRITE_TAC [sizeof_cases] THEN
   SRW_TAC [][sizeofmap, base_not_empty, FDOM_sizeofmap, align_lemma,
              offset_1]);
+
+(* ----------------------------------------------------------------------
+    Test Two
+   ---------------------------------------------------------------------- *)
+
+(* do name resolution on the following program
+
+   char c;
+   namespace n {
+     int x;
+     namespace n2 {
+       int y;
+     }
+     int z;
+   }
+   char d;
+   namespace n {
+     namespace n2 { int w; }
+     namespace n3 { int u; }
+   }
+   template <template <class> U> U<int> f(U<char>);
+
+*)
+
+val t2_program_def = Define`
+  t2_program = [
+    Decl (VDec BChar (Base "c"));
+    NameSpace "n" [Decl (VDec (Signed Int) (Base "x"));
+                   NameSpace "n2" [Decl (VDec (Signed Int) (Base "y"))];
+                   Decl (VDec (Signed Int) (Base "z"))];
+    Decl (VDec BChar (Base "d"));
+    NameSpace "n" [NameSpace "n2" [Decl (VDec (Signed Int) (Base "w"))];
+                   NameSpace "n3" [Decl (VDec (Signed Int) (Base "u"))]];
+    TemplateDef [TTemp (Base "U")]
+                (Decl (VDec (Function
+                             (TypeID (IDConstant F []
+                                      (SFTempCall "U" [TType (Signed Int)])))
+                             [TypeID (IDConstant F []
+                                      (SFTempCall "U" [TType BChar]))])
+                            (Base "f")))
+ ]
+`
+
+val NREL_def = Define`
+  (NREL R 0 x y = (x = y)) /\
+  (NREL R (SUC n) x y = ?z. R x z /\ NREL R n z y)
+`;
+
+val NREL_rwt = CONV_RULE numLib.SUC_TO_NUMERAL_DEFN_CONV NREL_def
+
+val NREL_sum = prove(
+  ``!n m x y.
+        NREL R (n + m) x y = ?z. NREL R n x z /\ NREL R m z y``,
+  Induct_on `n` THEN SRW_TAC [][NREL_def, arithmeticTheory.ADD_CLAUSES] THEN
+  METIS_TAC []);
+
+
+val FUNION_FEMPTY = prove(
+  ``(FUNION FEMPTY fm = fm) /\ (FUNION fm FEMPTY = fm)``,
+  SRW_TAC [][finite_mapTheory.fmap_EXT, finite_mapTheory.FUNION_DEF]);
+
+val FUNION_FUPDATE = store_thm(
+  "FUNION_FUPDATE",
+  ``FUNION (fm1 |+ (k,v)) fm2 = (FUNION fm1 fm2) |+ (k,v)``,
+  SRW_TAC [][finite_mapTheory.fmap_EXT, finite_mapTheory.FUNION_DEF,
+             INSERT_UNION_EQ] THEN
+  SRW_TAC [][finite_mapTheory.FAPPLY_FUPDATE_THM,
+             finite_mapTheory.FUNION_DEF] THEN
+  FULL_SIMP_TAC (srw_ss()) [])
+
+val FUN_FMAP_INSERT = prove(
+  ``!s. FINITE s ==>
+         !x. FUN_FMAP f (x INSERT s) = FUN_FMAP f s |+ (x, f x)``,
+  HO_MATCH_MP_TAC pred_setTheory.FINITE_INDUCT THEN
+  SIMP_TAC (srw_ss() ++ CONJ_ss ++ DNF_ss)
+           [finite_mapTheory.fmap_EXT, finite_mapTheory.FUN_FMAP_DEF,
+            finite_mapTheory.FAPPLY_FUPDATE_THM] THEN
+  SRW_TAC [][])
+
+val _ = augment_srw_ss [rewrites [typesTheory.Base_def, rewrite_type_def,
+                                  fmaptreeTheory.fupd_at_path_def,
+                                  fmaptreeTheory.apply_path_def,
+                                  empty_env_def, FUNION_FEMPTY,
+                                  FUNION_FUPDATE,
+                                  CONJUNCT1 NREL_def, FUN_FMAP_INSERT]]
+
+val initial = ``(MAP P1Decl t2_program, empty_p1 [] initial_state)``
+
+val open_ftnode_thm = CONJ (Q.SPEC `[]` open_ftnode_def)
+                           (GEN_ALL (Q.SPEC `h::t` open_ftnode_def))
+
+val open_path_thm =
+    CONJ (SIMP_RULE list_ss [] (Q.INST [`todo` |-> `[]`] open_path_def))
+         (SIMP_RULE list_ss [] (Q.INST [`todo` |-> `h::t`] open_path_def))
+
+val vardecl =
+    ONCE_REWRITE_CONV [NREL_rwt] THENC
+    ONCE_REWRITE_CONV [phase1_cases] THENC
+    SIMP_CONV (srw_ss()) [] THENC
+    SIMP_CONV (srw_ss()) [EnterNSpace_def, open_path_thm, LET_THM,
+                          open_ftnode_thm, NewGVar_def, state_NewGVar_def,
+                          ExitNSpace_def, empty_p1_def,
+                          finite_mapTheory.FAPPLY_FUPDATE_THM,
+                          instantiationTheory.IDhd_inst_def] THENC
+    SIMP_CONV (srw_ss() ++ DNF_ss) [finite_mapTheory.FUPDATE_COMMUTES];
+
+fun NCONV n c = if n <= 0 then ALL_CONV else c THENC NCONV (n - 1) c;
+
+val step1_2 = save_thm(
+  "step1_2",
+    (SIMP_CONV (srw_ss()) [t2_program_def,
+                           statesTheory.initial_state_def] THENC
+     NCONV 2 vardecl)
+    ``NREL phase1 2 ^initial (p, s)``)
+val _ = print "02 steps\n"
+
+val to_step_6 = save_thm(
+  "to_step_6",
+    (ONCE_REWRITE_CONV [DECIDE ``6n = 2 + 4``] THENC
+     SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL step1_2,
+                           pairTheory.EXISTS_PROD] THENC
+
+     NCONV 4 vardecl
+     )
+    ``NREL phase1 6 ^initial (p,s)``
+)
+val _ = print "06 steps\n"
+
+val to_step_10 = save_thm(
+  "to_step_10",
+  (ONCE_REWRITE_CONV [DECIDE ``10n = 6 + 4``] THENC
+   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_6,
+                         pairTheory.EXISTS_PROD] THENC
+   NCONV 4 vardecl)
+    ``NREL phase1 10 ^initial (p,s)``
+);
+val _ = print "10 steps\n";
+
+val to_step_14 = save_thm(
+  "to_step_14",
+  (ONCE_REWRITE_CONV [DECIDE ``14n = 10 + 4``] THENC
+   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_10,
+                         pairTheory.EXISTS_PROD] THENC
+   NCONV 4 vardecl)
+    ``NREL phase1 14 ^initial (p,s)``
+);
+val _ = print "14 steps\n"
+
+val to_step_18 = save_thm(
+  "to_step_18",
+  (ONCE_REWRITE_CONV [DECIDE ``18n = 14 + 4``] THENC
+   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_14,
+                         pairTheory.EXISTS_PROD] THENC
+   NCONV 4 vardecl)
+    ``NREL phase1 18 ^initial (p,s)``
+);
+val _ = print "18 steps\n"
+
+val to_step_22 = save_thm(
+  "to_step_22",
+  (ONCE_REWRITE_CONV [DECIDE ``22n = 18 + 4``] THENC
+   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_18,
+                         pairTheory.EXISTS_PROD] THENC
+   NCONV 4 vardecl)
+    ``NREL phase1 22 ^initial (p,s)``
+);
+val _ = print "22 steps\n"
+
+val to_step_23 = save_thm(
+  "to_step_23",
+  (ONCE_REWRITE_CONV [DECIDE ``23n = 22 + 1``] THENC
+   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_22,
+                         pairTheory.EXISTS_PROD] THENC
+   NCONV 1 vardecl)
+    ``NREL phase1 23 ^initial (p,s)``
+);
+val _ = print "23 steps\n"
+
 
 val _ = export_theory()
