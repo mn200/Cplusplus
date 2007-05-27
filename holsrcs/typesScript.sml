@@ -80,6 +80,7 @@ val _ = export_rewrites ["sfld_basename_def"]
 val is_abs_id_def = Define`
   (is_abs_id (IDConstant b ns n) = b)
 `;
+val _ = export_rewrites ["is_abs_id_def"]
 
 val IDtl_def = Define`
   IDtl (IDConstant b sfs sf) = sf

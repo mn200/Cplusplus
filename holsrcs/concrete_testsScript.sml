@@ -210,7 +210,17 @@ val sizeof_c = store_thm(
    }
    template <template <class> U> U<int> f(U<char>);
 
+   namespace n { 
+     int v1 = c;
+     int v2 = ::c;
+     int v3 = n2::y;
+     int v4 = x;
+     int v5 = n::x;
+   }
+
 *)
+val CI_def = Define`CI e = CopyInit (mExpr e base_se)`
+val _ = export_rewrites ["CI_def"]
 
 val t2_program_def = Define`
   t2_program = [
@@ -227,7 +237,24 @@ val t2_program_def = Define`
                                       (SFTempCall "U" [TType (Signed Int)])))
                              [TypeID (IDConstant F []
                                       (SFTempCall "U" [TType BChar]))])
-                            (Base "f")))
+                            (Base "f")));
+    NameSpace "n" [Decl (VDecInit (Signed Int) 
+                                  (Base "v1")
+                                  (CI (Var (Base "c"))));
+                   Decl (VDecInit (Signed Int) 
+                                  (Base "v2") 
+                                  (CI (Var (IDConstant T [] (SFName "c")))));
+                   Decl (VDecInit (Signed Int)
+                                  (Base "v3")
+                                  (CI (Var (IDConstant F [SFName "n2"] 
+                                                         (SFName "y")))));
+                   Decl (VDecInit (Signed Int) 
+                                  (Base "v4")
+                                  (CI (Var (Base "x")))); 
+                   Decl (VDecInit (Signed Int)
+                                  (Base "v5")
+                                  (CI (Var (IDConstant F [SFName "n"]
+                                                       (SFName "x")))))]
  ]
 `
 
@@ -271,7 +298,7 @@ val _ = augment_srw_ss [rewrites [typesTheory.Base_def, rewrite_type_def,
                                   fmaptreeTheory.fupd_at_path_def,
                                   fmaptreeTheory.apply_path_def,
                                   empty_env_def, FUNION_FEMPTY,
-                                  FUNION_FUPDATE,
+                                  FUNION_FUPDATE, 
                                   CONJUNCT1 NREL_def, FUN_FMAP_INSERT]]
 
 val initial = ``(MAP P1Decl t2_program, empty_p1 [] initial_state)``
@@ -292,79 +319,46 @@ val vardecl =
                           ExitNSpace_def, empty_p1_def,
                           finite_mapTheory.FAPPLY_FUPDATE_THM,
                           instantiationTheory.IDhd_inst_def] THENC
-    SIMP_CONV (srw_ss() ++ DNF_ss) [finite_mapTheory.FUPDATE_COMMUTES];
+    SIMP_CONV (srw_ss() ++ DNF_ss) [finite_mapTheory.FUPDATE_COMMUTES, 
+                                   mk_last_init_def, LET_THM];
 
 fun NCONV n c = if n <= 0 then ALL_CONV else c THENC NCONV (n - 1) c;
 
-val step1_2 = save_thm(
-  "step1_2",
+val to_step_4 = save_thm(
+  "to_step_4",
     (SIMP_CONV (srw_ss()) [t2_program_def,
                            statesTheory.initial_state_def] THENC
-     NCONV 2 vardecl)
-    ``NREL phase1 2 ^initial (p, s)``)
-val _ = print "02 steps\n"
+     NCONV 4 vardecl)
+    ``NREL phase1 4 ^initial (p, s)``)
+val _ = print "04 steps\n"
 
-val to_step_6 = save_thm(
-  "to_step_6",
-    (ONCE_REWRITE_CONV [DECIDE ``6n = 2 + 4``] THENC
-     SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL step1_2,
-                           pairTheory.EXISTS_PROD] THENC
+val recalc = ref false
 
-     NCONV 4 vardecl
-     )
-    ``NREL phase1 6 ^initial (p,s)``
-)
-val _ = print "06 steps\n"
+fun fourmore n = 
+    if not (!recalc) andalso can theorem ("to_step_"^Int.toString n) then () 
+    else let
+        fun mkn i = numSyntax.mk_numeral (Arbnum.fromInt i)
+        val prev0 = (n div 4) * 4
+        val (diff,prev) = if prev0 = n then (4,n-4) else (n - prev0,prev0)
+        val n_t = mkn n
+        val nth = DECIDE ``^n_t = ^(mkn (n - diff)) + ^(mkn diff)``
+        val t = ``NREL phase1 ^n_t ^initial (p, s)``
+        val th = if n > 4 then (fourmore prev; 
+                                theorem ("to_step_"^Int.toString prev))
+                 else if n = 4 then to_step_4
+                 else raise Fail "Can't do steps less than four"
+        val tac = 
+            ONCE_REWRITE_CONV [nth] THENC
+            SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL th, 
+                                  pairTheory.EXISTS_PROD] THENC
+            NCONV diff vardecl
+      in
+        if n <= 4 then () 
+        else (save_thm("to_step_"^Int.toString n, tac t); 
+              print (StringCvt.padLeft #"0" 2 (Int.toString n)); 
+              print " steps\n")
+      end
 
-val to_step_10 = save_thm(
-  "to_step_10",
-  (ONCE_REWRITE_CONV [DECIDE ``10n = 6 + 4``] THENC
-   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_6,
-                         pairTheory.EXISTS_PROD] THENC
-   NCONV 4 vardecl)
-    ``NREL phase1 10 ^initial (p,s)``
-);
-val _ = print "10 steps\n";
-
-val to_step_14 = save_thm(
-  "to_step_14",
-  (ONCE_REWRITE_CONV [DECIDE ``14n = 10 + 4``] THENC
-   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_10,
-                         pairTheory.EXISTS_PROD] THENC
-   NCONV 4 vardecl)
-    ``NREL phase1 14 ^initial (p,s)``
-);
-val _ = print "14 steps\n"
-
-val to_step_18 = save_thm(
-  "to_step_18",
-  (ONCE_REWRITE_CONV [DECIDE ``18n = 14 + 4``] THENC
-   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_14,
-                         pairTheory.EXISTS_PROD] THENC
-   NCONV 4 vardecl)
-    ``NREL phase1 18 ^initial (p,s)``
-);
-val _ = print "18 steps\n"
-
-val to_step_22 = save_thm(
-  "to_step_22",
-  (ONCE_REWRITE_CONV [DECIDE ``22n = 18 + 4``] THENC
-   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_18,
-                         pairTheory.EXISTS_PROD] THENC
-   NCONV 4 vardecl)
-    ``NREL phase1 22 ^initial (p,s)``
-);
-val _ = print "22 steps\n"
-
-val to_step_23 = save_thm(
-  "to_step_23",
-  (ONCE_REWRITE_CONV [DECIDE ``23n = 22 + 1``] THENC
-   SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL to_step_22,
-                         pairTheory.EXISTS_PROD] THENC
-   NCONV 1 vardecl)
-    ``NREL phase1 23 ^initial (p,s)``
-);
-val _ = print "23 steps\n"
-
+val _ = fourmore 32
 
 val _ = export_theory()

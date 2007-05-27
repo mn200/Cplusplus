@@ -335,6 +335,12 @@ val mk_dynobj_id_def = Define`
       IDConstant b sfs sf
 `;
 
+val idattach_locn_def = Define`
+  (idattach_locn (b,sfs1,targs) (IDConstant _ sfs2 sf) =
+      IDConstant b (sfs1 ++ sfs2) sf)
+`;
+val _ = export_rewrites ["idattach_locn_def"]
+
 (* the ps and avoids parameters are schematic *)
 val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
   (phase1_expr (Cnum n) = Cnum n) /\
@@ -368,6 +374,7 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
   (phase1_expr (EThrow eopt) = EThrow (OPTION_MAP phase1_expr eopt)) /\
 
   (* tricky cases *)
+  (* field selection *)
   (phase1_expr (SVar e id) =
       let e' = phase1_expr e in
       let ty = @ty. expr_type ps.global RValue e' ty in
@@ -375,14 +382,46 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
       let ps' = open_classnode avoids.tyfvs cnm ps
       in
           case id of
-             IDConstant F [] sf -> SVar e' (mk_dynobj_id ps sf)
+             IDConstant F [] sf -> SVar e' (mk_dynobj_id ps' sf)
           || id -> SVar e' (THE (typeid (rewrite_type avoids ps
-                                                      (TypeID id)))))
-`;
-(*
-  (phase1_expr (Var cid) =
+                                                      (TypeID id))))) /\
+
+  (phase1_expr (Var id) =
+      if is_abs_id id then Var id
+      else
+        case id of
+           IDConstant b [] sf ->
+             Var (idattach_locn (ps.dynobjs ' (sfld_string sf)) id)
+        || IDConstant b (h::t) sf ->
+           let s = sfld_string h
+           in
+             if s IN FDOM ps.dynclasses then
+               Var (idattach_locn (ps.dynclasses ' s) id)
+             else
+               let (b',ns) = ps.dynns ' s
+               in
+                 Var (IDConstant b' (MAP SFName ns ++ (h::t)) sf)) /\
+
   (phase1_expr (MemAddr cid fld) =
-*)
+     let cid' = if is_abs_id cid then cid
+                else
+                  let sf = IDhd cid in
+                  let s = sfld_string sf
+                  in
+                    if s IN FDOM ps.dynclasses then
+                      idattach_locn (ps.dynclasses ' s) cid
+                    else
+                      let (b,ns) = ps.dynns ' s
+                      in
+                        idattach_locn (b, MAP SFName ns, []:bool list) cid
+     in
+       (* there's nothing to do to the field.  Though it may actually be a
+          field of some class ancestral to cid', the whole point of the
+          calculation of the field address is to calculate it in the context
+          of being inside a cid', not the ancestor.  And we can safely leave
+          that to the dynamics *)
+       MemAddr cid' fld)
+`;
 
 val (phase1_expr_def, phase1_expr_ind) = Defn.tprove(
   phase1_expr_defn,
@@ -484,7 +523,7 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
      phase1_init {} s' init init'
    ==>
      phase1 (P1Decl (Decl (VDecInit ty (Base sfnm) init)) :: ds, s)
-            (ds, mk_last_init init' s))
+            (ds, mk_last_init init' s'))
 `;
 
 (*
