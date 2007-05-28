@@ -513,15 +513,29 @@ val newlocal_def = Define`
 `
 
 (* ----------------------------------------------------------------------
-    extract_class_name : frees_record -> P1state -> class_entry ->
-                         P1state
+    extract_class_names : frees_record -> P1state -> class_entry ->
+                          P1state
 
    ---------------------------------------------------------------------- *)
 
-val extract_class_name_def = Define`
+val extract_class_names_def = Define`
+  (extract_class_names avds ps (b,sfs) (CFnDefn v ty sf pms bodyoptopt) = 
+     let (targs,s) = break_sfld sf 
+     in
+       if v then 
+         (* virtual member functions can't be templates *)
+         ps with dynobjs := ps.dynobjs |+ (s, (F, [], [])) 
+       else
+         ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, targs))) /\
+  (extract_class_names avds ps (b,sfs) (FldDecl s ty) = 
+     ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, []))) /\
+  (extract_class_names avds ps (b,sfs) (Constructor _ _ _) = ps) /\
+  (extract_class_names avds ps (b,sfs) (Destructor _ _) = ps) /\
+  (extract_class_names avds ps (b,sfs) (NClass sf ciopt) = 
+     let (targs, s) = break_sfld sf
+     in
+       ps with dynclasses updated_by (\fm. fm |+ (s, (b,sfs,targs))))
 `
-
-
 
 (* ----------------------------------------------------------------------
     phase1_stmt : frees_record -> P1state -> CStmt -> CStmt
@@ -612,10 +626,29 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
   (phase1_cinfo_opt avds ps cnm (SOME ci) =
      let ancestors' = MAP (\ (id,b,p). (resolve_classid avds ps id, b, p))
                           ci.ancestors in
-     let ps' = extract_class_names avds (local_class cnm ps) ci.fields in
-     let (flds', ps'') = rewrite_members avds ps' ci.fields
+     let ps' = FOLDL (\s (ce,b,p). 
+                        extract_class_names avds s (F, [IDtl cnm]) ce) 
+                     (local_class cnm ps) 
+                     ci.fields in
+     let (ps'', flds') = 
+       FOLDL (\ (ps,celist) (ce,b,p).
+                let (ps',ce') = phase1_centry avds ps cnm ce
+                in
+                  (ps', celist ++ [(ce',b,p)]))
+             (ps',[])
+             ci.fields
      in
-       (SOME <| ancestors := ancestors'; flds := flds' |>, ps''))
+       (SOME <| ancestors := ancestors'; fields := flds' |>, ps'')) 
+
+     /\
+
+  (* in a local class, member functions can't be templates, and must be 
+     declared immediately *) 
+  (* they can be abstract though, which is this case *)
+  (phase1_centry avds ps cnm 
+                 (CFnDecl v retty (SFName s) pms (SOME NONE)) = 
+     
+   
 `
 
 val (phase1_stmt_def, phase1_stmt_ind) = Defn.tprove(
