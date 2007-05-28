@@ -519,19 +519,19 @@ val newlocal_def = Define`
    ---------------------------------------------------------------------- *)
 
 val extract_class_names_def = Define`
-  (extract_class_names avds ps (b,sfs) (CFnDefn v ty sf pms bodyoptopt) = 
-     let (targs,s) = break_sfld sf 
+  (extract_class_names avds ps (b,sfs) (CFnDefn v ty sf pms bodyoptopt) =
+     let (targs,s) = break_sfld sf
      in
-       if v then 
+       if v then
          (* virtual member functions can't be templates *)
-         ps with dynobjs := ps.dynobjs |+ (s, (F, [], [])) 
+         ps with dynobjs := ps.dynobjs |+ (s, (F, [], []))
        else
          ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, targs))) /\
-  (extract_class_names avds ps (b,sfs) (FldDecl s ty) = 
+  (extract_class_names avds ps (b,sfs) (FldDecl s ty) =
      ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, []))) /\
   (extract_class_names avds ps (b,sfs) (Constructor _ _ _) = ps) /\
   (extract_class_names avds ps (b,sfs) (Destructor _ _) = ps) /\
-  (extract_class_names avds ps (b,sfs) (NClass sf ciopt) = 
+  (extract_class_names avds ps (b,sfs) (NClass sf ciopt) =
      let (targs, s) = break_sfld sf
      in
        ps with dynclasses updated_by (\fm. fm |+ (s, (b,sfs,targs))))
@@ -626,29 +626,34 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
   (phase1_cinfo_opt avds ps cnm (SOME ci) =
      let ancestors' = MAP (\ (id,b,p). (resolve_classid avds ps id, b, p))
                           ci.ancestors in
-     let ps' = FOLDL (\s (ce,b,p). 
-                        extract_class_names avds s (F, [IDtl cnm]) ce) 
-                     (local_class cnm ps) 
+     let ps1 = FOLDL (\ps (id,b,p). open_classnode avds.tyfvs id ps)
+                     ps ancestors' in
+     let ps2 = FOLDL (\s (ce,b,p).
+                        extract_class_names avds s (F, [IDtl cnm]) ce)
+                     (local_class cnm ps1)
                      ci.fields in
-     let (ps'', flds') = 
+     let (ps3, flds') =
        FOLDL (\ (ps,celist) (ce,b,p).
                 let (ps',ce') = phase1_centry avds ps cnm ce
                 in
                   (ps', celist ++ [(ce',b,p)]))
-             (ps',[])
+             (ps2,[])
              ci.fields
      in
-       (SOME <| ancestors := ancestors'; fields := flds' |>, ps'')) 
+       (SOME <| ancestors := ancestors'; fields := flds' |>, ps''))
 
      /\
 
-  (* in a local class, member functions can't be templates, and must be 
-     declared immediately *) 
+  (* in a local class, member functions can't be templates, and must be
+     declared immediately *)
   (* they can be abstract though, which is this case *)
-  (phase1_centry avds ps cnm 
-                 (CFnDecl v retty (SFName s) pms (SOME NONE)) = 
-     
-   
+  (phase1_centry avds ps cnm
+                 (CFnDefn v retty (SFName s) pms (SOME NONE)) =
+     (ps, CFnDefn v
+                  (rewrite_type avds ps retty)
+                  (SFName s)
+                  (MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms)
+                  (SOME NONE)))
 `
 
 val (phase1_stmt_def, phase1_stmt_ind) = Defn.tprove(
@@ -657,9 +662,14 @@ val (phase1_stmt_def, phase1_stmt_ind) = Defn.tprove(
                         case sum of
                            INL (avds,s,st) -> CStmt_size st
                         || INR (INL (avds,s,vd)) -> var_decl_size vd
-                        || INR (INR (avds,ps,cnm,cinfo_opt)) ->
-                             option_size class_info_size cinfo_opt)` THEN
+                        || INR (INR (INL (avds,ps,cnm,cinfo_opt))) ->
+                             option_size class_info_size cinfo_opt
+                        || INR (INR (INR (avds,ps,cnm,ce))) ->
+                             class_entry_size ce)` THEN
   SRW_TAC [ARITH_ss][] THENL [
+    Cases_on `ci` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+    Induct_on `l` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
     Induct_on `handlers` THEN SRW_TAC [][] THEN
     FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
     Induct_on `handlers` THEN SRW_TAC [][] THEN
@@ -673,6 +683,9 @@ val (phase1_stmt_def, phase1_stmt_ind) = Defn.tprove(
     Cases_on `cinfo_opt` THEN
     SRW_TAC [ARITH_ss][basicSizeTheory.option_size_def]
   ])
+val _ = save_thm("phase1_stmt_def", phase1_stmt_def)
+val _ = save_thm("phase1_stmt_ind", phase1_stmt_ind)
+val _ = export_rewrites ["phase1_stmt_def"]
 
 
 
