@@ -146,7 +146,14 @@ val _ = Hol_datatype`
            | Constructor of (string # CPP_Type) list =>
                             mem_initializer list =>
                             CStmt option
-           | Destructor of bool => CStmt option; (* bool = T iff virtual *)
+           | Destructor of bool => CStmt option (* bool = T iff virtual *)
+           | NClass of StaticField => class_info option
+               (* this shouldn't really be here (nested classes can't be
+                  static or not), but it was the only way I could get HOL
+                  to accept the datatype definition.  This is a bug in
+                  HOL. *)
+
+    ;
 
   class_info =
              <| fields : (class_entry # bool # protection) list ;
@@ -154,6 +161,7 @@ val _ = Hol_datatype`
 
                 ancestors : (CPP_ID # bool # protection) list
                    (* bool indicates virtuality *)
+
              |> ;
 
   initializer =

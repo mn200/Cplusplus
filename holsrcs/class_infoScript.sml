@@ -51,6 +51,17 @@ val defined_classes_def = Define`
   defined_classes s = { id | is_class_name s id /\ ~(cinfo0 s id = NONE) }
 `;
 
+(* The set of nested classes belonging to a class *)
+val nested_class_def = Define`
+  nested_class s cnm1 cnm2 =
+    cnm1 IN defined_classes s /\
+    ?sf ci prot stat.
+          (cnm2 = mk_member cnm1 sf) /\
+          MEM (NClass sf ci, stat, prot) (cinfo s cnm1).fields
+`;
+
+
+
 (* similarly, direct base classes, in order of declaration *)
 val get_direct_bases_def = Define`
   get_direct_bases s cnm : CPP_ID list =
@@ -304,7 +315,7 @@ val MethodDefs_def = Define`
                  (cinfo (FST s) (LAST Cs)).fields }
 `
 
-(* s |- C has least method -: ty via Cs *)
+(* <s> |- <C> has least method <mnm> -: <ty> via <Cs> *)
 val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
                   paren_style = OnlyIfNecessary,
                   fixity = Infix (NONASSOC, 460),
@@ -323,6 +334,34 @@ val methodty_via_def = Define`
          (Cs,minfo) IN MethodDefs s C mname /\
          !Cs' m'. (Cs',m') IN MethodDefs s C mname ==>
                    RTC (pord1 (s,C)) Cs Cs'
+`
+
+(* Injected class names *)
+val InjectedClasses_def = Define`
+  InjectedClasses s cnm1 =
+    { (Cs,fullid) | (cnm1, Cs) IN subobjs s /\
+                    ((fullid = LAST Cs) \/
+                     nested_class (FST s) cnm1 fullid) }
+`;
+(* <s> |- <C> has least injected <Cnm> via <pth> *)
+val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 2)),
+                  paren_style = OnlyIfNecessary,
+                  fixity = Infix (NONASSOC, 460),
+                  pp_elements = [HardSpace 1, TOK "|-", BreakSpace(1,0),
+                                 TM, BreakSpace(1,0),
+                                 PPBlock([TOK "has", BreakSpace(1,0),
+                                          TOK "least", BreakSpace(1,0),
+                                          TOK "injected", BreakSpace(1,0),
+                                          TM],
+                                         (PP.INCONSISTENT, 2)),
+                                 BreakSpace(1,0),
+                                 TOK "via", BreakSpace(1,0)],
+                  term_name = "injected_via" }
+val injected_via_def = Define`
+  s |- cnm1 has least injected cnm2 via Cs =
+         (Cs,cnm2) IN InjectedClasses s cnm1 /\
+         !Cs'. (Cs',cnm2) IN InjectedClasses s cnm1 ==>
+               RTC (pord1 (s,cnm1)) Cs' Cs ==> (Cs = Cs')
 `
 
 (* see 6.3.6 Wasserab et al. *)

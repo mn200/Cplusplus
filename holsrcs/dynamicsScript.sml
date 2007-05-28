@@ -1449,16 +1449,35 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: block-vstrdec-forward *)
+(* this kind of declaration is made only so that a subsequent definition
+   that refers to the name links to the right sort of class.  This is all
+   handled by name resolution, so the dynamics can just ignore these *)
+(!name vds sts c s0.
+     T
+   ==>
+     ^mng (mStmt (Block T (VStrDec name NONE :: vds) sts) c) s0
+          (s0, mStmt (Block T vds sts) c))
+
+   /\
+
 (* RULE-ID: block-vstrdec *)
 (* this is the declaration of a local class *)
-(!name info0 info userdefs s0 s vds sts c env'.
+(!name info0 info userdefs s0 s vds sts c env' lclasses.
      ((info,userdefs) = define_default_specials info0) /\
      install_member_functions name s0 info.fields s /\
      ~is_abs_id name /\
-     (SOME env' = update_class name (info,userdefs) s.env)
+     (SOME env' = update_class name (info,userdefs) s.env) /\
+     (lclasses =
+        mapPartial (\ (e,stat,prot).
+                      case e of
+                         NClass sf ciopt -> SOME (VStrDec (mk_member name sf)
+                                                          ciopt)
+                      || e -> NONE)
+                   info.fields)
    ==>
      ^mng (mStmt (Block T (VStrDec name (SOME info0) :: vds) sts) c) s0
-          (s with env := env', mStmt (Block T vds sts) c))
+          (s with env := env', mStmt (Block T (lclasses ++ vds) sts) c))
 `
 
 
