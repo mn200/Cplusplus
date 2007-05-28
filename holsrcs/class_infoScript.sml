@@ -341,7 +341,8 @@ val InjectedClasses_def = Define`
   InjectedClasses s cnm1 =
     { (Cs,fullid) | (cnm1, Cs) IN subobjs s /\
                     ((fullid = LAST Cs) \/
-                     nested_class (FST s) cnm1 fullid) }
+                     nested_class (FST s) (LAST Cs) fullid)
+    }
 `;
 (* <s> |- <C> has least injected <Cnm> via <pth> *)
 val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 2)),
@@ -358,10 +359,12 @@ val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 2)),
                                  TOK "via", BreakSpace(1,0)],
                   term_name = "injected_via" }
 val injected_via_def = Define`
-  s |- cnm1 has least injected cnm2 via Cs =
-         (Cs,cnm2) IN InjectedClasses s cnm1 /\
-         !Cs'. (Cs',cnm2) IN InjectedClasses s cnm1 ==>
-               RTC (pord1 (s,cnm1)) Cs' Cs ==> (Cs = Cs')
+  s |- cnm1 has least injected sf via Cs =
+         ?fullid.
+            (Cs,fullid) IN InjectedClasses s cnm1 /\ (sf = IDtl fullid) /\
+            !Cs' id'. (Cs',id') IN InjectedClasses s cnm1 /\
+                      (sf = IDtl id') ==>
+                      RTC (pord1 (s,cnm1)) Cs Cs'
 `
 
 (* see 6.3.6 Wasserab et al. *)

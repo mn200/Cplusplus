@@ -174,9 +174,20 @@ val open_classnode_def = Define`
                      is_virtual s cnm sf ret (MAP SND ps) /\
                      (break_sfld sf = ([], str)) /\
                      (res = (F, [], []))) } in
-    let funmap = FUN_FMAP (\s. funflds ' s) (IMAGE FST funflds)
+    let funmap = FUN_FMAP (\s. funflds ' s) (IMAGE FST funflds) in
+    let nclasses = { (str,res) |
+                       ?sf fpth absp sfs fpthsf targs.
+                          (s,avoids) |- cnm has least injected sf via fpth /\
+                          (break_sfld sf = (targs, str)) /\
+                          (dest_id (LAST fpth) = (absp, sfs, fpthsf)) /\
+                          (res = if SND (break_sfld fpthsf) = str then
+                                   (absp, sfs, targs)
+                                 else
+                                   (absp, sfs ++ [fpthsf], targs)) } in
+    let nclassmap = FUN_FMAP (\s. nclasses ' s) (IMAGE FST nclasses)
     in
-       p1s with <| dynobjs := FUNION objmap (FUNION funmap p1s.dynobjs) |>
+       p1s with <| dynobjs := FUNION objmap (FUNION funmap p1s.dynobjs) ;
+                   dynclasses := FUNION nclassmap p1s.dynclasses |>
 `;
 
 val open_classpath_def = Define`
