@@ -467,6 +467,7 @@ val phase1_init_def = Define`
   (* similarly, a copyinit with a statement can't appear in user input *)
   (phase1_init avoids s (CopyInit (EStmt _ _)) result = F)
 `;
+val _ = export_rewrites ["phase1_init_def"]
 
 
 (* ----------------------------------------------------------------------

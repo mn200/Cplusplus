@@ -210,7 +210,7 @@ val sizeof_c = store_thm(
    }
    template <template <class> U> U<int> f(U<char>);
 
-   namespace n { 
+   namespace n {
      int v1 = c;
      int v2 = ::c;
      int v3 = n2::y;
@@ -238,19 +238,19 @@ val t2_program_def = Define`
                              [TypeID (IDConstant F []
                                       (SFTempCall "U" [TType BChar]))])
                             (Base "f")));
-    NameSpace "n" [Decl (VDecInit (Signed Int) 
+    NameSpace "n" [Decl (VDecInit (Signed Int)
                                   (Base "v1")
                                   (CI (Var (Base "c"))));
-                   Decl (VDecInit (Signed Int) 
-                                  (Base "v2") 
+                   Decl (VDecInit (Signed Int)
+                                  (Base "v2")
                                   (CI (Var (IDConstant T [] (SFName "c")))));
                    Decl (VDecInit (Signed Int)
                                   (Base "v3")
-                                  (CI (Var (IDConstant F [SFName "n2"] 
+                                  (CI (Var (IDConstant F [SFName "n2"]
                                                          (SFName "y")))));
-                   Decl (VDecInit (Signed Int) 
+                   Decl (VDecInit (Signed Int)
                                   (Base "v4")
-                                  (CI (Var (Base "x")))); 
+                                  (CI (Var (Base "x"))));
                    Decl (VDecInit (Signed Int)
                                   (Base "v5")
                                   (CI (Var (IDConstant F [SFName "n"]
@@ -298,10 +298,9 @@ val _ = augment_srw_ss [rewrites [typesTheory.Base_def, rewrite_type_def,
                                   fmaptreeTheory.fupd_at_path_def,
                                   fmaptreeTheory.apply_path_def,
                                   empty_env_def, FUNION_FEMPTY,
-                                  FUNION_FUPDATE, 
+                                  FUNION_FUPDATE,
                                   CONJUNCT1 NREL_def, FUN_FMAP_INSERT]]
 
-val initial = ``(MAP P1Decl t2_program, empty_p1 [] initial_state)``
 
 val open_ftnode_thm = CONJ (Q.SPEC `[]` open_ftnode_def)
                            (GEN_ALL (Q.SPEC `h::t` open_ftnode_def))
@@ -319,46 +318,46 @@ val vardecl =
                           ExitNSpace_def, empty_p1_def,
                           finite_mapTheory.FAPPLY_FUPDATE_THM,
                           instantiationTheory.IDhd_inst_def] THENC
-    SIMP_CONV (srw_ss() ++ DNF_ss) [finite_mapTheory.FUPDATE_COMMUTES, 
+    SIMP_CONV (srw_ss() ++ DNF_ss) [finite_mapTheory.FUPDATE_COMMUTES,
                                    mk_last_init_def, LET_THM];
 
 fun NCONV n c = if n <= 0 then ALL_CONV else c THENC NCONV (n - 1) c;
 
-val to_step_4 = save_thm(
-  "to_step_4",
-    (SIMP_CONV (srw_ss()) [t2_program_def,
-                           statesTheory.initial_state_def] THENC
-     NCONV 4 vardecl)
-    ``NREL phase1 4 ^initial (p, s)``)
-val _ = print "04 steps\n"
-
 val recalc = ref false
+val istate = statesTheory.initial_state_def
+fun mk_initial prog = ``(MAP P1Decl ^prog, empty_p1 [] initial_state)``
 
-fun fourmore n = 
-    if not (!recalc) andalso can theorem ("to_step_"^Int.toString n) then () 
+fun fourmore pfx prog n = let
+  fun recurse n =
+    if not (!recalc) andalso can theorem (pfx^Int.toString n) then ()
     else let
         fun mkn i = numSyntax.mk_numeral (Arbnum.fromInt i)
         val prev0 = (n div 4) * 4
         val (diff,prev) = if prev0 = n then (4,n-4) else (n - prev0,prev0)
         val n_t = mkn n
         val nth = DECIDE ``^n_t = ^(mkn (n - diff)) + ^(mkn diff)``
-        val t = ``NREL phase1 ^n_t ^initial (p, s)``
-        val th = if n > 4 then (fourmore prev; 
-                                theorem ("to_step_"^Int.toString prev))
-                 else if n = 4 then to_step_4
-                 else raise Fail "Can't do steps less than four"
-        val tac = 
-            ONCE_REWRITE_CONV [nth] THENC
-            SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL th, 
-                                  pairTheory.EXISTS_PROD] THENC
-            NCONV diff vardecl
+        val t = ``NREL phase1 ^n_t ^(mk_initial (lhs (concl prog))) (p, s)``
+        val tac = if n > 4 then let
+                      val _ = recurse prev
+                      val th = theorem (pfx^Int.toString prev)
+                    in
+                      ONCE_REWRITE_CONV [nth] THENC
+                      SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL th,
+                                            pairTheory.EXISTS_PROD] THENC
+                      NCONV diff vardecl
+                    end
+                  else
+                    SIMP_CONV (srw_ss()) [prog, istate] THENC
+                    NCONV n vardecl
       in
-        if n <= 4 then () 
-        else (save_thm("to_step_"^Int.toString n, tac t); 
-              print (StringCvt.padLeft #"0" 2 (Int.toString n)); 
-              print " steps\n")
+        save_thm(pfx^Int.toString n, tac t);
+        print (StringCvt.padLeft #"0" 2 (Int.toString n));
+        print " steps\n"
       end
+in
+  recurse n
+end
 
-val _ = fourmore 32
+val _ = fourmore "t2_step_" t2_program_def 31
 
 val _ = export_theory()
