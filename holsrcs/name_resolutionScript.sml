@@ -41,6 +41,31 @@ val _ = Hol_datatype`
     accdecls : ext_decl list |>
 `;
 
+val resolve_classid_def = Define`
+  (resolve_classid avds ps (IDConstant T sfs sf) = IDConstant T sfs sf) /\
+  (resolve_classid avds ps (IDConstant F [] (SFName s)) =
+     let (b,sfs,targs) = ps.dynclasses ' s
+     in
+       IDConstant b sfs (SFName s)) /\
+  (resolve_classid avds ps (IDConstant F [] (SFTempCall s targs)) =
+     let (b,sfs,targs') = ps.dynclasses ' s
+     in
+       IDConstant b sfs (SFTempCall s targs)) /\
+  (resolve_classid avds ps (IDConstant F (SFName s :: sfs) sf) =
+     if s IN FDOM ps.dynclasses then
+       let (b,pre_sfs,targs) = ps.dynclasses ' s
+       in
+         IDConstant b (pre_sfs ++ SFName s :: sfs) sf
+     else
+       let (b,sfnms) = ps.dynns ' s
+       in
+         IDConstant b (MAP SFName sfnms ++ SFName s :: sfs) sf) /\
+  (resolve_classid avds ps (IDConstant F (SFTempCall s targs :: sfs) sf) =
+     let (b,pre_sfs,targs') = ps.dynclasses ' s
+     in
+       IDConstant b (pre_sfs ++ SFTempCall s targs :: sfs) sf)
+`;
+
 val break_sfld_def = Define`
   (break_sfld (SFName s) = ([], s)) /\
   (break_sfld (SFTempCall s targs) = (targs, s))
@@ -259,7 +284,7 @@ val ExitNSpace_def = Define`
               (open_ftnode [] (empty_p1 s.accdecls s.global))
 `;
 
-val rewrite_types_def = Define`
+val rewrite_type_def = Define`
   rewrite_type templvars ps ty =
     let inst =
          <| typemap := (\s. if s IN templvars.tyfvs then TypeID (Base s)
@@ -267,7 +292,13 @@ val rewrite_types_def = Define`
                               let (b,sfs,targs) = ps.dynclasses ' s
                               in
                                 TypeID (IDConstant b sfs (SFName s))
-                            else TypeID (Base s)) ;
+                            else if s IN FDOM ps.dynns then
+                              let (b,sfnms) = ps.dynns ' s
+                              in
+                                TypeID (IDConstant b (MAP SFName sfnms)
+                                                   (SFName s))
+                            else
+                              TypeID (Base s)) ;
             valmap := TVAVar ;
             tempmap := (\s. if s IN templvars.tempfvs then (F, [], s)
                             else if s IN FDOM ps.dynclasses then
@@ -447,27 +478,172 @@ val _ = export_rewrites ["phase1_expr_def"]
 
 
 (* ----------------------------------------------------------------------
-    phase1_init : frees_record -> P1state -> initializer ->
-                  initializer -> bool
+    phase1_init : frees_record -> P1state -> initializer -> initializer
 
     Relationally reworks an initializer to reflect names in scope in
     P1state, avoiding the given frees (which are template parameters).
    ---------------------------------------------------------------------- *)
 
 val phase1_init_def = Define`
-  (phase1_init avoids s (DirectInit0 elist) result =
-      (result = DirectInit0 (MAP (phase1_expr avoids s) elist))) /\
+  (phase1_init avoids s (DirectInit0 elist)  =
+     DirectInit0 (MAP (phase1_expr avoids s) elist)) /\
 
-  (* DirectInit form is not going to appear in user input *)
-  (phase1_init avoids s (DirectInit ee) result = F)  /\
+  (phase1_init avoids s (CopyInit (NormE e se))  =
+     CopyInit (NormE (phase1_expr avoids s e) se))
 
-  (phase1_init avoids s (CopyInit (NormE e se)) result =
-     (result = CopyInit (NormE (phase1_expr avoids s e) se))) /\
-
-  (* similarly, a copyinit with a statement can't appear in user input *)
-  (phase1_init avoids s (CopyInit (EStmt _ _)) result = F)
 `;
 val _ = export_rewrites ["phase1_init_def"]
+
+(* ----------------------------------------------------------------------
+    newlocal : P1state -> StaticField -> P1state
+   ---------------------------------------------------------------------- *)
+
+(* can't declare a local variable that is a template, so only consider a
+   SFName parameter  *)
+val newlocal_def = Define`
+  newlocal ps (SFName s) ty =
+     ps with <| dynobjs := ps.dynobjs |+ (s, (F, [], [])) ;
+                global := ps.global with
+                            env updated_by
+                              (\ft. FTNode
+                                    (item ft with
+                                      typemap updated_by
+                                              (\fm. fm |+ (SFName s,ty)))
+                                    (map ft)) |>
+`
+
+(* ----------------------------------------------------------------------
+    extract_class_name : frees_record -> P1state -> class_entry ->
+                         P1state
+
+   ---------------------------------------------------------------------- *)
+
+val extract_class_name_def = Define`
+`
+
+
+
+(* ----------------------------------------------------------------------
+    phase1_stmt : frees_record -> P1state -> CStmt -> CStmt
+   ---------------------------------------------------------------------- *)
+
+val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
+  (phase1_stmt avds ps (CLoop (NormE e se) bod) =
+     CLoop (NormE (phase1_expr avds ps e) se) (phase1_stmt avds ps bod)) /\
+  (phase1_stmt avds ps (CIf (NormE e se) st1 st2) =
+     CIf (NormE (phase1_expr avds ps e) se)
+         (phase1_stmt avds ps st1)
+         (phase1_stmt avds ps st2)) /\
+  (phase1_stmt avds ps (Standalone (NormE e se)) =
+     Standalone (NormE (phase1_expr avds ps e) se)) /\
+  (phase1_stmt avds ps EmptyStmt = EmptyStmt) /\
+  (phase1_stmt avds ps (Block F vds sts) =
+     let (vds',s') = FOLDL (\ (va,s0) vd. let (vd',s') = phase1_vdec avds s0 vd
+                                          in
+                                            (va ++ [vd'], s'))
+                           ([],ps)
+                           vds
+     in
+       Block F vds' (MAP (phase1_stmt avds s') sts)) /\
+  (phase1_stmt avds ps (Ret (NormE e se)) =
+     Ret (NormE (phase1_expr avds ps e) se)) /\
+  (phase1_stmt avds ps EmptyRet = EmptyRet) /\
+  (phase1_stmt avds ps Break = Break) /\
+  (phase1_stmt avds ps Cont = Cont) /\
+  (phase1_stmt avds ps (Trap tt st) = Trap tt (phase1_stmt avds ps st)) /\
+  (phase1_stmt avds ps (Throw NONE) = Throw NONE) /\
+  (phase1_stmt avds ps (Throw (SOME (NormE e se))) =
+     Throw (SOME (NormE (phase1_expr avds ps e) se))) /\
+  (phase1_stmt avds ps (Catch st handlers) =
+     Catch (phase1_stmt avds ps st)
+           (MAP (\ (epd, est).
+                    case epd of
+                       NONE -> (NONE, phase1_stmt avds ps est)
+                    || SOME (NONE, ty) ->
+                               (SOME (NONE, rewrite_type avds ps ty),
+                                phase1_stmt avds ps est)
+                    || SOME (SOME enm, ty) ->
+                         let ty' = rewrite_type avds ps ty
+                         in
+                           (SOME (SOME enm, ty'),
+                            phase1_stmt avds
+                                        (newlocal ps (SFName enm) ty')
+                                        est))
+                handlers)) /\
+  (phase1_stmt avds ps ClearExn = ClearExn)
+
+     /\
+
+  (* neither of these handle the definition of structured variables,
+     which is impossible in a local scope, even for static data members *)
+  (phase1_vdec avds ps (VDec ty nm) =
+     let ty' = rewrite_type avds ps ty
+     in
+       (VDec ty' nm, newlocal ps (IDtl nm) ty')) /\
+  (phase1_vdec avds ps (VDecInit ty nm init) =
+     let ty' = rewrite_type avds ps ty
+     in
+       (VDecInit ty' nm (phase1_init avds ps init),
+        newlocal ps (IDtl nm) ty')) /\
+  (phase1_vdec avds ps (VStrDec cnm cinfo_opt) =
+     let (cinfo_opt', ps') = phase1_cinfo_opt avds ps cnm cinfo_opt
+     in
+       (VStrDec cnm cinfo_opt', ps'))
+
+     /\
+
+  (phase1_cinfo_opt avds ps cnm NONE =
+     (NONE,
+      case cnm of
+        IDConstant F [] (SFName s) ->
+          ps with
+           <| dynclasses updated_by (\fm. fm |+ (s, (F, [], [])));
+              global := ps.global with
+                          env updated_by
+                            (\ft. FTNode
+                                   (item ft with
+                                      classenv updated_by
+                                        (\fm. fm |+ (SFName s,
+                                                     FTNode
+                                                       empty_class_envinfo
+                                                       FEMPTY)))
+                                   (map ft))
+           |>)) /\
+  (phase1_cinfo_opt avds ps cnm (SOME ci) =
+     let ancestors' = MAP (\ (id,b,p). (resolve_classid avds ps id, b, p))
+                          ci.ancestors in
+     let ps' = extract_class_names avds (local_class cnm ps) ci.fields in
+     let (flds', ps'') = rewrite_members avds ps' ci.fields
+     in
+       (SOME <| ancestors := ancestors'; flds := flds' |>, ps''))
+`
+
+val (phase1_stmt_def, phase1_stmt_ind) = Defn.tprove(
+  phase1_stmt_defn,
+  WF_REL_TAC `measure (\sum.
+                        case sum of
+                           INL (avds,s,st) -> CStmt_size st
+                        || INR (INL (avds,s,vd)) -> var_decl_size vd
+                        || INR (INR (avds,ps,cnm,cinfo_opt)) ->
+                             option_size class_info_size cinfo_opt)` THEN
+  SRW_TAC [ARITH_ss][] THENL [
+    Induct_on `handlers` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `handlers` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `handlers` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `vds` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `sts` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Cases_on `cinfo_opt` THEN
+    SRW_TAC [ARITH_ss][basicSizeTheory.option_size_def]
+  ])
+
+
+
+
 
 
 (* ----------------------------------------------------------------------
@@ -531,11 +707,10 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
 
   (* RULE-ID: [phase1-decl-vdecinit] *)
   (!s s' ds ty sfnm init init'.
-     (s' = NewGVar ty (SFName sfnm) s) /\
-     phase1_init {} s' init init'
+     (s' = NewGVar ty (SFName sfnm) s)
    ==>
      phase1 (P1Decl (Decl (VDecInit ty (Base sfnm) init)) :: ds, s)
-            (ds, mk_last_init init' s'))
+            (ds, mk_last_init (phase1_init {} s' init)))
 `;
 
 (*
@@ -643,7 +818,7 @@ val _ = set_trace "inddef strict" 1
      lookup_field_info (MAP (\ (n,ty). (SFName n, ty)) Cflds) fld (i,ftype) /\
      offset (sizeofmap s) (MAP (UNCURRY NSD) Cflds) i offn
    ==>
-     ^mng (mExpr (SVar (LVal a (Class cnm) p) fld) se) s
+     ^mng (NormE (SVar (LVal a (Class cnm) p) fld) se) s
           (s, ev (LVal (a + subobj_offset s (cnm, p ^ p') + offn) ftype
                        (default_path ftype)) se))
 *)

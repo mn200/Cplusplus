@@ -62,7 +62,9 @@ val _ = Hol_datatype`
     info     : state_class_info ;
     refs     : string # addr |-> addr # CPP_ID list
 |>`
-
+val empty_class_envinfo_def = Define`
+  empty_class_envinfo = <| statvars := FEMPTY; info := NONE; refs := FEMPTY |>
+`;
 
 val _ = type_abbrev ("class_env", ``:(StaticField,class_envinfo)fmaptree``)
 
