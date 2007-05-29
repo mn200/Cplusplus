@@ -29,13 +29,51 @@ val _ = Hol_datatype`
             | ExitNS of string
 `;
 
+val _ = Hol_datatype`
+  dynobj_type = dStatMember | dMember | dVirtualMember | dNormalObj
+`;
+
+(* given an environment, and an id, determine if the id is a reference to
+   a member object *)
+val eid_is_member_def = Define`
+  eid_is_member (env : environment) id =
+    case id of
+       IDConstant b [] sf -> F
+    || IDConstant b (SFTempCall s targs :: sfs) sf -> T
+    || IDConstant b (SFName s :: sfs) sf ->
+         if SFName s IN FDOM (item env).classenv then T
+         else eid_is_member (map env ' s) (IDConstant b sfs sf)
+`
+val _ = export_rewrites ["eid_is_member_def"]
+
+(* when looking up a member, ignores ancestors - also ignores possibility
+   that a member might be virtual *)
+val id_objtype_def = Define`
+  id_objtype (s : state) id =
+    case id of
+       IDConstant b [] sf -> dNormalObj
+    || IDConstant b (h::t) sf ->
+         let classid = IDConstant b (FRONT (h::t)) (LAST (h::t))
+         in
+           if is_class_name s classid then
+             let ci = cinfo s classid in
+             let (ce,b,p) = THE (FINDL (\ (ce,b,p). fieldname ce = sf)
+                                       ci.fields)
+             in
+               if b then dStatMember else dMember
+           else dNormalObj
+`;
+
+
+
 (* the "others" field stores 'objects' (functions and variables), as well
    as namespace names *)
 val _ = Hol_datatype`
   P1state = <|
     current_nspath : string list ;
     dynclasses : string |-> bool # StaticField list # TemplateArg list ;
-    dynobjs : string |-> bool # StaticField list # TemplateArg list ;
+    dynobjs : string |-> bool # StaticField list # TemplateArg list #
+                         dynobj_type ;
     dynns : string |-> bool # string list ;
     global : state ;
     accdecls : ext_decl list |>
@@ -140,7 +178,7 @@ val open_ftnode_def = Define`
                                      ?sfld targs.
                                        sfld IN FDOM tyenv /\
                                        (break_sfld sfld = (targs, s)) /\
-                                       (p = (T, sfpth, targs)))
+                                       (p = (T, sfpth, targs, dNormalObj)))
                               (IMAGE sfld_string (FDOM tyenv)))
                     s.dynobjs;
                 dynns :=
@@ -180,7 +218,8 @@ val open_classnode_def = Define`
                   (s,avoids) |- cnm has least sf -: tyst via fpth /\
                   (break_sfld sf = (targs, str)) /\
                   (dest_id (LAST fpth) = (absp,sfs,fpthsf)) /\
-                  (res = (absp, sfs ++ [fpthsf], targs)) }
+                  (res = (absp, sfs ++ [fpthsf], targs,
+                          if SND tyst then dStatMember else dMember)) }
     in
     let objmap = FUN_FMAP (\s. objflds ' s) (IMAGE FST objflds) in
     let funflds =
@@ -192,13 +231,14 @@ val open_classnode_def = Define`
                      (break_sfld sf = (targs, str)) /\
                      ~is_virtual s cnm sf ret (MAP SND ps) /\
                      (dest_id (LAST fpth) = (absp,sfs,fpthsf)) /\
-                     (res = (absp,sfs ++ [fpthsf],targs))) \/
+                     (res = (absp,sfs ++ [fpthsf],targs,
+                             if stat then dStatMember else dMember))) \/
                 (?ret ps bod pth sf.
                      (s,avoids) |- cnm has least method sf -: (ret,F,ps,bod)
                             via pth /\
                      is_virtual s cnm sf ret (MAP SND ps) /\
                      (break_sfld sf = ([], str)) /\
-                     (res = (F, [], []))) } in
+                     (res = (F, [], [], dVirtualMember))) } in
     let funmap = FUN_FMAP (\s. funflds ' s) (IMAGE FST funflds) in
     let nclasses = { (str,res) |
                        ?sf fpth absp sfs fpthsf targs.
@@ -342,7 +382,8 @@ val NewGVar_def = Define`
     let ty' = rewrite_type (FOLDL (\a ta. a UNION tafrees ta) {} targs) s ty
     in
       s with <| dynobjs :=
-                  s.dynobjs |+ (sfstr, (T,MAP SFName s.current_nspath,targs)) ;
+                  s.dynobjs |+ (sfstr, (T,MAP SFName s.current_nspath,targs,
+                                        dNormalObj)) ;
                 global updated_by state_NewGVar ty s.current_nspath sfnm ;
                 accdecls := (s.accdecls ++ [Decl (VDec ty' sfnm')]) |>
 `;
@@ -421,28 +462,47 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
       let e' = phase1_expr e in
       let ty = @ty. expr_type ps.global RValue e' ty in
       let cnm = @cnm. strip_const ty = Class cnm in
-      let ps' = open_classnode avoids.tyfvs cnm ps
-      in
+      let ps' =
           case id of
-             IDConstant F [] sf -> SVar e' (mk_dynobj_id ps' sf)
-          || id -> SVar e' (THE (typeid (rewrite_type avoids ps
-                                                      (TypeID id))))) /\
+             IDConstant b [] sf -> open_classnode avoids.tyfvs cnm ps
+          || IDConstant b (sf1::sfs) sf2 ->
+               open_classnode avoids.tyfvs (class_part id) ps
+      in
+          SVar e' (mk_dynobj_id ps' (IDtl id))) /\
 
   (phase1_expr (Var id) =
-      if is_abs_id id then Var id
-      else
-        case id of
-           IDConstant b [] sf ->
-             Var (idattach_locn (ps.dynobjs ' (sfld_string sf)) id)
-        || IDConstant b (h::t) sf ->
-           let s = sfld_string h
-           in
-             if s IN FDOM ps.dynclasses then
-               Var (idattach_locn (ps.dynclasses ' s) id)
-             else
-               let (b',ns) = ps.dynns ' s
-               in
-                 Var (IDConstant b' (MAP SFName ns ++ (h::t)) sf)) /\
+      case id of
+         IDConstant T sfs sf ->
+           if id_objtype ps.global id = dMember then
+             let cnm = class_part id in
+             let ps' = open_classnode avoids.tyfvs cnm ps
+             in
+               SVar (Deref This) (mk_dynobj_id ps' (IDtl id))
+           else Var id
+      || IDConstant F [] sf ->
+           (let qid = idattach_locn (ps.dynobjs ' (sfld_string sf)) id
+            in
+              (case SND (SND (SND (ps.dynobjs ' (sfld_string sf)))) of
+                  dVirtualMember -> SVar (Deref This) id
+               || dMember -> SVar (Deref This) qid
+               || dStatMember -> Var qid
+               || dNormalObj -> Var qid))
+      || IDConstant F (h::t) sf ->
+            (let s = sfld_string h in
+             let qid =
+                 if s IN FDOM ps.dynclasses then
+                   idattach_locn (ps.dynclasses ' s) id
+                 else
+                   let (b',ns) = ps.dynns ' s
+                   in
+                     IDConstant b' (MAP SFName ns ++ (h::t)) sf
+             in
+               if id_objtype ps.global qid = dMember then
+                 let cnm = class_part qid in
+                 let ps' = open_classnode avoids.tyfvs cnm ps
+                 in
+                   SVar (Deref This) (mk_dynobj_id ps' (IDtl qid))
+               else Var id)) /\
 
   (phase1_expr (MemAddr cid fld) =
      let cid' = if is_abs_id cid then cid
