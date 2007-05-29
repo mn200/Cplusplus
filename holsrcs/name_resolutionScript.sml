@@ -562,7 +562,7 @@ val _ = export_rewrites ["phase1_init_def"]
    SFName parameter  *)
 val newlocal_def = Define`
   newlocal ps (SFName s) ty =
-     ps with <| dynobjs := ps.dynobjs |+ (s, (F, [], [])) ;
+     ps with <| dynobjs := ps.dynobjs |+ (s, (F, [], [], dNormalObj)) ;
                 global := ps.global with
                             env updated_by
                               (\ft. FTNode
@@ -576,22 +576,54 @@ val newlocal_def = Define`
     extract_class_names : frees_record -> P1state -> class_entry ->
                           P1state
 
+    This is used in pass 1 of the analysis of a class declaration,
+    where the top-level members have their names added to the current scope.
+    This can be done in the order in which the names appear in the class
+    definition because reordering isn't allowed to make a difference.
+    (IOW, this doesn't detect the static error of having it make a
+    difference.)
+
    ---------------------------------------------------------------------- *)
 
 val extract_class_names_def = Define`
-  (extract_class_names avds ps (b,sfs) (CFnDefn v ty sf pms bodyoptopt) =
+  (extract_class_names avds ps (b,sfs)
+                       (CFnDefn v ty sf pms bodyoptopt,stat,p) =
      let (targs,s) = break_sfld sf
      in
        if v then
          (* virtual member functions can't be templates *)
-         ps with dynobjs := ps.dynobjs |+ (s, (F, [], []))
+         ps with dynobjs := ps.dynobjs |+ (s, (F, [], [], dVirtualMember))
        else
-         ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, targs))) /\
-  (extract_class_names avds ps (b,sfs) (FldDecl s ty) =
-     ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, []))) /\
-  (extract_class_names avds ps (b,sfs) (Constructor _ _ _) = ps) /\
-  (extract_class_names avds ps (b,sfs) (Destructor _ _) = ps) /\
-  (extract_class_names avds ps (b,sfs) (NClass sf ciopt) =
+         let cnm = IDConstant b (FRONT sfs) (LAST sfs) in
+         let rty' = rewrite_type avds ps ty in
+         let ptys = MAP (rewrite_type avds ps o SND) pms
+         in
+           if is_virtual ps.global cnm sf rty' ptys then
+             ps with
+               dynobjs := ps.dynobjs |+ (s, (b, sfs, [], dVirtualMember))
+           else
+             ps with
+               dynobjs := ps.dynobjs |+ (s, (b,sfs,targs,
+                                             if stat then dStatMember
+                                             else dMember))) /\
+  (extract_class_names avds ps (b,sfs) (FldDecl s ty,stat,p) =
+     if function_type ty then
+       let (rty,ptys) = dest_function_type (rewrite_type avds ps ty) in
+       let cnm = IDConstant b (FRONT sfs) (LAST sfs)
+       in
+         if is_virtual ps.global cnm (SFName s) rty ptys then
+           ps with
+             dynobjs := ps.dynobjs |+ (s, (b, sfs, [], dVirtualMember))
+         else
+           ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, [],
+                                                 if stat then dStatMember
+                                                 else dMember))
+     else   ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, [],
+                                                 if stat then dStatMember
+                                                 else dMember))) /\
+  (extract_class_names avds ps (b,sfs) (Constructor _ _ _,_,_) = ps) /\
+  (extract_class_names avds ps (b,sfs) (Destructor _ _,_,_) = ps) /\
+  (extract_class_names avds ps (b,sfs) (NClass sf ciopt,_,_) =
      let (targs, s) = break_sfld sf
      in
        ps with dynclasses updated_by (\fm. fm |+ (s, (b,sfs,targs))))
@@ -688,8 +720,8 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
                           ci.ancestors in
      let ps1 = FOLDL (\ps (id,b,p). open_classnode avds.tyfvs id ps)
                      ps ancestors' in
-     let ps2 = FOLDL (\s (ce,b,p).
-                        extract_class_names avds s (F, [IDtl cnm]) ce)
+     let ps2 = FOLDL (\s cebp.
+                        extract_class_names avds s (F, [IDtl cnm]) cebp)
                      (local_class cnm ps1)
                      ci.fields in
      let (ps3, flds') =
@@ -746,10 +778,6 @@ val (phase1_stmt_def, phase1_stmt_ind) = Defn.tprove(
 val _ = save_thm("phase1_stmt_def", phase1_stmt_def)
 val _ = save_thm("phase1_stmt_ind", phase1_stmt_ind)
 val _ = export_rewrites ["phase1_stmt_def"]
-
-
-
-
 
 
 (* ----------------------------------------------------------------------
@@ -812,11 +840,11 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
    /\
 
   (* RULE-ID: [phase1-decl-vdecinit] *)
-  (!s s' ds ty sfnm init init'.
+  (!s s' ds ty sfnm init.
      (s' = NewGVar ty (SFName sfnm) s)
    ==>
      phase1 (P1Decl (Decl (VDecInit ty (Base sfnm) init)) :: ds, s)
-            (ds, mk_last_init (phase1_init {} s' init)))
+            (ds, mk_last_init (phase1_init {} s' init) s'))
 `;
 
 (*

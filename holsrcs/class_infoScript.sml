@@ -745,7 +745,8 @@ val covariant_def = Define`
    virtual *)
 val is_virtual_def = Define`
   is_virtual s cnm fnm retty paramtys =
-    ?bnm params body prot retty'.
+    ?bnm params body prot retty' sfnm.
+       (fnm = SFName sfnm) /\
        (s,{}) |- bnm <= cnm  /\
        MEM (CFnDefn T retty' fnm params body, F, prot)
            (cinfo s bnm).fields /\

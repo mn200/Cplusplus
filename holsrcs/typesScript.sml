@@ -176,6 +176,11 @@ val function_type_def = Define`
 `;
 val _ = export_rewrites ["function_type_def"]
 
+val dest_function_type_def = Define`
+  dest_function_type (Function r a) = (r,a)
+`;
+val _ = export_rewrites ["dest_function_type_def"]
+
 (* 3.9.2 p1 "implicit" *)
 val ref_type_def = Define`
   (ref_type (Ref t0) = T) /\ (ref_type x = F)
