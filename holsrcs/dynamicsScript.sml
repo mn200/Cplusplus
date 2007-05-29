@@ -701,10 +701,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (lookup_class s cname = SOME cenv) /\
      ((item cenv).info = SOME (cinfo, userdefs)) /\
      MEM (FldDecl fldname ty, T, prot) cinfo.fields /\
-     (lookup_addr s (mk_member cname (SFName fldname)) = SOME (addr, pth)) /\
+     (lookup_addr s (mk_member cname fldname) = SOME (addr, pth)) /\
      (SOME ptrval = ptr_encode s addr ty pth)
    ==>
-     ^mng (mExpr (MemAddr cname (SFName fldname)) se) s
+     ^mng (mExpr (MemAddr cname fldname) se) s
           (s, ev (ECompVal ptrval (Ptr ty)) se))
 
    /\

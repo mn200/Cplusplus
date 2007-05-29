@@ -637,6 +637,17 @@ val extract_class_names_def = Define`
                          (ce,stat,p))
 `
 
+
+(* ----------------------------------------------------------------------
+    local_class : CPP_ID -> P1state -> P1state
+   ---------------------------------------------------------------------- *)
+
+val local_class_def = Define`
+  local_class (IDConstant F [] (SFName s)) ps =
+    ps with dynclasses := ps.dynclasses |+ (s, (F, [], []))
+`;
+
+
 (* ----------------------------------------------------------------------
     phase1_stmt : frees_record -> P1state -> CStmt -> CStmt
    ---------------------------------------------------------------------- *)
@@ -795,6 +806,42 @@ val _ = save_thm("phase1_stmt_def", phase1_stmt_def)
 val _ = save_thm("phase1_stmt_ind", phase1_stmt_ind)
 val _ = export_rewrites ["phase1_stmt_def"]
 
+(* ----------------------------------------------------------------------
+    phase1_fndefn : free_record -> CPP_Type -> CPP_ID ->
+                    (string # CPP_Type) list -> CStmt ->
+                    P1state -> P1state
+
+   ---------------------------------------------------------------------- *)
+
+val phase1_fndefn_def = Define`
+  phase1_fndefn avds retty fnm pms body ps =
+    let retty' = rewrite_type avds ps retty in
+    let pms' = MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms in
+    let funty = Function retty' (MAP SND pms') in
+    let (fnm',declared_ps, body_ps) =
+      case fnm of (* if the name is qualified, then there must be an
+                     existing declaration, so we don't need to alter
+                     anything in the state *)
+         IDConstant T [] sf -> ARB (* must be an error, see 8.3 p1 *)
+      || IDConstant T (sf1::sfs) sf2 ->
+            (fnm, ps, open_path avds.tyfvs T (sf1::sfs) ps)
+      || IDConstant F [] sf ->
+            (IDConstant T (MAP SFName ps.current_nspath) sf,
+             NewGVar funty sf ps,
+             NewGVar funty sf ps)
+      || IDConstant F (sf1::sfs) sf2 ->
+            let fnm' = resolve_classid avds ps fnm in
+            let (b,sfs,sf) = dest_id fnm'
+            in
+              (fnm', ps, open_path avds.tyfvs b sfs ps)
+    in
+    let ps' = FOLDL (\ps (n,ty). newlocal ps (SFName n) ty) body_ps pms' in
+    let body' = phase1_stmt avds ps' body
+    in
+      declared_ps with
+        accdecls := (declared_ps.accdecls ++ [FnDefn retty' fnm' pms' body'])
+`;
+
 
 (* ----------------------------------------------------------------------
     phase1 :
@@ -861,6 +908,15 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
    ==>
      phase1 (P1Decl (Decl (VDecInit ty (Base sfnm) init)) :: ds, s)
             (ds, mk_last_init (phase1_init {} s' init) s'))
+
+   /\
+
+  (* RULE-ID: [phase1-decl-fndefn] *)
+  (!s ds retty fnm pms body.
+     T
+   ==>
+     phase1 (P1Decl (FnDefn retty fnm pms body) :: ds, s)
+            (ds, phase1_fndefn {} retty fnm pms body s))
 `;
 
 (*

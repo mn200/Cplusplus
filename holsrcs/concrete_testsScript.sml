@@ -22,9 +22,12 @@ val state1_def = Define`
                    (SFName "c",
                     FTNode (<| info :=
                                  SOME (<| fields :=
-                                            [(FldDecl "foo" (Signed Char), F,
+                                            [(FldDecl (SFName "foo")
+                                                      (Signed Char),
+                                              F,
                                               Public);
-                                             (FldDecl "bar" (Signed Int), F,
+                                             (FldDecl (SFName "bar")
+                                                      (Signed Int), F,
                                               Public)];
                                             ancestors := [] |>, {}) |>)
                            FEMPTY) |>)
@@ -309,13 +312,26 @@ val open_path_thm =
     CONJ (SIMP_RULE list_ss [] (Q.INST [`todo` |-> `[]`] open_path_def))
          (SIMP_RULE list_ss [] (Q.INST [`todo` |-> `h::t`] open_path_def))
 
+val id_objtype_thm = let
+  val base = SPEC_ALL id_objtype_def
+in
+  CONJ (SIMP_RULE (srw_ss()) [] (Q.INST [`id` |-> `IDConstant b [] sf`] base))
+       (SIMP_RULE (srw_ss()) []
+                  (Q.INST [`id` |-> `IDConstant b (h::t) sf`] base))
+end
+
+(* attach conditional congruence rule to stop evaluation of branches *)
+
 val vardecl =
     ONCE_REWRITE_CONV [NREL_rwt] THENC
     ONCE_REWRITE_CONV [phase1_cases] THENC
     SIMP_CONV (srw_ss()) [] THENC
     SIMP_CONV (srw_ss()) [EnterNSpace_def, open_path_thm, LET_THM,
                           open_ftnode_thm, NewGVar_def, state_NewGVar_def,
-                          ExitNSpace_def, empty_p1_def,
+                          ExitNSpace_def, newlocal_def, id_objtype_thm,
+                          phase1_fndefn_def, empty_p1_def,
+                          is_class_name_def, is_class_name_env_def,
+                          elookup_class_def,
                           finite_mapTheory.FAPPLY_FUPDATE_THM,
                           instantiationTheory.IDhd_inst_def] THENC
     SIMP_CONV (srw_ss() ++ DNF_ss) [finite_mapTheory.FUPDATE_COMMUTES,
@@ -329,7 +345,8 @@ fun mk_initial prog = ``(MAP P1Decl ^prog, empty_p1 [] initial_state)``
 
 fun fourmore pfx prog n = let
   fun recurse n =
-    if not (!recalc) andalso can theorem (pfx^Int.toString n) then ()
+    if not (!recalc) andalso can theorem (pfx^Int.toString n) then
+      print ("Cache hit for "^pfx^Int.toString n^"\n")
     else let
         fun mkn i = numSyntax.mk_numeral (Arbnum.fromInt i)
         val prev0 = (n div 4) * 4
@@ -347,17 +364,60 @@ fun fourmore pfx prog n = let
                       NCONV diff vardecl
                     end
                   else
-                    SIMP_CONV (srw_ss()) [prog, istate] THENC
+                    SIMP_CONV (srw_ss()) [prog, istate, empty_p1_def] THENC
                     NCONV n vardecl
       in
         save_thm(pfx^Int.toString n, tac t);
-        print (StringCvt.padLeft #"0" 2 (Int.toString n));
-        print " steps\n"
+        print (pfx^Int.toString n^"\n")
       end
 in
   recurse n
 end
 
-val _ = fourmore "t2_step_" t2_program_def 31
+val _ = fourmore "t2_step_" t2_program_def 27
+
+(* ----------------------------------------------------------------------
+    test #3
+
+    int x;
+    int f(int n) { return n + x; }
+   ---------------------------------------------------------------------- *)
+
+val t3_program_def = Define`
+  t3_program = [Decl (VDec (Signed Int) (Base "x"));
+                FnDefn (Signed Int)
+                       (Base "f")
+                       [("n", Signed Int)]
+                       (Ret (mExpr (CApBinary CPlus
+                                              (Var (Base "n"))
+                                              (Var (Base "x")))
+                                   base_se))]
+`;
+
+val _ = fourmore "t3_step_" t3_program_def 2
+
+local
+  val th = theorem "t3_step_2"
+  val s_t = lhs (rand (rand (concl th)))
+  val assertion = can prove(``LAST ^s_t.accdecls =
+                          FnDefn (Signed Int) (IDConstant T [] (SFName "f"))
+                                 [("n", Signed Int)]
+                                 (Ret (mExpr
+                                       (CApBinary
+                                          CPlus
+                                          (Var (IDConstant F [] (SFName "n")))
+                                          (Var (IDConstant T [] (SFName "x")))
+                                          )
+                                       base_se))``,
+                         SRW_TAC [][])
+in
+val _ = if assertion then print "Test #3 assertion passes\n"
+        else print "Test #3 assertion fails\n"
+end
+
+
+
+
+
 
 val _ = export_theory()
