@@ -51,16 +51,20 @@ val defined_classes_def = Define`
   defined_classes s = { id | is_class_name s id /\ ~(cinfo0 s id = NONE) }
 `;
 
+val strip_CETemp_def = Define`
+  (strip_CETemp (CETemplateDef targs ce) = ce) /\
+  (strip_CETemp ce = ce)
+`;
+
 (* The set of nested classes belonging to a class *)
 val nested_class_def = Define`
   nested_class s cnm1 cnm2 =
     cnm1 IN defined_classes s /\
-    ?sf ci prot stat.
+    ?sf ce ci prot stat.
           (cnm2 = mk_member cnm1 sf) /\
-          MEM (NClass sf ci, stat, prot) (cinfo s cnm1).fields
+          MEM (ce, stat, prot) (cinfo s cnm1).fields /\
+          (strip_CETemp ce = NClass sf ci)
 `;
-
-
 
 (* similarly, direct base classes, in order of declaration *)
 val get_direct_bases_def = Define`
@@ -256,20 +260,26 @@ val path_via_def = Define`
 (* finding fields W et al. 5.1.3
    - omitting constructors and destructors as these can't be called normally *)
 val fieldname_def = Define`
-  (fieldname (FldDecl fldnm ty) = SFName fldnm) /\
-  (fieldname (CFnDefn virtp retty n args body) = n)
+  (fieldname (FldDecl fldnm ty) = fldnm) /\
+  (fieldname (CFnDefn virtp retty n args body) = n) /\
+  (fieldname (CETemplateDef targs ce) = fieldname ce)
 `
 
 (* again, omitting constructors and destructors as these can't be called *)
 val fieldtype_def = Define`
   (fieldtype (FldDecl fld ty) = ty) /\
-  (fieldtype (CFnDefn virtp retty n args body) = Function retty (MAP SND args))
+  (fieldtype (CFnDefn virtp retty n args body) =
+     Function retty (MAP SND args)) /\
+  (fieldtype (CETemplateDef targs ce) = fieldtype ce)
 `;
 
 (* those fields for which the above two predicates are well-defined *)
 val okfield_def = Define`
   (okfield (FldDecl fld ty) = T) /\
   (okfield (CFnDefn virtp retty n args body) = T) /\
+  (okfield (CETemplateDef targs ce) =
+     okfield ce /\ (!ce' targs'. ~(ce = CETemplateDef targs' ce')) /\
+     function_type (fieldtype ce)) /\
   (okfield _ = F)
 `;
 
@@ -310,9 +320,10 @@ val MethodDefs_def = Define`
   MethodDefs s cnm mthnm =
     { (Cs,(rettype,statp,ps,body)) |
          (cnm,Cs) IN subobjs s /\
-         ?prot virtp.
-             MEM (CFnDefn virtp rettype mthnm ps body, statp, prot)
-                 (cinfo (FST s) (LAST Cs)).fields }
+         ?prot virtp ce.
+             MEM (ce, statp, prot) (cinfo (FST s) (LAST Cs)).fields /\
+             (strip_CETemp ce = CFnDefn virtp rettype mthnm ps body)
+    }
 `
 
 (* <s> |- <C> has least method <mnm> -: <ty> via <Cs> *)
@@ -461,8 +472,9 @@ val nsdmembers_def = Define`
         (mapPartial
            (\ce. case ce of
                     (CFnDefn virtp ret nm args bod, stat, prot) -> NONE
-                 || (FldDecl fld ty, stat, prot) -> if stat then NONE
-                                                    else SOME (fld,ty)
+                 || (FldDecl fld ty, stat, prot) ->
+                       if stat \/ function_type ty \/ ref_type ty then NONE
+                       else SOME (sfld_string fld,ty)
                  || _ -> NONE)
            (cinfo s c).fields)
     else NONE
@@ -605,16 +617,14 @@ val get_fields_def = Define`
   get_fields ci =
           mapPartial
             (\ (ce, b, p).
-               case ce of
-                  CFnDefn virtp retty nm params body ->
-                     SOME (nm, Function retty (MAP SND params))
-               || FldDecl fld ty -> SOME (SFName fld, ty)
-               || _ -> NONE)
+               if okfield ce then
+                 SOME (fieldname ce, fieldtype ce)
+               else NONE)
             (FST ci).fields
 `;
 
-val field_type_def = Define`
-  field_type ci sfld =
+val get_field_type_def = Define`
+  get_field_type ci sfld =
     OPTION_MAP SND (FINDL (\ (nm, ty). nm = sfld) (get_fields ci))
 `;
 
@@ -635,7 +645,7 @@ val elookup_type_def = Define`
           NONE -> NONE
        || SOME cenv -> (case (item cenv).info of
                            NONE -> NONE
-                        || SOME ci -> field_type ci sf)
+                        || SOME ci -> get_field_type ci sf)
      else
        case FLOOKUP (map env) h of
           NONE -> NONE
@@ -647,7 +657,7 @@ val elookup_type_def = Define`
         NONE -> NONE
      || SOME cenv -> (case (item cenv).info of
                          NONE -> NONE
-                      || SOME ci -> field_type ci sf))
+                      || SOME ci -> get_field_type ci sf))
 `;
 
 (* looks up an object identifier and returns its address *)
@@ -702,7 +712,6 @@ val lookup_offset_def = Define`
   (lookup_offset s mdp _ = NONE)
 `;
 
-
 (* looks up a fully-qualified field (e.g., C::fld) and finds its type *)
 val lookup_field_type_def = Define`
   lookup_field_type s (IDConstant b sfs sf) =
@@ -710,7 +719,7 @@ val lookup_field_type_def = Define`
        NONE -> NONE
     || SOME cenv -> (case (item cenv).info of
                         NONE -> NONE
-                     || SOME ce -> field_type ce sf)
+                     || SOME ce -> get_field_type ce sf)
 `;
 
 (* ----------------------------------------------------------------------

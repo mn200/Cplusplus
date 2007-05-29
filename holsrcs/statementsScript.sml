@@ -142,7 +142,7 @@ val _ = Hol_datatype`
                   why there is a StaticField there.
                 *)
 
-           | FldDecl of string => CPP_Type
+           | FldDecl of StaticField => CPP_Type
            | Constructor of (string # CPP_Type) list =>
                             mem_initializer list =>
                             CStmt option
@@ -152,6 +152,8 @@ val _ = Hol_datatype`
                   static or not), but it was the only way I could get HOL
                   to accept the datatype definition.  This is a bug in
                   HOL. *)
+           | CETemplateDef of TemplateArg list => class_entry
+               (* recursive entry can only be a CFnDefn, FldDecl or NClass *)
 
     ;
 

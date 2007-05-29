@@ -606,27 +606,35 @@ val extract_class_names_def = Define`
                dynobjs := ps.dynobjs |+ (s, (b,sfs,targs,
                                              if stat then dStatMember
                                              else dMember))) /\
-  (extract_class_names avds ps (b,sfs) (FldDecl s ty,stat,p) =
-     if function_type ty then
-       let (rty,ptys) = dest_function_type (rewrite_type avds ps ty) in
-       let cnm = IDConstant b (FRONT sfs) (LAST sfs)
-       in
-         if is_virtual ps.global cnm (SFName s) rty ptys then
-           ps with
-             dynobjs := ps.dynobjs |+ (s, (b, sfs, [], dVirtualMember))
-         else
-           ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, [],
-                                                 if stat then dStatMember
-                                                 else dMember))
-     else   ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, [],
-                                                 if stat then dStatMember
-                                                 else dMember))) /\
+  (extract_class_names avds ps (b,sfs) (FldDecl sf ty,stat,p) =
+     let (targs,s) = break_sfld sf
+     in
+       if function_type ty then
+         let (rty,ptys) = dest_function_type (rewrite_type avds ps ty) in
+         let cnm = IDConstant b (FRONT sfs) (LAST sfs)
+         in
+           if is_virtual ps.global cnm sf rty ptys then
+             ps with
+               dynobjs := ps.dynobjs |+ (s, (b, sfs, [], dVirtualMember))
+           else
+             ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, targs,
+                                                   if stat then dStatMember
+                                                   else dMember))
+       else
+         ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, [],
+                                               if stat then dStatMember
+                                               else dMember))) /\
   (extract_class_names avds ps (b,sfs) (Constructor _ _ _,_,_) = ps) /\
   (extract_class_names avds ps (b,sfs) (Destructor _ _,_,_) = ps) /\
   (extract_class_names avds ps (b,sfs) (NClass sf ciopt,_,_) =
      let (targs, s) = break_sfld sf
      in
-       ps with dynclasses updated_by (\fm. fm |+ (s, (b,sfs,targs))))
+       ps with dynclasses updated_by (\fm. fm |+ (s, (b,sfs,targs)))) /\
+  (extract_class_names avds ps (b,sfs) (CETemplateDef targs ce, stat, p) =
+     extract_class_names (FOLDL (\a ta. a UNION tafrees ta) avds targs)
+                         ps
+                         (b,sfs)
+                         (ce,stat,p))
 `
 
 (* ----------------------------------------------------------------------
@@ -745,7 +753,15 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
                   (rewrite_type avds ps retty)
                   (SFName s)
                   (MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms)
-                  (SOME NONE)))
+                  (SOME NONE))) /\
+  (phase1_centry avds ps cnm
+                 (CFnDefn v retty (SFName s) pms (SOME (SOME bod))) =
+     let retty' = rewrite_type avds ps retty in
+     let pms' = MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms in
+     let ps' = FOLDL (\ ps (nm,ty). newlocal ps (SFName nm) ty) ps pms' in
+     let bod' = phase1_stmt avds ps' bod
+     in
+       (ps, CFnDefn v retty' (SFName s) pms' (SOME (SOME bod'))))
 `
 
 val (phase1_stmt_def, phase1_stmt_ind) = Defn.tprove(

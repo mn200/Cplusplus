@@ -18,7 +18,6 @@ open typesTheory memoryTheory expressionsTheory operatorsTheory
 
 val _ = new_theory "statics";
 
-
 (* t1 is the type of the lvalue, t2 is the type of the RHS.
    ass_type_conds checks whether the two are compatible. *)
 val ass_type_conds_def0 = Defn.Hol_defn "ass_type_conds"
@@ -315,26 +314,26 @@ val MEM_splits = prove(
 (* SANITY *)
 val hasfld_imp_lfi = store_thm(
   "hasfld_imp_lfi",
-  ``(s,{}) |- C has least fld -: (ftype,stat) via p' /\
+  ``(st,{}) |- C has least (SFName s) -: (ftype,stat) via p' /\
     object_type ftype /\
     ~stat ==>
     ?i. lookup_field_info
           (MAP (\ (n,ty). (SFName n, ty))
-               (THE (nsdmembers s (LAST p'))))
-          fld
+               (THE (nsdmembers st (LAST p'))))
+          (SFName s)
           (i,ftype)``,
   SRW_TAC [][fieldty_via_def, FieldDecls_def, nsdmembers_def] THEN
   Cases_on `centry` THEN
-  FULL_SIMP_TAC (srw_ss()) [fieldtype_def, typesTheory.object_type_def,
+  FULL_SIMP_TAC (srw_ss()) [fieldtype_def, fieldname_def,
+                            typesTheory.object_type_def,
                             okfield_def] THEN
   IMP_RES_TAC MEM_splits THEN
   SRW_TAC [][fieldname_def] THEN
   Q.HO_MATCH_ABBREV_TAC
-    `?i. lookup_field_info (L1 ++ (X,Y) :: L2) X (i,Y)` THEN
+    `?i. lookup_field_info (L1 ++ (X,Y) :: L2) X' (i,Y)` THEN
   SRW_TAC [][lookup_field_info_def] THEN
   Q.EXISTS_TAC `LENGTH L1` THEN
-  SRW_TAC [ARITH_ss][rich_listTheory.EL_APPEND2])
-
+  SRW_TAC [ARITH_ss][rich_listTheory.EL_APPEND2]);
 
 val _ = export_theory();
 
