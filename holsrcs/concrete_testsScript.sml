@@ -80,9 +80,9 @@ val cinfo_state1_c = Save_thm(
 
 val RTC_class_lt_cname = Store_thm(
   "RTC_class_lt_cname",
-  ``(state1,{}) |- b <= cname = (b = cname)``,
+  ``(state1,{}) |- cname <= b = (b = cname)``,
   SRW_TAC [][EQ_IMP_THM, RTC_class_lt_def, relationTheory.RTC_RULES] THEN
-  POP_ASSUM (MP_TAC o ONCE_REWRITE_RULE [relationTheory.RTC_CASES2]) THEN
+  POP_ASSUM (MP_TAC o ONCE_REWRITE_RULE [relationTheory.RTC_CASES1]) THEN
   SRW_TAC [][is_direct_base_def, get_direct_bases_def, is_virtual_base_def,
              get_virtual_bases_def, relationTheory.RUNION]);
 
@@ -321,21 +321,90 @@ in
 end
 
 (* attach conditional congruence rule to stop evaluation of branches *)
+val COND_EVAL_CONG = prove(
+  ``(b = b') ==> ((if b then t else f) = (if b' then t else f))``,
+  SRW_TAC [][])
+val option_CASE_EVAL_CONG = prove(
+  ``(opt = opt') ==> (option_case nc sc opt = option_case nc sc opt')``,
+  SRW_TAC [][]);
+val ID_CASE_EVAL_CONG = prove(
+  ``(id = id') ==> (CPP_ID_case ic id = CPP_ID_case ic id')``,
+  SRW_TAC [][]);
+
+val EVAL_ss = simpLib.SSFRAG { ac = [], congs = [COND_EVAL_CONG,
+                                                 option_CASE_EVAL_CONG,
+                                                 ID_CASE_EVAL_CONG],
+                               convs = [], dprocs = [], filter = NONE,
+                               rewrs = [] }
+val _ = augment_srw_ss [EVAL_ss]
+
+val empty_frees_thm = prove(
+  ``{}.tyfvs = {}``,
+  SRW_TAC [][freesTheory.empty_freerec_def]);
+
+val RTC_class_lt_thm =
+    (SIMP_RULE (srw_ss() ++ DNF_ss) [GSYM RTC_class_lt_def] o
+     SIMP_RULE (srw_ss()) [Once relationTheory.RTC_CASES1,
+                           relationTheory.RUNION, cinfo_def, cinfo0_def,
+                           is_direct_base_def, is_virtual_base_def,
+                           get_direct_bases_def, get_virtual_bases_def] o
+     Q.INST [`c1` |-> `IDConstant b sfs sf`, `s` |-> `st,Set`]  o
+     SPEC_ALL) RTC_class_lt_def
+val lift_lookup_thm =
+    CONJ ((SIMP_RULE (srw_ss()) [] o
+           Q.INST [`id` |-> `IDConstant T sfs sf`] o
+           SPEC_ALL) lift_lookup_def)
+         ((SIMP_RULE (srw_ss()) [] o
+           Q.INST [`id` |-> `IDConstant F sfs sf`] o
+           SPEC_ALL) lift_lookup_def)
+
+val expr_type_rewrites =
+    REWRITE_RULE [ONCE_REWRITE_CONV [EQ_SYM_EQ]
+                                    ``lookup_type env id = SOME ty``]
+                 staticsTheory.expr_type_rewrites
+
+val cinfo_thm = Q.INST [`cnm` |-> `IDConstant b sfs sf`] (SPEC_ALL cinfo_def)
+val cinfo0_thm = Q.INST [`cnm` |-> `IDConstant b sfs sf`] (SPEC_ALL cinfo0_def)
+val defined_classes_thm =
+    SIMP_CONV (srw_ss()) [defined_classes_def]
+              ``IDConstant b sfs sf IN defined_classes s``
+val is_class_name_thm =
+    SIMP_CONV (srw_ss()) [is_class_name_def]
+                        ``is_class_name s (IDConstant b sfs sf)``
+val subobjs_thm =
+  SIMP_CONV (srw_ss()) [calc_subobjs]
+            ``(IDConstant b sfs sf, Cs) IN subobjs s``
+val rsubobjs_thm =
+    SIMP_CONV (srw_ss()) [Once calc_rsubobjs]
+              ``(IDConstant b sfs sf, Cs) IN rsubobjs s``
+
+val open_classnode_thm = (Q.INST [`cnm` |-> `IDConstant b sfs sf`] o
+                          SPEC_ALL) open_classnode_def
+
 
 val vardecl =
     ONCE_REWRITE_CONV [NREL_rwt] THENC
     ONCE_REWRITE_CONV [phase1_cases] THENC
     SIMP_CONV (srw_ss()) [] THENC
-    SIMP_CONV (srw_ss()) [EnterNSpace_def, open_path_thm, LET_THM,
-                          open_ftnode_thm, NewGVar_def, state_NewGVar_def,
-                          ExitNSpace_def, newlocal_def, id_objtype_thm,
-                          phase1_fndefn_def, empty_p1_def,
-                          is_class_name_def, is_class_name_env_def,
-                          elookup_class_def,
-                          finite_mapTheory.FAPPLY_FUPDATE_THM,
-                          instantiationTheory.IDhd_inst_def] THENC
-    SIMP_CONV (srw_ss() ++ DNF_ss) [finite_mapTheory.FUPDATE_COMMUTES,
-                                   mk_last_init_def, LET_THM];
+    SIMP_CONV (srw_ss())
+              [EnterNSpace_def, open_path_thm, LET_THM,
+               open_ftnode_thm, NewGVar_def, state_NewGVar_def,
+               ExitNSpace_def, newlocal_def, id_objtype_thm,
+               lookup_type_def, lift_lookup_thm,
+               phase1_fndefn_def, empty_p1_def,
+               is_class_name_thm, is_class_name_env_def,
+               elookup_class_def, freesTheory.tempfree_sing_def,
+               finite_mapTheory.FAPPLY_FUPDATE_THM,
+               finite_mapTheory.FLOOKUP_DEF, cinfo_thm,
+               cinfo0_thm, defined_classes_thm, expr_type_rewrites,
+               local_class_def, is_virtual_def,
+               RTC_class_lt_thm, elookup_class_def,
+               elookup_type_def, mk_dynobj_id_def, subobjs_thm,
+               rsubobjs_thm, empty_frees_thm, open_classnode_thm,
+               instantiationTheory.IDhd_inst_def] THENC
+    SIMP_CONV (srw_ss() ++ DNF_ss ++ CONJ_ss)
+              [finite_mapTheory.FUPDATE_COMMUTES,
+               mk_last_init_def, LET_THM];
 
 fun NCONV n c = if n <= 0 then ALL_CONV else c THENC NCONV (n - 1) c;
 
@@ -343,38 +412,44 @@ val recalc = ref false
 val istate = statesTheory.initial_state_def
 fun mk_initial prog = ``(MAP P1Decl ^prog, empty_p1 [] initial_state)``
 
-fun fourmore pfx prog n = let
+fun fourmore pfx0 prog n = let
+  val pfx = pfx0^"_step_"
   fun recurse n =
-    if not (!recalc) andalso can theorem (pfx^Int.toString n) then
-      print ("Cache hit for "^pfx^Int.toString n^"\n")
-    else let
-        fun mkn i = numSyntax.mk_numeral (Arbnum.fromInt i)
-        val prev0 = (n div 4) * 4
-        val (diff,prev) = if prev0 = n then (4,n-4) else (n - prev0,prev0)
-        val n_t = mkn n
-        val nth = DECIDE ``^n_t = ^(mkn (n - diff)) + ^(mkn diff)``
-        val t = ``NREL phase1 ^n_t ^(mk_initial (lhs (concl prog))) (p, s)``
-        val tac = if n > 4 then let
-                      val _ = recurse prev
-                      val th = theorem (pfx^Int.toString prev)
-                    in
-                      ONCE_REWRITE_CONV [nth] THENC
-                      SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL th,
-                                            pairTheory.EXISTS_PROD] THENC
-                      NCONV diff vardecl
-                    end
-                  else
-                    SIMP_CONV (srw_ss()) [prog, istate, empty_p1_def] THENC
-                    NCONV n vardecl
-      in
-        save_thm(pfx^Int.toString n, tac t);
-        print (pfx^Int.toString n^"\n")
+      case (!recalc, Lib.total theorem (pfx^Int.toString n)) of
+        (false, SOME th) => (if !Globals.interactive then
+                               print ("Cache hit for "^pfx^Int.toString n^"\n")
+                             else ();
+                             th)
+      | _ => let
+          fun mkn i = numSyntax.mk_numeral (Arbnum.fromInt i)
+          val prev0 = (n div 4) * 4
+          val (diff,prev) = if prev0 = n then (4,n-4) else (n - prev0,prev0)
+          val n_t = mkn n
+          val nth = DECIDE ``^n_t = ^(mkn (n - diff)) + ^(mkn diff)``
+          val t = ``NREL phase1 ^n_t ^(mk_initial (lhs (concl prog))) (p, s)``
+          val tac = if n > 4 then let
+                        val _ = recurse prev
+                        val th = theorem (pfx^Int.toString prev)
+                      in
+                        ONCE_REWRITE_CONV [nth] THENC
+                        SIMP_CONV (srw_ss()) [NREL_sum, GEN_ALL th,
+                                              pairTheory.EXISTS_PROD] THENC
+                        NCONV diff vardecl
+                      end
+                    else
+                      SIMP_CONV (srw_ss()) [prog, istate, empty_p1_def] THENC
+                      NCONV n vardecl
+        in
+          save_thm(pfx^Int.toString n, tac t)
+          before
+          (if !Globals.interactive then print (pfx^Int.toString n^"\n")
+           else ())
       end
 in
   recurse n
 end
 
-val _ = fourmore "t2_step_" t2_program_def 27
+val _ = fourmore "t2" t2_program_def 31
 
 (* ----------------------------------------------------------------------
     test #3
@@ -394,7 +469,7 @@ val t3_program_def = Define`
                                    base_se))]
 `;
 
-val _ = fourmore "t3_step_" t3_program_def 2
+val _ = fourmore "t3" t3_program_def 2
 
 local
   val th = theorem "t3_step_2"
@@ -415,9 +490,198 @@ val _ = if assertion then print "Test #3 assertion passes\n"
         else print "Test #3 assertion fails\n"
 end
 
+(* ----------------------------------------------------------------------
+    test #4
 
+    int x;
+    int f(int x) { return x + x; }
+   ---------------------------------------------------------------------- *)
 
+val t4_program_def = Define`
+  t4_program = [Decl (VDec (Signed Int) (Base "x"));
+                FnDefn (Signed Int)
+                       (Base "f")
+                       [("x", Signed Int)]
+                       (Ret (mExpr (CApBinary CPlus
+                                              (Var (Base "x"))
+                                              (Var (Base "x")))
+                                   base_se))]
+`;
 
+val _ = fourmore "t4" t4_program_def 2
 
+local
+  val th = theorem "t4_step_2"
+  val s_t = lhs (rand (rand (concl th)))
+  val assertion = can prove(``LAST ^s_t.accdecls =
+                          FnDefn (Signed Int) (IDConstant T [] (SFName "f"))
+                                 [("x", Signed Int)]
+                                 (Ret (mExpr
+                                       (CApBinary
+                                          CPlus
+                                          (Var (IDConstant F [] (SFName "x")))
+                                          (Var (IDConstant F [] (SFName "x")))
+                                          )
+                                       base_se))``,
+                         SRW_TAC [][])
+in
+val _ = if assertion then print "Test #4 assertion passes\n"
+        else print "Test #4 assertion fails\n"
+end
+
+(* ----------------------------------------------------------------------
+    test #5
+
+    int x;
+    int f(int i)
+    {
+      int j = i + x;
+      if (j > 0) {
+        int x = 3;
+        j = j - x + ::x;
+      }
+      return j;
+    }
+
+   ---------------------------------------------------------------------- *)
+
+val t5_program_def = Define`
+  t5_program =
+     [Decl (VDec (Signed Int) (Base "x"));
+      FnDefn (Signed Int)
+             (Base "f")
+             [("i", Signed Int)]
+             (Block F [VDecInit (Signed Int)
+                                (Base "j")
+                                (CI (CApBinary CPlus
+                                               (Var (Base "i"))
+                                               (Var (Base "x"))))]
+                      [CIf (mExpr (CApBinary CGreat
+                                             (Var (Base "j"))
+                                             (Cnum 0))
+                                  base_se)
+                           (Block F [VDecInit (Signed Int)
+                                              (Base "x")
+                                              (CI (Cnum 3))]
+                            [Standalone
+                               (mExpr
+                                  (Assign
+                                     NONE
+                                     (Var (Base "j"))
+                                     (CApBinary CPlus
+                                                (CApBinary
+                                                   CMinus
+                                                   (Var (Base "j"))
+                                                   (Var (Base "x")))
+                                                (Var (IDConstant
+                                                        T [] (SFName "x")))))
+                                  base_se)])
+                           EmptyStmt;
+                       Ret (mExpr (Var (Base "j")) base_se)])]
+`;
+
+val _ = fourmore "t5" t5_program_def 2
+
+(* ----------------------------------------------------------------------
+    test #6
+
+    int x;
+    int f()
+    {
+      struct s {
+        int g() { return x; }
+        int x;
+      };
+      s val;
+      val.x = x;
+      return val.g();
+    }
+
+   ---------------------------------------------------------------------- *)
+
+val t6_program_def = Define`
+  t6_program =
+    [Decl (VDec (Signed Int) (Base "x"));
+     FnDefn (Signed Int) (Base "f") []
+       (Block F
+          [VStrDec (Base "s")
+             (SOME
+               <| ancestors := [];
+                  fields := [(CFnDefn F (Signed Int) (SFName "g") []
+                                (SOME (SOME (Ret (mExpr (Var (Base "x"))
+                                                        base_se)))),
+                                F, Public);
+                             (FldDecl (SFName "x") (Signed Int), F, Public)]
+               |>);
+           VDec (Class (Base "s")) (Base "val")]
+          [Standalone
+             (mExpr
+              (Assign NONE
+                      (SVar (Var (Base "val")) (Base "x"))
+                      (Var (Base "x")))
+              base_se);
+           Ret (mExpr (FnApp (SVar (Var (Base "val")) (Base "g")) [])
+                      base_se)])]
+`;
+
+val t6_2_0 = fourmore "t6" t6_program_def 2
+
+val t6_2_1 = CONV_RULE
+               (SIMP_CONV (srw_ss()) [open_classnode_def, Once LET_THM])
+               t6_2_0
+
+val t6_2_2 = CONV_RULE
+               (SIMP_CONV (srw_ss())
+                          [FieldDecls_def, fieldty_via_def,
+                           methodty_via_def, MethodDefs_def,
+                           injected_via_def, InjectedClasses_def,
+                           strip_CETemp_def,
+                           pairTheory.EXISTS_PROD,
+                           subobjs_thm, rsubobjs_thm,
+                           is_direct_base_def,
+                           cinfo_thm, cinfo0_thm,
+                           get_direct_bases_def,
+                           finite_mapTheory.FLOOKUP_DEF,
+                           defined_classes_thm, is_class_name_thm,
+                           is_class_name_env_def,
+                           RTC_class_lt_thm, is_virtual_base_def,
+                           get_virtual_bases_def])
+               t6_2_1
+
+val RTC_REFL = prove(``RTC R x x``, SRW_TAC [][relationTheory.RTC_RULES])
+val pGSPEC_U = prove(
+  ``GSPEC (\ (p,q). (f p q, s1 p q \/ s2 p q)) =
+      GSPEC (\ (p,q). (f p q, s1 p q)) UNION
+      GSPEC (\ (p,q). (f p q, s2 p q))``,
+  SRW_TAC [][pred_setTheory.EXTENSION, EQ_IMP_THM] THEN METIS_TAC []);
+val pGSPEC_SING = prove(
+  ``GSPEC (\ (p,q). ((p,q), (x = p) /\ (q = y))) = {(x,y)}``,
+  SRW_TAC [][pred_setTheory.EXTENSION, EQ_IMP_THM]);
+val pGSPEC_F = prove(
+  ``GSPEC (\ (p,q). (f p q, F)) = {}``,
+  SRW_TAC [][pred_setTheory.EXTENSION]);
+val _ = augment_srw_ss [rewrites [pGSPEC_F, pGSPEC_SING, pGSPEC_U,
+                                  pred_setTheory.INSERT_UNION_EQ,
+                                  okfield_def, RTC_REFL, fieldname_def,
+                                  fieldtype_def]]
+
+val t6_2_3 = SIMP_RULE (srw_ss() ++ DNF_ss) [] t6_2_2
+
+val t6_2_4 = SIMP_RULE (srw_ss()) [strip_CETemp_def] t6_2_3
+
+val setfn_2 = prove(
+  ``~(x = y) ==> ({(x,u); (y,v)} ' x = u) /\
+                 ({(x,u); (y,v)} ' y = v)``,
+  SRW_TAC [][] THEN MATCH_MP_TAC SETFN_UNIQUE THEN
+  SRW_TAC [][]);
+
+val t6_2_5 = SIMP_RULE (srw_ss()) [Once LET_THM, is_virtual_def,
+                                   RTC_class_lt_thm, cinfo_thm,
+                                   cinfo0_thm, setfn_2,
+                                   defined_classes_thm, FLOOKUP_DEF
+                                   ]
+             t6_2_4
+
+val t6_2_6 = SIMP_RULE (srw_ss()) [nested_class_def] t6_2_5
 
 val _ = export_theory()

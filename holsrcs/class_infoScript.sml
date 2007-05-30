@@ -55,6 +55,7 @@ val strip_CETemp_def = Define`
   (strip_CETemp (CETemplateDef targs ce) = ce) /\
   (strip_CETemp ce = ce)
 `;
+val _ = export_rewrites ["strip_CETemp_def"]
 
 (* The set of nested classes belonging to a class *)
 val nested_class_def = Define`
@@ -76,8 +77,8 @@ val get_direct_bases_def = Define`
 (* c2 is a direct base of c1 *)
 val is_direct_base_def = Define`
   is_direct_base (s,avoids) c1 c2 =
-    c1 IN defined_classes s /\ MEM c1 (get_direct_bases s c2) /\
-    DISJOINT (cppidfrees c1).tyfvs avoids
+    c1 IN defined_classes s /\ MEM c2 (get_direct_bases s c1) /\
+    DISJOINT (cppidfrees c2).tyfvs avoids
 `;
 
 val _ = add_rule { block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
@@ -97,7 +98,7 @@ val get_virtual_bases_def = Define`
 (* c2 is a virtual base of c1 *)
 val is_virtual_base_def = Define`
   is_virtual_base (s,avoids) c1 c2 =
-    c1 IN defined_classes s /\ MEM c1 (get_virtual_bases s c2) /\
+    c1 IN defined_classes s /\ MEM c2 (get_virtual_bases s c1) /\
     DISJOINT (cppidfrees c1).tyfvs avoids
 `;
 
@@ -213,6 +214,14 @@ val (subobjs_rules, subobjs_ind, subobjs_cases) = Hol_reln`
      subobjs s (C, Cs))
 `;
 
+val calc_subobjs = store_thm(
+  "calc_subobjs",
+  ``(C,Cs) IN subobjs s =
+      (C,Cs) IN rsubobjs s \/
+      (?C' D. s |- C <= C' /\ s |- C' <. D /\ (D,Cs) IN rsubobjs s)``,
+  SRW_TAC [][SPECIFICATION] THEN REWRITE_TAC [subobjs_cases] THEN
+  SRW_TAC [][SPECIFICATION]);
+
 (* from s3.4 of Wasserab et al *)
 val (pord1_rules, pord1_ind, pord1_cases) = Hol_reln`
    (!C Cs Ds s.
@@ -326,7 +335,7 @@ val MethodDefs_def = Define`
     }
 `
 
-(* <s> |- <C> has least method <mnm> -: <ty> via <Cs> *)
+* <s> |- <C> has least method <mnm> -: <ty> via <Cs> *)
 val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
                   paren_style = OnlyIfNecessary,
                   fixity = Infix (NONASSOC, 460),
@@ -756,18 +765,18 @@ val is_virtual_def = Define`
   is_virtual s cnm fnm retty paramtys =
     ?bnm params body prot retty' sfnm.
        (fnm = SFName sfnm) /\
-       (s,{}) |- bnm <= cnm  /\
+       (s,{}) |- cnm <= bnm  /\
        MEM (CFnDefn T retty' fnm params body, F, prot)
            (cinfo s bnm).fields /\
        (MAP SND params = paramtys) /\
-       covariant s retty' retty
+       covariant s retty retty'
 `;
 
 (* true if the given class is abstract *)
 val is_abstract_def = Define`
   is_abstract s cnm =
     ?fnm bnm retty params prot.
-       (s,{}) |- bnm <= cnm  /\
+       (s,{}) |- cnm <= bnm  /\
        MEM (CFnDefn T retty fnm params (SOME NONE), F, prot)
            (cinfo s bnm).fields /\
        !b' virtp prot' params' retty' body.

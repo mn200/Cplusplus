@@ -97,6 +97,7 @@ val celookup_class_def = Define`
         NONE -> NONE
      || SOME cei -> celookup_class (map cei) (IDConstant b t sf))
 `;
+val _ = export_rewrites ["celookup_class_def"]
 
 val elookup_class_def = Define`
   (elookup_class env (IDConstant b [] sf) =
@@ -115,6 +116,7 @@ val elookup_class_def = Define`
   (elookup_class env (IDConstant b sfs sf2) =
       celookup_class (item env).classenv (IDConstant b sfs sf2))
 `;
+val _ = export_rewrites ["elookup_class_def"]
 
 val is_class_name_env_def = Define`
   (is_class_name_env env id = ?c. elookup_class env id = SOME c)
@@ -134,6 +136,7 @@ val update_classenv_def = Define`
        || SOME ce' -> SOME (cenv |+ (h, FTNode (item (cenv ' h)) ce'))
      else NONE)
 `;
+val _ = export_rewrites ["update_classenv_def"]
 
 (* class id has no namespace constituents - i.e., this is OK for a local
    class, but not OK for a top-level declaration... *)

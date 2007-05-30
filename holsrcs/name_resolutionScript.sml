@@ -110,10 +110,6 @@ val break_sfld_def = Define`
 `;
 val _ = export_rewrites ["break_sfld_def"]
 
-val dest_id_def = Define`
-  dest_id (IDConstant b sfs sf) = (b,sfs,sf)
-`
-
 (* ----------------------------------------------------------------------
     empty_p1 : ext_decl list -> state -> P1state
 
@@ -573,6 +569,98 @@ val newlocal_def = Define`
 `
 
 (* ----------------------------------------------------------------------
+    new_class : CPP_ID -> CPP_ID list -> state -> state
+
+    adds a new class at the given location, with no fields, and the
+    given identifiers as ancestors
+   ---------------------------------------------------------------------- *)
+
+val enew_class_def = Define`
+  (enew_class (IDConstant b [] sf) ancs (env : environment) =
+     FTNode (item env with
+               classenv updated_by
+                 (\fm. fm |+ (sf, FTNode
+                                    <| statvars := FEMPTY;
+                                       info := SOME (<| fields := [];
+                                                        ancestors := ancs |>,
+                                                     {});
+                                       refs := FEMPTY |>
+                                    FEMPTY)))
+            (map env)) /\
+  (enew_class (IDConstant b (sf1::sfs) sf2) ancs env =
+     if sf1 IN FDOM (item env).classenv then
+       FTNode (item env with
+                 classenv updated_by
+                   (THE o
+                    update_classenv (sf1::(sfs ++ [sf2]))
+                                    (<| fields := [];
+                                        ancestors := ancs |>, {})))
+              (map env)
+     else
+       FTNode (item env)
+              (map env |+ (sfld_string sf1,
+                           enew_class (IDConstant b sfs sf2)
+                                      ancs
+                                      (map env ' (sfld_string sf1)))))
+`;
+val _ = export_rewrites ["enew_class_def"]
+
+
+val new_class_def = Define`
+  new_class cnm ancs s =
+    if is_abs_id cnm then s with genv updated_by enew_class cnm ancs
+    else s with env updated_by enew_class cnm ancs
+`;
+val _ = export_rewrites ["new_class_def"]
+
+(* ----------------------------------------------------------------------
+    new_class_field : (bool # StaticField list) ->
+                      (class_entry # bool # protection) -> state -> state
+   ---------------------------------------------------------------------- *)
+
+val cenew_class_field_def = Define`
+  (cenew_class_field [sf] cebp (cenv : StaticField |-> class_env) =
+     cenv |+ (sf, FTNode
+                   (item (cenv ' sf) with
+                    info updated_by
+                      (\ iuds_opt.
+                         let (i,uds) = THE iuds_opt
+                         in
+                           SOME
+                             (i with fields := (i.fields ++ [cebp]), uds)))
+                   (map (cenv ' sf)))) /\
+  (cenew_class_field (h::t) cebp cenv =
+     cenv |+ (h, FTNode (item (cenv ' h))
+                        (cenew_class_field t cebp (map (cenv ' h)))))
+`;
+val _ = export_rewrites ["cenew_class_field_def"]
+
+val enew_class_field_def = Define`
+  (enew_class_field [sf] cebp (env : environment) =
+     FTNode (item env with
+               classenv updated_by cenew_class_field [sf] cebp)
+            (map env)) /\
+  (enew_class_field (sf :: sfs) cebp env =
+     if sf IN FDOM (item env).classenv then
+       FTNode (item env with classenv
+                  updated_by cenew_class_field (sf :: sfs) cebp)
+              (map env)
+     else
+       FTNode (item env)
+              (map env |+ (sfld_string sf,
+                           enew_class_field sfs cebp
+                                            (map env ' (sfld_string sf)))))
+`;
+val _ = export_rewrites ["enew_class_field_def"]
+
+val new_class_field_def = Define`
+  new_class_field (b,sfs) cebp s =
+    if b then s with genv updated_by enew_class_field sfs cebp
+    else s with env updated_by enew_class_field sfs cebp
+`
+val _ = export_rewrites ["new_class_field_def"]
+
+(* ----------------------------------------------------------------------
     extract_class_names : frees_record -> P1state -> class_entry ->
                           P1state
 
@@ -588,42 +676,51 @@ val newlocal_def = Define`
 val extract_class_names_def = Define`
   (extract_class_names avds ps (b,sfs)
                        (CFnDefn v ty sf pms bodyoptopt,stat,p) =
-     let (targs,s) = break_sfld sf
+     let (targs,s) = break_sfld sf in
+     let rty' = rewrite_type avds ps ty in
+     let pms' = MAP (\ (n,ty). (n, rewrite_type avds ps ty)) pms in
+     let ptys = MAP SND pms' in
+     let ps0 = ps with
+                global updated_by
+                  new_class_field
+                    (b,sfs)
+                    (CFnDefn v rty' sf pms' bodyoptopt,stat,p)
      in
        if v then
          (* virtual member functions can't be templates *)
-         ps with dynobjs := ps.dynobjs |+ (s, (F, [], [], dVirtualMember))
+         ps0 with dynobjs := ps.dynobjs |+ (s, (F, [], [], dVirtualMember))
        else
-         let cnm = IDConstant b (FRONT sfs) (LAST sfs) in
-         let rty' = rewrite_type avds ps ty in
-         let ptys = MAP (rewrite_type avds ps o SND) pms
+         let cnm = IDConstant b (FRONT sfs) (LAST sfs)
          in
-           if is_virtual ps.global cnm sf rty' ptys then
-             ps with
-               dynobjs := ps.dynobjs |+ (s, (b, sfs, [], dVirtualMember))
+           if is_virtual ps0.global cnm sf rty' ptys then
+             ps0 with
+               dynobjs := ps.dynobjs |+ (s, (b, [], [], dVirtualMember))
            else
-             ps with
+             ps0 with
                dynobjs := ps.dynobjs |+ (s, (b,sfs,targs,
                                              if stat then dStatMember
                                              else dMember))) /\
   (extract_class_names avds ps (b,sfs) (FldDecl sf ty,stat,p) =
-     let (targs,s) = break_sfld sf
+     let (targs,s) = break_sfld sf in
+     let ty' = rewrite_type avds ps ty in
+     let ps0 = ps with global updated_by
+                new_class_field (b,sfs) (FldDecl sf ty',stat,p)
      in
-       if function_type ty then
-         let (rty,ptys) = dest_function_type (rewrite_type avds ps ty) in
+       if function_type ty' then
+         let (rty,ptys) = dest_function_type ty' in
          let cnm = IDConstant b (FRONT sfs) (LAST sfs)
          in
-           if is_virtual ps.global cnm sf rty ptys then
-             ps with
-               dynobjs := ps.dynobjs |+ (s, (b, sfs, [], dVirtualMember))
+           if is_virtual ps0.global cnm sf rty ptys then
+             ps0 with
+               dynobjs := ps0.dynobjs |+ (s, (b, sfs, [], dVirtualMember))
            else
-             ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, targs,
-                                                   if stat then dStatMember
-                                                   else dMember))
+             ps0 with dynobjs := ps0.dynobjs |+ (s, (b, sfs, targs,
+                                                     if stat then dStatMember
+                                                     else dMember))
        else
-         ps with dynobjs := ps.dynobjs |+ (s, (b, sfs, [],
-                                               if stat then dStatMember
-                                               else dMember))) /\
+         ps0 with dynobjs := ps0.dynobjs |+ (s, (b, sfs, [],
+                                                 if stat then dStatMember
+                                                 else dMember))) /\
   (extract_class_names avds ps (b,sfs) (Constructor _ _ _,_,_) = ps) /\
   (extract_class_names avds ps (b,sfs) (Destructor _ _,_,_) = ps) /\
   (extract_class_names avds ps (b,sfs) (NClass sf ciopt,_,_) =
@@ -636,6 +733,7 @@ val extract_class_names_def = Define`
                          (b,sfs)
                          (ce,stat,p))
 `
+val _ = export_rewrites ["extract_class_names_def"]
 
 
 (* ----------------------------------------------------------------------
@@ -737,8 +835,9 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
   (phase1_cinfo_opt avds ps cnm (SOME ci) =
      let ancestors' = MAP (\ (id,b,p). (resolve_classid avds ps id, b, p))
                           ci.ancestors in
+     let ps0 = ps with global updated_by new_class cnm ancestors' in
      let ps1 = FOLDL (\ps (id,b,p). open_classnode avds.tyfvs id ps)
-                     ps ancestors' in
+                     ps0 ancestors' in
      let ps2 = FOLDL (\s cebp.
                         extract_class_names avds s (F, [IDtl cnm]) cebp)
                      (local_class cnm ps1)
@@ -751,7 +850,9 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
              (ps2,[])
              ci.fields
      in
-       (SOME <| ancestors := ancestors'; fields := flds' |>, ps''))
+       (SOME <| ancestors := ancestors'; fields := flds' |>,
+        ps3 with <| dynobjs := ps.dynobjs;
+                    dynclasses := ps.dynclasses |>))
 
      /\
 
@@ -772,7 +873,11 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
      let ps' = FOLDL (\ ps (nm,ty). newlocal ps (SFName nm) ty) ps pms' in
      let bod' = phase1_stmt avds ps' bod
      in
-       (ps, CFnDefn v retty' (SFName s) pms' (SOME (SOME bod'))))
+       (ps, CFnDefn v retty' (SFName s) pms' (SOME (SOME bod')))) /\
+  (phase1_centry avds ps cnm (FldDecl sf ty) =
+     let ty' = rewrite_type avds ps ty
+     in
+         (ps, FldDecl sf ty'))
 `
 
 val (phase1_stmt_def, phase1_stmt_ind) = Defn.tprove(

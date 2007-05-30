@@ -87,6 +87,11 @@ val IDtl_def = Define`
 `;
 val _ = export_rewrites ["IDtl_def"]
 
+val dest_id_def = Define`
+  dest_id (IDConstant b sfs sf) = (b,sfs,sf)
+`
+val _ = export_rewrites ["dest_id_def"]
+
 val is_qualified_def = Define`
   is_qualified (IDConstant b sfs sf) = ~(sfs = [])
 `;
@@ -139,6 +144,7 @@ val strip_const_def = Define`
   (strip_const (Const ty) = strip_const ty) /\
   (strip_const ty = ty)
 `;
+val _ = export_rewrites ["strip_const_def"]
 
 (* strip out all consts from a pointer chain *)
 val strip_ptr_const_def = Define`
