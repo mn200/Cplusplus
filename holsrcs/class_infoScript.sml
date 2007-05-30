@@ -335,7 +335,7 @@ val MethodDefs_def = Define`
     }
 `
 
-* <s> |- <C> has least method <mnm> -: <ty> via <Cs> *)
+(* <s> |- <C> has least method <mnm> -: <ty> via <Cs> *)
 val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
                   paren_style = OnlyIfNecessary,
                   fixity = Infix (NONASSOC, 460),

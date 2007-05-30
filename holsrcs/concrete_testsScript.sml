@@ -627,7 +627,7 @@ val t6_program_def = Define`
 val t6_2_0 = fourmore "t6" t6_program_def 2
 
 val t6_2_1 = CONV_RULE
-               (SIMP_CONV (srw_ss()) [open_classnode_def, Once LET_THM])
+               (SIMP_CONV (srw_ss()) [open_classnode_def, LET_THM])
                t6_2_0
 
 val t6_2_2 = CONV_RULE
@@ -648,6 +648,8 @@ val t6_2_2 = CONV_RULE
                            get_virtual_bases_def])
                t6_2_1
 
+
+
 val RTC_REFL = prove(``RTC R x x``, SRW_TAC [][relationTheory.RTC_RULES])
 val pGSPEC_U = prove(
   ``GSPEC (\ (p,q). (f p q, s1 p q \/ s2 p q)) =
@@ -663,11 +665,9 @@ val pGSPEC_F = prove(
 val _ = augment_srw_ss [rewrites [pGSPEC_F, pGSPEC_SING, pGSPEC_U,
                                   pred_setTheory.INSERT_UNION_EQ,
                                   okfield_def, RTC_REFL, fieldname_def,
-                                  fieldtype_def]]
+                                  fieldtype_def, FLOOKUP_DEF]]
 
 val t6_2_3 = SIMP_RULE (srw_ss() ++ DNF_ss) [] t6_2_2
-
-val t6_2_4 = SIMP_RULE (srw_ss()) [strip_CETemp_def] t6_2_3
 
 val setfn_2 = prove(
   ``~(x = y) ==> ({(x,u); (y,v)} ' x = u) /\
@@ -675,13 +675,14 @@ val setfn_2 = prove(
   SRW_TAC [][] THEN MATCH_MP_TAC SETFN_UNIQUE THEN
   SRW_TAC [][]);
 
-val t6_2_5 = SIMP_RULE (srw_ss()) [Once LET_THM, is_virtual_def,
+val t6_2_4 = SIMP_RULE (srw_ss()) [is_virtual_def,
                                    RTC_class_lt_thm, cinfo_thm,
                                    cinfo0_thm, setfn_2,
-                                   defined_classes_thm, FLOOKUP_DEF
+                                   defined_classes_thm,
+                                   FAPPLY_FUPDATE_THM
                                    ]
-             t6_2_4
+             t6_2_3
 
-val t6_2_6 = SIMP_RULE (srw_ss()) [nested_class_def] t6_2_5
+val t6_final = save_thm("t6_2_final", t6_2_4);
 
 val _ = export_theory()
