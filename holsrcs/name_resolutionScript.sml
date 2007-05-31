@@ -74,31 +74,31 @@ val _ = Hol_datatype`
     dynclasses : string |-> bool # StaticField list # TemplateArg list ;
     dynobjs : string |-> bool # StaticField list # TemplateArg list #
                          dynobj_type ;
-    dynns : string |-> bool # string list ;
+    dynns : string |-> string list ;
     global : state ;
     accdecls : ext_decl list |>
 `;
 
+(* ----------------------------------------------------------------------
+    resolve_classid : P1state -> CPP_ID -> CPP_ID
+   ---------------------------------------------------------------------- *)
+
 val resolve_classid_def = Define`
-  (resolve_classid avds ps (IDConstant T sfs sf) = IDConstant T sfs sf) /\
-  (resolve_classid avds ps (IDConstant F [] (SFName s)) =
-     let (b,sfs,targs) = ps.dynclasses ' s
-     in
-       IDConstant b sfs (SFName s)) /\
-  (resolve_classid avds ps (IDConstant F [] (SFTempCall s targs)) =
-     let (b,sfs,targs') = ps.dynclasses ' s
-     in
-       IDConstant b sfs (SFTempCall s targs)) /\
-  (resolve_classid avds ps (IDConstant F (SFName s :: sfs) sf) =
+  (resolve_classid ps (IDConstant T sfs sf) = IDConstant T sfs sf) /\
+  (resolve_classid ps (IDConstant F [] sf) =
+       let (b,sfs,targs) = ps.dynclasses ' (sfld_string sf)
+       in
+         IDConstant b sfs sf) /\
+  (resolve_classid ps (IDConstant F (SFName s :: sfs) sf) =
      if s IN FDOM ps.dynclasses then
        let (b,pre_sfs,targs) = ps.dynclasses ' s
        in
          IDConstant b (pre_sfs ++ SFName s :: sfs) sf
      else
-       let (b,sfnms) = ps.dynns ' s
+       let sfnms = ps.dynns ' s
        in
-         IDConstant b (MAP SFName sfnms ++ SFName s :: sfs) sf) /\
-  (resolve_classid avds ps (IDConstant F (SFTempCall s targs :: sfs) sf) =
+         IDConstant T (MAP SFName sfnms ++ SFName s :: sfs) sf) /\
+  (resolve_classid ps (IDConstant F (SFTempCall s targs :: sfs) sf) =
      let (b,pre_sfs,targs') = ps.dynclasses ' s
      in
        IDConstant b (pre_sfs ++ SFTempCall s targs :: sfs) sf)
@@ -178,7 +178,7 @@ val open_ftnode_def = Define`
                               (IMAGE sfld_string (FDOM tyenv)))
                     s.dynobjs;
                 dynns :=
-                  FUNION (FUN_FMAP (\s. (T, pth)) (FDOM (map env_at_pth)))
+                  FUNION (FUN_FMAP (\s. pth) (FDOM (map env_at_pth)))
                          s.dynns ;
                 global := s.global with genv := genv'
              |>
@@ -307,7 +307,7 @@ val open_path_def = Define`
 val EnterNSpace_def = Define`
   EnterNSpace n s =
     open_path {} T [SFName n]
-              (s with dynns := s.dynns |+ (n,(T,s.current_nspath)))
+              (s with dynns := s.dynns |+ (n,s.current_nspath))
 `;
 (* the with clause is necessary in the circumstance where this is the
    first declaration of the namespace *)
@@ -329,9 +329,10 @@ val rewrite_type_def = Define`
                               in
                                 TypeID (IDConstant b sfs (SFName s))
                             else if s IN FDOM ps.dynns then
-                              let (b,sfnms) = ps.dynns ' s
+                              let sfnms = ps.dynns ' s
                               in
-                                TypeID (IDConstant b (MAP SFName sfnms)
+                                TypeID (IDConstant T
+                                                   (MAP SFName sfnms)
                                                    (SFName s))
                             else
                               TypeID (Base s)) ;
@@ -459,6 +460,9 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
       let ty = @ty. expr_type ps.global RValue e' ty in
       let cnm = @cnm. strip_const ty = Class cnm in
       let ps' =
+          (* open the class scope here, not the path to the scope;
+             classes don't insert their enclosing scopes' names into their
+             own scope - see notes/namespace-nested-class.cpp *)
           case id of
              IDConstant b [] sf -> open_classnode avoids.tyfvs cnm ps
           || IDConstant b (sf1::sfs) sf2 ->
@@ -489,16 +493,14 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
                  if s IN FDOM ps.dynclasses then
                    idattach_locn (ps.dynclasses ' s) id
                  else
-                   let (b',ns) = ps.dynns ' s
-                   in
-                     IDConstant b' (MAP SFName ns ++ (h::t)) sf
+                   IDConstant T (MAP SFName (ps.dynns ' s) ++ (h::t)) sf
              in
                if id_objtype ps.global qid = dMember then
                  let cnm = class_part qid in
                  let ps' = open_classnode avoids.tyfvs cnm ps
                  in
                    SVar (Deref This) (mk_dynobj_id ps' (IDtl qid))
-               else Var id)) /\
+               else Var qid)) /\
 
   (phase1_expr (MemAddr cid fld) =
      let cid' = if is_abs_id cid then cid
@@ -509,9 +511,9 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
                     if s IN FDOM ps.dynclasses then
                       idattach_locn (ps.dynclasses ' s) cid
                     else
-                      let (b,ns) = ps.dynns ' s
+                      let ns = ps.dynns ' s
                       in
-                        idattach_locn (b, MAP SFName ns, []:bool list) cid
+                        idattach_locn (T, MAP SFName ns, []:bool list) cid
      in
        (* there's nothing to do to the field.  Though it may actually be a
           field of some class ancestral to cid', the whole point of the
@@ -551,6 +553,40 @@ val phase1_init_def = Define`
 val _ = export_rewrites ["phase1_init_def"]
 
 (* ----------------------------------------------------------------------
+    cresolve_nspaces : P1state -> CPP_ID -> string list
+
+    returns the path of namespaces that the resolved id belongs to
+    (assuming it identifies a class)
+   ---------------------------------------------------------------------- *)
+
+val ecresolve_nspaces_def = Define`
+  (ecresolve_nspaces env [] = []) /\
+  (ecresolve_nspaces env (SFName s :: t) =
+     if SFName s IN FDOM (item env).classenv then []
+     else s :: ecresolve_nspaces (map env ' s) t) /\
+  (ecresolve_nspaces env (SFTempCall _ _ :: _) = [])
+`
+val _ = export_rewrites ["ecresolve_nspaces_def"]
+
+val cresolve_nspaces_def = Define`
+  (cresolve_nspace ps (IDConstant T sfs sf) =
+     ecresolve_nspaces ps.global.genv (sfs ++ [sf])) /\
+  (cresolve_nspace ps (IDConstant F sfs sf) =
+     let h = IDhd (IDConstant F sfs sf) in
+     let s = sfld_string h
+     in
+        if s IN FDOM ps.dynclasses then
+          let (b,pre_sfs,targs) = ps.dynclasses ' s
+          in
+            if b then ecresolve_nspaces ps.global.env (pre_sfs ++ [h])
+            else []
+        else
+          let ns = ps.dynns ' s
+          in
+            ecresolve_nspaces ps.global.env (MAP SFName ns ++ sfs))
+`;
+
+(* ----------------------------------------------------------------------
     newlocal : P1state -> StaticField -> P1state
    ---------------------------------------------------------------------- *)
 
@@ -569,47 +605,47 @@ val newlocal_def = Define`
 `
 
 (* ----------------------------------------------------------------------
-    new_class : CPP_ID -> CPP_ID list -> state -> state
+    new_class : CPP_ID -> state_class_info -> state -> state
 
     adds a new class at the given location, with no fields, and the
     given identifiers as ancestors
    ---------------------------------------------------------------------- *)
 
+val cenv_new_class_def = Define`
+  (cenv_new_class [sf] info (cenv : StaticField |-> class_env) =
+     cenv |+ (sf, FTNode <| statvars := FEMPTY;
+                            info := info;
+                            refs := FEMPTY |>
+                         FEMPTY)) /\
+  (cenv_new_class (sf::sfs) info cenv =
+     cenv |+ (sf, FTNode
+                    (item (cenv ' sf))
+                    (cenv_new_class sfs info (map (cenv ' sf)))))
+`
+
 val enew_class_def = Define`
-  (enew_class (IDConstant b [] sf) ancs (env : environment) =
-     FTNode (item env with
-               classenv updated_by
-                 (\fm. fm |+ (sf, FTNode
-                                    <| statvars := FEMPTY;
-                                       info := SOME (<| fields := [];
-                                                        ancestors := ancs |>,
-                                                     {});
-                                       refs := FEMPTY |>
-                                    FEMPTY)))
+  (enew_class (IDConstant b [] sf) info (env : environment) =
+     FTNode (item env with classenv updated_by cenv_new_class [sf] info)
             (map env)) /\
-  (enew_class (IDConstant b (sf1::sfs) sf2) ancs env =
+  (enew_class (IDConstant b (sf1::sfs) sf2) info env =
      if sf1 IN FDOM (item env).classenv then
        FTNode (item env with
                  classenv updated_by
-                   (THE o
-                    update_classenv (sf1::(sfs ++ [sf2]))
-                                    (<| fields := [];
-                                        ancestors := ancs |>, {})))
+                   (cenv_new_class (sf1::(sfs ++ [sf2])) info))
               (map env)
      else
        FTNode (item env)
               (map env |+ (sfld_string sf1,
                            enew_class (IDConstant b sfs sf2)
-                                      ancs
+                                      info
                                       (map env ' (sfld_string sf1)))))
 `;
 val _ = export_rewrites ["enew_class_def"]
 
-
 val new_class_def = Define`
-  new_class cnm ancs s =
-    if is_abs_id cnm then s with genv updated_by enew_class cnm ancs
-    else s with env updated_by enew_class cnm ancs
+  new_class cnm info s =
+    if is_abs_id cnm then s with genv updated_by enew_class cnm info
+    else s with env updated_by enew_class cnm info
 `;
 val _ = export_rewrites ["new_class_def"]
 
@@ -671,68 +707,61 @@ val _ = export_rewrites ["new_class_field_def"]
     (IOW, this doesn't detect the static error of having it make a
     difference.)
 
+    Affect only ps.global; allowing for dynamic names to be created with
+    an appropriate call to open_classnode later.
+
    ---------------------------------------------------------------------- *)
 
-val extract_class_names_def = Define`
+val extract_class_names_defn = Hol_defn "extract_class_names" `
   (extract_class_names avds ps (b,sfs)
                        (CFnDefn v ty sf pms bodyoptopt,stat,p) =
      let (targs,s) = break_sfld sf in
      let rty' = rewrite_type avds ps ty in
      let pms' = MAP (\ (n,ty). (n, rewrite_type avds ps ty)) pms in
-     let ptys = MAP SND pms' in
-     let ps0 = ps with
-                global updated_by
-                  new_class_field
-                    (b,sfs)
-                    (CFnDefn v rty' sf pms' bodyoptopt,stat,p)
+     let ptys = MAP SND pms'
      in
-       if v then
-         (* virtual member functions can't be templates *)
-         ps0 with dynobjs := ps.dynobjs |+ (s, (F, [], [], dVirtualMember))
-       else
-         let cnm = IDConstant b (FRONT sfs) (LAST sfs)
-         in
-           if is_virtual ps0.global cnm sf rty' ptys then
-             ps0 with
-               dynobjs := ps.dynobjs |+ (s, (b, [], [], dVirtualMember))
-           else
-             ps0 with
-               dynobjs := ps.dynobjs |+ (s, (b,sfs,targs,
-                                             if stat then dStatMember
-                                             else dMember))) /\
+       ps with global updated_by
+       new_class_field (b,sfs) (CFnDefn v rty' sf pms' bodyoptopt,stat,p)) /\
   (extract_class_names avds ps (b,sfs) (FldDecl sf ty,stat,p) =
      let (targs,s) = break_sfld sf in
-     let ty' = rewrite_type avds ps ty in
-     let ps0 = ps with global updated_by
-                new_class_field (b,sfs) (FldDecl sf ty',stat,p)
+     let ty' = rewrite_type avds ps ty
      in
-       if function_type ty' then
-         let (rty,ptys) = dest_function_type ty' in
-         let cnm = IDConstant b (FRONT sfs) (LAST sfs)
-         in
-           if is_virtual ps0.global cnm sf rty ptys then
-             ps0 with
-               dynobjs := ps0.dynobjs |+ (s, (b, sfs, [], dVirtualMember))
-           else
-             ps0 with dynobjs := ps0.dynobjs |+ (s, (b, sfs, targs,
-                                                     if stat then dStatMember
-                                                     else dMember))
-       else
-         ps0 with dynobjs := ps0.dynobjs |+ (s, (b, sfs, [],
-                                                 if stat then dStatMember
-                                                 else dMember))) /\
+       ps with global updated_by
+                new_class_field (b,sfs) (FldDecl sf ty',stat,p)) /\
   (extract_class_names avds ps (b,sfs) (Constructor _ _ _,_,_) = ps) /\
   (extract_class_names avds ps (b,sfs) (Destructor _ _,_,_) = ps) /\
-  (extract_class_names avds ps (b,sfs) (NClass sf ciopt,_,_) =
+  (extract_class_names avds ps (b,sfs) (NClass sf NONE,_,_) =
      let (targs, s) = break_sfld sf
      in
-       ps with dynclasses updated_by (\fm. fm |+ (s, (b,sfs,targs)))) /\
+        ps with global updated_by
+                   new_class (IDConstant b sfs sf) NONE) /\
+  (extract_class_names avds ps (b,sfs) (NClass sf (SOME ci),_,_) =
+     let (targs, s) = break_sfld sf in
+     let ancs' = MAP (\ (id,b,p). (resolve_classid ps id, b, p))
+                     ci.ancestors in
+     let ps0 = ps with global updated_by
+                   new_class (IDConstant b sfs sf)
+                       (SOME (<| ancestors := ancs'; fields := [] |>, {}))
+     in
+       FOLDL (\ps cebp. extract_class_names avds ps (b,sfs ++ [sf]) cebp)
+             ps0
+             ci.fields) /\
   (extract_class_names avds ps (b,sfs) (CETemplateDef targs ce, stat, p) =
      extract_class_names (FOLDL (\a ta. a UNION tafrees ta) avds targs)
                          ps
                          (b,sfs)
                          (ce,stat,p))
 `
+
+val (extract_class_names_def, extract_class_names_ind) = Defn.tprove(
+  extract_class_names_defn,
+  WF_REL_TAC `measure (\ (avds,ps,sfs,cebp). class_entry_size (FST cebp))` THEN
+  SRW_TAC [ARITH_ss][] THEN
+  Cases_on `ci` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
+  Induct_on `l` THEN SRW_TAC [][] THEN
+  FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []);
+val _ = save_thm("extract_class_names_def", extract_class_names_def)
+val _ = save_thm("extract_class_names_ind", extract_class_names_ind)
 val _ = export_rewrites ["extract_class_names_def"]
 
 
@@ -833,21 +862,23 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
                                    (map ft))
            |>)) /\
   (phase1_cinfo_opt avds ps cnm (SOME ci) =
-     let ancestors' = MAP (\ (id,b,p). (resolve_classid avds ps id, b, p))
+     let ancestors' = MAP (\ (id,b,p). (resolve_classid ps id, b, p))
                           ci.ancestors in
-     let ps0 = ps with global updated_by new_class cnm ancestors' in
-     let ps1 = FOLDL (\ps (id,b,p). open_classnode avds.tyfvs id ps)
-                     ps0 ancestors' in
+     let ps0 = ps with global updated_by
+                 new_class cnm (SOME (<| ancestors := ancestors' ;
+                                         fields := [] |>, {})) in
+     let ps1 = open_path avds.tyfvs F (id_sfs cnm) ps0 in
      let ps2 = FOLDL (\s cebp.
                         extract_class_names avds s (F, [IDtl cnm]) cebp)
-                     (local_class cnm ps1)
+                     ps1
                      ci.fields in
-     let (ps3, flds') =
+     let ps3 = open_path avds.tyfvs F (id_sfs cnm) ps2 in
+     let (ps4, flds') =
        FOLDL (\ (ps,celist) (ce,b,p).
                 let (ps',ce') = phase1_centry avds ps cnm ce
                 in
                   (ps', celist ++ [(ce',b,p)]))
-             (ps2,[])
+             (ps3,[])
              ci.fields
      in
        (SOME <| ancestors := ancestors'; fields := flds' |>,
@@ -891,14 +922,14 @@ val (phase1_stmt_def, phase1_stmt_ind) = Defn.tprove(
                         || INR (INR (INR (avds,ps,cnm,ce))) ->
                              class_entry_size ce)` THEN
   SRW_TAC [ARITH_ss][] THENL [
+    Induct_on `handlers` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `handlers` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
+    Induct_on `handlers` THEN SRW_TAC [][] THEN
+    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
     Cases_on `ci` THEN FULL_SIMP_TAC (srw_ss()) [] THEN
     Induct_on `l` THEN SRW_TAC [][] THEN
-    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
-    Induct_on `handlers` THEN SRW_TAC [][] THEN
-    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
-    Induct_on `handlers` THEN SRW_TAC [][] THEN
-    FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
-    Induct_on `handlers` THEN SRW_TAC [][] THEN
     FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
     Induct_on `vds` THEN SRW_TAC [][] THEN
     FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) [],
@@ -935,7 +966,7 @@ val phase1_fndefn_def = Define`
              NewGVar funty sf ps,
              NewGVar funty sf ps)
       || IDConstant F (sf1::sfs) sf2 ->
-            let fnm' = resolve_classid avds ps fnm in
+            let fnm' = resolve_classid ps fnm in
             let (b,sfs,sf) = dest_id fnm'
             in
               (fnm', ps, open_path avds.tyfvs b sfs ps)
@@ -945,6 +976,135 @@ val phase1_fndefn_def = Define`
     in
       declared_ps with
         accdecls := (declared_ps.accdecls ++ [FnDefn retty' fnm' pms' body'])
+`;
+
+(* ----------------------------------------------------------------------
+    phase1_gcentry : free_record -> P1state -> CPP_ID -> class_entry ->
+                     class_entry
+   ---------------------------------------------------------------------- *)
+
+(* P1state -> CPP_ID -> CPP_ID *)
+val resolve_meminit_id_def = Define`
+  (resolve_meminit_id cnm ps (IDConstant F [] (SFName s)) =
+     if s IN FDOM ps.dynobjs then
+       mk_member cnm (SFName s)
+     else idattach_locn (ps.dynclasses ' s) (IDConstant F [] (SFName s))) /\
+  (resolve_meminit_id cnm ps memid = resolve_classid ps memid)
+`;
+
+
+val phase1_meminit_def = Define`
+  phase1_meminit avds cnm param_scope class_scope (mid, args) =
+    let mid' = resolve_meminit_id cnm class_scope mid in
+    let args' =
+      case args of
+         NONE -> NONE
+      || SOME elist -> SOME (MAP (phase1_expr avds param_scope) elist)
+    in
+      (mid', args')
+`
+
+(* see phase1_centry (part of phase1_stmt) for what happens to class entries
+   in local class definitions *)
+val phase1_gcentry_def = Define`
+  (phase1_gcentry avds ps cnm (CFnDefn v retty (SFName s) pms bod) =
+     let retty' = rewrite_type avds ps retty in
+     let pms' = MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms in
+     let ps' = FOLDL (\ps (nm,ty). newlocal ps (SFName nm) ty) ps pms' in
+     let bod' = case bod of
+                   NONE -> NONE
+                || SOME NONE -> SOME NONE
+                || SOME (SOME b) -> SOME (SOME (phase1_stmt avds ps' b))
+     in
+        CFnDefn v retty' (SFName s) pms' bod') /\
+  (phase1_gcentry avds ps cnm (FldDecl sf ty) =
+     FldDecl sf (rewrite_type avds ps ty)) /\
+  (phase1_gcentry avds ps cnm (CETemplateDef targs ce) =
+     CETemplateDef targs
+                    (phase1_gcentry
+                       (FOLDL (\a ta. a UNION tafrees ta) avds targs)
+                       ps cnm ce)) /\
+  (phase1_gcentry avds ps cnm (Constructor pms meminits bodo) =
+     let pms' = (MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms) in
+     let param_scope =
+       FOLDL (\ps (nm,ty). newlocal ps (SFName nm) ty) ps pms' in
+     let meminits' = MAP (phase1_meminit avds cnm param_scope ps) meminits
+     in
+       Constructor pms' meminits'
+                   (OPTION_MAP (phase1_stmt avds ps) bodo))
+`;
+
+
+
+(* ----------------------------------------------------------------------
+    phase1_gclassdefn : free_record -> CPP_ID -> class_info option ->
+                        P1state -> P1state
+
+   ---------------------------------------------------------------------- *)
+
+val phase1_gclassdefn_def = Define`
+  (phase1_gclassdefn avds cnm NONE ps =
+
+     (* 7.1.5.3 p1 implies that cnm will be a simple identifier or a
+        possibly qualified template identifier (if the avds set is
+        empty, then this would be an explicit specialisation;
+        otherwise this would be the declaration of a partial
+        specialisation); explicit instantiation is handled elsewhere
+     *)
+
+     case cnm of
+        IDConstant F [] (SFName s) ->
+           (let csfs = MAP SFName ps.current_nspath in
+            let fullnm = IDConstant T csfs (SFName s)
+            in
+              ps with <| dynclasses updated_by (\fm. fm |+ (s, (T, csfs, [])));
+                         global updated_by new_class fullnm NONE;
+                         accdecls := (ps.accdecls ++
+                                        [Decl (VStrDec fullnm NONE)]) |>)
+     || IDConstant b sfs (SFTempCall s targs) ->
+          let ns = cresolve_nspace ps cnm in
+          let fullnm = resolve_classid ps cnm
+          in
+            ps with <| dynclasses updated_by
+                         (\fm. if ns = ps.current_nspath then
+                                 fm |+ (s, (T, MAP SFName ns, targs))
+                               else fm);
+                       global updated_by new_class fullnm NONE;
+                       accdecls := (ps.accdecls ++
+                                      [Decl (VStrDec fullnm NONE)]) |>) /\
+
+  (phase1_gclassdefn avds cnm (SOME ci) ps =
+     let ancs' = MAP (\ (id,b,p). (resolve_classid ps id, b, p))
+                     ci.ancestors in
+     let fullnm =
+           case cnm of
+              IDConstant b [] sf ->
+                 IDConstant b (MAP SFName ps.current_nspath) sf
+           || IDConstant b sfs sf -> resolve_classid ps cnm in
+     let ps0 = ps with global updated_by
+                 new_class fullnm
+                           (SOME (<| ancestors := ancs' ;
+                                     fields := [] |>, {})) in
+     let ps1 = open_path avds.tyfvs T (id_sfs fullnm) ps0 in
+     let ps2 = FOLDL (\s cebp.
+                        extract_class_names avds s (T, id_sfs fullnm) cebp)
+                     ps1
+                     ci.fields in
+     let ps3 = open_path avds.tyfvs T (id_sfs fullnm) ps2 in
+     let flds' =
+         FOLDL (\ celist (ce,b,p).
+                  let ce' = phase1_gcentry avds ps cnm ce
+                  in
+                    (celist ++ [(ce',b,p)]))
+               []
+               ci.fields
+     in
+       ps3 with <| dynobjs := ps0.dynobjs ; dynclasses := ps0.dynclasses ;
+                   accdecls := (ps.accdecls ++
+                                [Decl (VStrDec fullnm
+                                               (SOME <| ancestors := ancs' ;
+                                                        fields := flds' |>))])
+                |>)
 `;
 
 
@@ -1022,6 +1182,14 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
    ==>
      phase1 (P1Decl (FnDefn retty fnm pms body) :: ds, s)
             (ds, phase1_fndefn {} retty fnm pms body s))
+
+   /\
+
+  (!id cinfoopt ds s.
+     T
+   ==>
+     phase1 (P1Decl (Decl (VStrDec id cinfoopt)) :: ds, s)
+            (ds, phase1_gclassdefn {} id cinfoopt s))
 `;
 
 (*

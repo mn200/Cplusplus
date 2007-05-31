@@ -101,6 +101,11 @@ val mk_member_def = Define`
   mk_member (IDConstant b sfs sf1) sf2 = IDConstant b (sfs ++ [sf1]) sf2
 `;
 
+val id_sfs_def = Define`
+  id_sfs (IDConstant b sfs sf) = sfs ++ [sf]
+`;
+val _ = export_rewrites ["id_sfs_def"]
+
 val is_var_type_def = Define`
   (is_var_type (TypeID cid) = T) /\
   (is_var_type _ = F)

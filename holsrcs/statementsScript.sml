@@ -45,18 +45,8 @@ val _ = Hol_datatype `
            | LVC of (CExpr -> CExpr) => se_info
 `;
 
-(* terms taken from grammar, as in 12.6.2 *)
-val _ = Hol_datatype`mem_initializer_id = MI_C of CPP_ID
-                                        | MI_fld of string
-   (* note it's a string, not a StaticField, because the only extra
-      advantage to having a Sfield, would be a template.  But you can't
-      initialise a field that is a template, because they only such fields
-      are functions.  Note we're cheating here somewhat, by not just having
-      strings here *)
-`;
-
 val _ = type_abbrev("mem_initializer",
-                    ``:mem_initializer_id # CExpr list option``)
+                    ``:CPP_ID # CExpr list option``)
 
 val _ = Hol_datatype `varlocn = RefPlace of num option => CPP_ID
                               | ObjPlace of num
