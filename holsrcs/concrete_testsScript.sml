@@ -339,8 +339,9 @@ val EVAL_ss = simpLib.SSFRAG { ac = [], congs = [COND_EVAL_CONG,
 val _ = augment_srw_ss [EVAL_ss]
 
 val empty_frees_thm = prove(
-  ``{}.tyfvs = {}``,
+  ``({}.tyfvs = {}) /\ ({}.tempfvs = {})``,
   SRW_TAC [][freesTheory.empty_freerec_def]);
+val _ = augment_srw_ss [rewrites [empty_frees_thm]]
 
 val RTC_class_lt_thm =
     (SIMP_RULE (srw_ss() ++ DNF_ss) [GSYM RTC_class_lt_def] o
@@ -599,6 +600,8 @@ val _ = fourmore "t5" t5_program_def 2
 
    ---------------------------------------------------------------------- *)
 
+val _ = Globals.linewidth := 160;
+val _ = Globals.max_print_depth := ~1;
 val t6_program_def = Define`
   t6_program =
     [Decl (VDec (Signed Int) (Base "x"));
@@ -624,9 +627,35 @@ val t6_program_def = Define`
                       base_se)])]
 `;
 
-val t6_2_0 = fourmore "t6" t6_program_def 2
+val let_thms = prove(
+  ``(LET (\x. v1) v2 = v1) /\ (LET (\x. f1 x) [] = f1 []) /\
+    (LET (\ (x,y). f x y) (v1,v2) = 
+       LET (\x. LET (\y. f x y) v2) v1) /\
+    (LET f' (IDConstant T [] sf) = f' (IDConstant T [] sf)) /\
+    (LET f' (IDConstant F [] sf) = f' (IDConstant F [] sf)) /\
+    (LET f2 (STRING c cs) = f2 (STRING c cs)) /\
+    (LET f3 (Function ty1 ty2) = 
+       LET (\ret. LET (\argtys. f3 (Function ret argtys)) ty2) ty1) /\
+    (LET f4 (Signed Int) = f4 (Signed Int))``,
+  SRW_TAC [][LET_THM]);
+val _ = augment_srw_ss [rewrites [let_thms]]
 
-val t6_2_1 = CONV_RULE
+val t6_2_1 = let 
+  val t = ``NREL phase1 2 ^(mk_initial (rhs (concl t6_program_def))) (p,s)``
+  val th0 = SIMP_CONV (srw_ss()) [NREL_rwt, pairTheory.EXISTS_PROD, 
+                                  empty_p1_def, 
+                                  statesTheory.initial_state_def] t 
+  val th1 = SIMP_RULE (srw_ss()) [Once phase1_cases, NewGVar_def, LET_THM, 
+                                  state_NewGVar_def] th0
+  val th2 = SIMP_RULE (srw_ss()) [Once phase1_cases, 
+                                  phase1_fndefn_def, NewGVar_def] th1
+in 
+  th2
+end
+                      
+(* 
+
+CONV_RULE
                (SIMP_CONV (srw_ss()) [open_classnode_def, LET_THM])
                t6_2_0
 
@@ -684,5 +713,5 @@ val t6_2_4 = SIMP_RULE (srw_ss()) [is_virtual_def,
              t6_2_3
 
 val t6_final = save_thm("t6_2_final", t6_2_4);
-
+*)
 val _ = export_theory()

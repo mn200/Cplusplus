@@ -252,16 +252,14 @@ val open_classnode_def = Define`
 `;
 
 val open_classpath_def = Define`
-  open_classpath avoids p1s sofar sfs =
-    case sfs of
-       [] -> p1s
-    || sf :: rest -> open_classpath avoids
-                                    (open_classnode avoids
-                                                    (mk_member sofar sf)
-                                                    p1s)
-                                    (mk_member sofar sf)
-                                    rest
+  (open_classpath avoids p1s sofar [] = p1s) /\
+  (open_classpath avoids p1s sofar (sf::rest) = 
+      open_classpath avoids 
+                     (open_classnode avoids (mk_member sofar sf) p1s)
+                     (mk_member sofar sf)
+                     rest)
 `;
+val _ = export_rewrites ["open_classpath_def"]
 
 
 (* ----------------------------------------------------------------------
@@ -622,6 +620,7 @@ val cenv_new_class_def = Define`
                     (item (cenv ' sf))
                     (cenv_new_class sfs info (map (cenv ' sf)))))
 `
+val _ = export_rewrites ["cenv_new_class_def"]
 
 val enew_class_def = Define`
   (enew_class (IDConstant b [] sf) info (env : environment) =

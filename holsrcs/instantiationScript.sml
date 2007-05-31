@@ -1292,13 +1292,6 @@ val varlocn_inst_def = Define`
   (varlocn_inst sigma (ObjPlace n) = SOME (ObjPlace n))
 `;
 
-(* fields that are initialised can't be member functions, so there is no
-   chance the MI_fld could be a template call *)
-val meminitid_inst_def = Define`
-  (meminitid_inst sigma (MI_C id) = OPTION_MAP MI_C (cppID_inst sigma id)) /\
-  (meminitid_inst sigma (MI_fld nm) = SOME (MI_fld nm))
-`;
-
 val stmt_inst_defn = Hol_defn "stmt_inst" `
   (stmt_inst sigma EmptyStmt = SOME EmptyStmt) /\
   (stmt_inst sigma (CLoop ee st) =
@@ -1401,7 +1394,7 @@ val stmt_inst_defn = Hol_defn "stmt_inst" `
           OP2CMB (Constructor params')
                  (olmap (\ (mid,optargs).
                            OP2CMB (,)
-                                  (meminitid_inst sigma mid)
+                                  (cppID_inst sigma mid)
                                   (OPTION_MAP (olmap (expr_inst sigma))
                                               optargs))
                         meminits)
@@ -1482,7 +1475,9 @@ val extdecl_inst_defn = Defn.Hol_defn "extdecl_inst" `
   (extdecl_inst sub (ClassDestDef cnm body) =
      OP2CMB ClassDestDef (cppID_inst sub cnm) (stmt_inst sub body)) /\
   (extdecl_inst sub (NameSpace s edecs) =
-     OPTION_MAP (NameSpace s) (olmap (extdecl_inst sub) edecs))
+     OPTION_MAP (NameSpace s) (olmap (extdecl_inst sub) edecs)) /\
+  (extdecl_inst sub (TemplateDef targs ed) = 
+     SOME (TemplateDef targs ed))
 `
 
 val (extdecl_inst_def, extdecl_inst_ind) = Defn.tprove(
