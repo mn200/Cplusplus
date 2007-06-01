@@ -1343,11 +1343,31 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
 
    /\
 
+  (* RULE-ID: [phase1-decl-classdefn] *)
   (!id cinfoopt ds s.
      T
    ==>
      phase1 (P1Decl (Decl (VStrDec id cinfoopt)) :: ds, s)
             (ds, phase1_gclassdefn {} id cinfoopt s))
+
+   /\
+
+  (* RULE-ID: [phase1-decl-template-class] *)
+  (!targs id cinfoopt ds s tafs.
+     (tafs = FOLDL (\a ta. a UNION tafrees ta) {} targs)
+   ==>
+     phase1 (P1Decl (TemplateDef targs (Decl (VStrDec id cinfoopt))) :: ds, s)
+            (ds, phase1_gclassdefn tafs id cinfoopt s))
+
+   /\
+
+  (* RULE-ID: [phase1-decl-template-function] *)
+  (!s targs ds retty fnm pms body tafs.
+     (tafs = FOLDL (\a ta. a UNION tafrees ta) {} targs)
+   ==>
+     phase1 (P1Decl (TemplateDef targs (FnDefn retty fnm pms body)) :: ds, s)
+            (ds, phase1_fndefn tafs retty fnm pms body s))
+
 `;
 
 (* ----------------------------------------------------------------------
