@@ -489,6 +489,18 @@ val nsdmembers_def = Define`
     else NONE
 `
 
+val initialisable_members_def = Define`
+  initialisable_members s c =
+    mapPartial (\ce. case ce of
+                        (CFnDefn virtp ret nm args bod,stat,prot) -> NONE
+                     || (FldDecl fld ty, stat, prot) ->
+                           if stat \/ function_type ty then NONE
+                           else SOME (sfld_string fld,ty)
+                     || _ -> NONE)
+               (cinfo s c).fields
+`;
+
+
 val o_ABS_L = store_thm(
   "o_ABS_L",
   ``(\x. f x) o g = (\x. f (g x))``,

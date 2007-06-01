@@ -187,41 +187,82 @@ val state_updtypemap_def = Define`
 `;
 val _ = add_record_fupdate("typemap", ``state_updtypemap``)
 
-val state_varmap_def = Define`
-  state_varmap s = FUN_FMAP (\id. THE (lookup_addr s (Base id)))
-                      { id | ?a. lookup_addr s (Base id) = SOME a }
-`;
-val _ = add_record_field ("varmap", ``state_varmap``)
-
-(* updates "dynamic" map only *)
-val state_updvarmap_def = Define`
-  state_updvarmap f s =
-    s with env := FTNode (item s.env with varmap updated_by f)
-                         (map s.env)
-`
-val _ = add_record_fupdate ("varmap", ``state_updvarmap``)
-
 val state_classmap_def = Define`
   state_classmap s = FUN_FMAP (\id. THE (lookup_class s id))
                               { id | ?c. lookup_class s id = SOME c }
 `;
 val _ = add_record_field ("classmap", ``state_classmap``)
 
+(* binds a class-member name to an address.  The member might be a static
+   variable, or a reference.  If the latter, then the pcopt field will be
+   SOME a0, where a0 is the address of the parent. *)
+val cenv_new_addr_binding_def = Define`
+  (cenv_new_addr_binding [sf] s pcopt a (cenv : StaticField |-> class_env) =
+     let cdata = cenv ' sf in
+     let (ci,udfs) = THE (item cdata).info
+     in
+        if ?prot ty. MEM (FldDecl (SFName s) ty,T,prot) ci.fields then
+          cenv |+ (sf, FTNode (item cdata with statvars
+                                 updated_by (\fm. fm |+ (s,a)))
+                              (map cdata))
+        else
+          cenv |+ (sf, FTNode (item cdata with refs
+                                 updated_by (\fm. fm |+ ((s,THE pcopt), a)))
+                              (map cdata))) /\
+  (cenv_new_addr_binding (sf::sfs) s pcopt a cenv =
+     cenv |+ (sf, FTNode (item (cenv ' sf))
+                         (cenv_new_addr_binding sfs s pcopt a
+                                                (map (cenv ' sf)))))
+`;
+
+(* binds an id to an address in an environment.  The id might be associated
+   with a class *)
+val enew_addr_binding_def = Define`
+  (enew_addr_binding [] s pcopt a env =
+     FTNode (item env with varmap updated_by (\fm. fm |+ (s,a)))
+            (map env)) /\
+  (enew_addr_binding (sf :: sfs) s pcopt a env =
+     if sf IN FDOM (item env).classenv then
+       FTNode (item env with classenv updated_by
+                 cenv_new_addr_binding (sf :: sfs) s pcopt a)
+              (map env)
+     else
+       let s' = sfld_string sf
+       in
+         FTNode
+           (item env)
+           (map env |+ (s', enew_addr_binding sfs s pcopt a (map env ' s'))))
+`;
+
+val new_addr_binding_def = Define`
+  (new_addr_binding (IDConstant T sfs (SFName str)) pcopt a s =
+      s with genv updated_by enew_addr_binding sfs str pcopt a) /\
+  (new_addr_binding (IDConstant F sfs (SFName str)) pcopt a s =
+      s with env updated_by enew_addr_binding sfs str pcopt a)
+`;
+
+(* setting up a new type binding is only necessary for dynamically allocated
+   variables - all other sorts will already have their type information
+   recorded in the state *)
+val new_type_binding_def = Define`
+  (new_type_binding (IDConstant F [] (SFName str)) ty s =
+     s with env := FTNode (item s.env with typemap
+                             updated_by (\fm. fm |+ (SFName str, ty)))
+                          (map s.env)) /\
+  (new_type_binding id ty s = s)
+`;
+
 val vdeclare_def = Define`
   vdeclare s0 ty nm s =
      (?a sz rs.
          (rs = range_set a sz) /\
          object_type ty /\ malloc s0 ty a /\ sizeof T (sizeofmap s) ty sz /\
-         (s = s0 with <| constmap :=
+         (s = (new_addr_binding nm NONE (a,default_path ty) o
+               new_type_binding nm ty)
+              (s0 with <| constmap :=
                             if const_type ty then s0.constmap UNION rs
                             else s0.constmap DIFF rs;
-                         allocmap updated_by (UNION) rs;
-                         varmap updated_by
-                            (\vm. vm |+ (nm,(a,default_path ty)));
-                         typemap updated_by (\tm. tm |+ (SFName nm,ty)) |>))
-        \/
-     (function_type ty /\
-      (s = s0 with typemap updated_by (\tm. tm |+ (SFName nm, ty))))
+                         allocmap updated_by (UNION) rs |>)))
         \/
      (?ty0.
         (ty = Ref ty0) /\
@@ -234,10 +275,8 @@ val vdeclare_def = Define`
            address, 0.  We can't just leave the varmap unchanged as
            the declaration of a variable masks other variables of the same
            name.  See notes/ref001.cpp *)
-        (s = s0 with
-             <| varmap updated_by (\vm. vm |+ (nm, (0, default_path ty0)));
-                typemap updated_by (\tm. tm |+ (SFName nm, ty0)) |>))
-
+        (s = (new_addr_binding nm NONE (0,default_path ty) o
+              new_type_binding nm ty0) s0))
 `;
 
 
@@ -251,9 +290,12 @@ val initA_constructor_call_def = Define`
 `;
 
 val initA_member_call_def = Define`
-  initA_member_call ty addr args =
-    case ty of
+  initA_member_call parent_addr nm ty addr args =
+    case strip_const ty of
        Class cnm -> initA_constructor_call T T cnm addr args
+    || Ref ty0 -> VDecInitA ty
+                            (RefPlace (SOME parent_addr) nm)
+                            (CopyInit (mExpr (HD args) base_se))
     || _ -> VDecInitA ty
                       (ObjPlace addr)
                       (CopyInit (mExpr (HD args) base_se))
@@ -401,11 +443,11 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 (* RULE-ID: decl-vdec-nonclass *)
 (!s0 ty name s.
-     vdeclare s0 ty name s /\
+     vdeclare s0 ty (Base name) s /\
      object_type ty /\
      ~class_type (strip_array ty)
    ==>
-     declmng mng (VDec ty (IDConstant F [] (SFName name)), s0) ([], s))
+     declmng mng (VDec ty (Base name), s0) ([], s))
 
    /\
 
@@ -426,7 +468,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (!s0 s a name cnm ty subdecls sz.
      (strip_array ty = Class cnm) /\
      array_type ty /\
-     vdeclare s0 ty name s /\
+     vdeclare s0 ty (Base name) s /\
      sizeof T (sizeofmap s0) (Class cnm) sz /\
      (subdecls =
        GENLIST (\n. VDecInitA
@@ -438,7 +480,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                                 base_se)))
                (array_size ty))
    ==>
-     declmng mng (VDec ty (IDConstant F [] (SFName name)), s0)
+     declmng mng (VDec ty (Base name), s0)
                  (subdecls, s))
 
    /\
@@ -459,13 +501,11 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    declaration of a object. *)
 (!s0 ty cnm name args s1 a pth.
      (ty = Class cnm) /\
-     vdeclare s0 (Class cnm) name s1 /\
-     ((a,pth) = s1.varmap ' name)
+     vdeclare s0 (Class cnm) (Base name) s1 /\
+     (SOME (a,pth) = lookup_addr s1 (Base name))
    ==>
      declmng mng
-             (VDecInit ty
-                       (IDConstant F [] (SFName name))
-                       (DirectInit0 args),
+             (VDecInit ty (Base name) (DirectInit0 args),
               s0)
              ([VDecInitA ty
                          (ObjPlace a)
@@ -511,26 +551,24 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    copy-initialisation *)
 (!s0 ty name arg s a pth loc.
      (!cnm. ~(ty = Class cnm)) /\
-     vdeclare s0 ty name s /\
-     ((a,pth) = s.varmap ' name) /\
+     vdeclare s0 ty (Base name) s /\
+     (SOME (a,pth) = lookup_addr s (Base name)) /\
      (loc = if ref_type ty then RefPlace NONE (Base name) else ObjPlace a)
    ==>
      declmng mng
-             (VDecInit ty
-                       (IDConstant F [] (SFName name))
-                       (DirectInit0 [arg]), s0)
+             (VDecInit ty (Base name) (DirectInit0 [arg]), s0)
              ([VDecInitA ty loc (CopyInit (mExpr arg base_se))], s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-start-evaluate-copy *)
 (!s0 ty name arg s a pth loc.
-     vdeclare s0 ty name s /\
-     ((a,pth) = s.varmap ' name) /\
+     vdeclare s0 ty (Base name) s /\
+     (SOME (a,pth) = lookup_addr s (Base name)) /\
      (loc = if ref_type ty then RefPlace NONE (Base name) else ObjPlace a)
    ==>
      declmng mng
-             (VDecInit ty (IDConstant F [] (SFName name)) (CopyInit arg), s0)
+             (VDecInit ty (Base name) (CopyInit arg), s0)
              ([VDecInitA ty loc (CopyInit arg)], s))
 
    /\
@@ -574,18 +612,18 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    /\
 
 (* RULE-ID: decl-vdecinit-finish-ref *)
-(* a0 is bogus, NULL even. - assume for the moment that aopt doesn't matter *)
-(!s0 ty1 nm a aopt ty2 p p' s se f.
+(* if isSome, aopt is the address of a containing class *)
+(!s0 ty1 refnm a aopt ty2 p p' s se f.
      is_null_se se /\
      ((f = CopyInit) \/ (f = DirectInit)) /\
      (if class_type ty1 then
         (s0,{}) |- dest_class ty1 casts p into p'
       else (p' = p)) /\
-     (s = s0 with varmap updated_by (\fm. fm |+ (nm, (a,p'))))
+     (s = new_addr_binding refnm aopt (a,p') s0)
    ==>
      declmng mng
              (VDecInitA (Ref ty1)
-                        (RefPlace aopt (Base nm))
+                        (RefPlace aopt refnm)
                         (f (NormE (LVal a ty2 p) se)), s0)
              ([], s))
 

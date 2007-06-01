@@ -136,7 +136,7 @@ val installfn_def = Define`
    the state.  It doesn't bother with constructor or destructors as these
    can be specially looked up when needed, and can't have their addresses
    taken. *)
-val imemfn_def = Define`
+val imemfn_defn = Hol_defn "imemfn" `
   (imemfn cnm s0 [] s = (s0 = s)) /\
   (imemfn cnm s0 ((FldDecl flnm ty, b, p) :: rest) s = imemfn cnm s0 rest s) /\
   (imemfn cnm
@@ -157,8 +157,20 @@ val imemfn_def = Define`
      imemfn cnm s0 rest s) /\
   (imemfn cnm s0 ((Constructor _ _ _, _, _) :: rest) s =
      imemfn cnm s0 rest s) /\
-  (imemfn cnm s0 ((Destructor _ _, b, p) :: rest) s = imemfn cnm s0 rest s)
+  (imemfn cnm s0 ((Destructor _ _, b, p) :: rest) s = imemfn cnm s0 rest s) /\
+  (imemfn cnm s0 ((NClass sfn (SOME ci), b, p)::rest) s =
+     ?s'. imemfn (mk_member cnm sfn) s0 (ci.fields) s' /\
+          imemfn cnm s' rest s)
 `
+
+val (imemfn_def, imemfn_ind) = Defn.tprove(
+  imemfn_defn,
+  WF_REL_TAC `measure (\ (cnm,s,celist,s'). CStmt7_size celist)` THEN
+  SRW_TAC [ARITH_ss][] THEN Cases_on `ci` THEN SRW_TAC [ARITH_ss][]);
+val _ = save_thm("imemfn_def", imemfn_def)
+val _ = save_thm("imemfn_ind", imemfn_ind)
+val _ = export_rewrites ["imemfn_def"]
+
 
 val install_member_functions_def =
     overload_on ("install_member_functions", ``imemfn``)
@@ -234,17 +246,15 @@ val construct_ctor_pfx_def = Define`
     let allccs = constituent_offsets s mdp cnm in
     let direct_bases = get_direct_bases s cnm in
     let virt_bases = get_virtual_bases s cnm in
-    let data_fields = THE (nsdmembers s cnm) in
-    let lookup nm = FINDL (\ (nm',mi). nm' = nm) mem_inits in
-           (* TODO: replace equality with a name comparison functionality
-                    that copes with the example in notes/12.6.2p1.cpp *)
+    let data_fields = initialisable_members s cnm in
+    let lookup (nm:CPP_ID) = FINDL (\ (nm',mi). nm' = nm) mem_inits in
 
-    let do_bases pth =
+    let do_bases (pth : CPP_ID list) =
       let a' = subobj_offset s (cnm, pth) in
-      let nm = LAST pth
+      let (nm : CPP_ID) = LAST pth
       in
          (* F T records, no, not most-derived, yes, a subobject *)
-         case lookup (MI_C nm) of
+         case lookup nm of
            NONE -> (* 12.6.2 p4 - default initialisation *)
              [initA_constructor_call F T nm (a + a') []]
         || SOME (nm',NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
@@ -259,14 +269,15 @@ val construct_ctor_pfx_def = Define`
       let (c,a') = THE (FINDL (\ (c, off). c = NSD nsdname nsdty) allccs)
       in
           (* T T pairs below record: yes, most-derived, yes, a subobject *)
-          case lookup (MI_fld nsdname) of
+          case lookup (Base nsdname) of
              NONE -> (* 12.6.2 p4 - default initialisation *)
                (@inits. default_init s T T nsdty (a + a') inits)
           || SOME(nm', NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
                (@inits. value_init s T T nsdty (a + a') inits)
           || SOME(nm', SOME args) -> (* direct initialisation, with args as
                                         initialiser *)
-               [initA_member_call nsdty (a + a') args]
+               [initA_member_call a (mk_member cnm (SFName nsdname))
+                                  nsdty (a + a') args]
     in
     let nsds = FLAT (MAP do_nsd data_fields)
   in
@@ -1467,14 +1478,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ((info,userdefs) = define_default_specials info0) /\
      install_member_functions name s0 info.fields s /\
      ~is_abs_id name /\
-     (SOME env' = update_class name (info,userdefs) s.env) /\
-     (lclasses =
-        mapPartial (\ (e,stat,prot).
-                      case e of
-                         NClass sf ciopt -> SOME (VStrDec (mk_member name sf)
-                                                          ciopt)
-                      || e -> NONE)
-                   info.fields)
+     (SOME env' = update_class name (info,userdefs) s.env)
    ==>
      ^mng (mStmt (Block T (VStrDec name (SOME info0) :: vds) sts) c) s0
           (s with env := env', mStmt (Block T (lclasses ++ vds) sts) c))
