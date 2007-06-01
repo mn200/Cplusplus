@@ -35,6 +35,12 @@ val freerec_UNION_empty = store_thm(
              theorem "frees_record_component_equality"]);
 val _ = export_rewrites ["freerec_UNION_empty"]
 
+val DISJOINT_def = Define`
+  DISJOINT f1 f2 = pred_set$DISJOINT f1.tyfvs f2.tyfvs /\
+                   pred_set$DISJOINT f1.tempfvs f2.tempfvs /\
+                   pred_set$DISJOINT f1.valfvs f1.valfvs
+`;
+
 val tyfree_sing_def = Define`
   tyfree_sing s = <| tyfvs := {s}; tempfvs := {}; valfvs := {} |>
 `;

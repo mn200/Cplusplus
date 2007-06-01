@@ -601,7 +601,6 @@ val _ = fourmore "t5" t5_program_def 2
    ---------------------------------------------------------------------- *)
 
 val _ = Globals.linewidth := 160;
-val _ = Globals.max_print_depth := ~1;
 val t6_program_def = Define`
   t6_program =
     [Decl (VDec (Signed Int) (Base "x"));
@@ -643,7 +642,8 @@ val let_thms = prove(
     (LET f3 (Class id) = let id0 = id in f3 (Class id0)) /\
     (LET f5 (h :: t) = LET (\h0. LET (\t0. f5 (h0::t0)) t) h) /\
     (LET f6 FEMPTY = f6 FEMPTY) /\
-    (LET f6 (fm |+ kv) = LET (\fm0. LET (\kv0. f6 (fm0 |+ kv0)) kv) fm) /\
+    (LET f6 ((fm: 'a |-> 'b) |+ kv) =
+      LET (\fm0. LET (\kv0. f6 (fm0 |+ kv0)) kv) fm) /\
     (LET f7 <|current_nspath := cns; dynclasses := dcs; dynobjs := dos;
               dynns := dns; global := glob;
               accdecls := acs |> =
@@ -656,16 +656,16 @@ val let_thms = prove(
     (LET f8 T = f8 T) /\ (LET f8 F = f8 F) /\
     (LET f9 dNormalObj = f9 dNormalObj) /\
     (LET f9 dMember = f9 dMember) /\
-    (LET f10    <|allocmap := am; hallocmap := hm; fnmap := fm;
+    (LET f10    <|allocmap := am; hallocmap := hm; fnmap := fnm;
                   fnencode := fem; fndecode := fdm;
                  genv := genv ;
                  env := env; initmap := im; stack := stk; thisvalue := this;
                  blockclasses := bcs; exprclasses := ecs|> =
-       let am0 = am in let hm0 = hm in let fm0 = fm in let fem0 = fem in
+       let am0 = am in let hm0 = hm in let fnm0 = fnm in let fem0 = fem in
        let fdm0 = fdm in
        let genv0 = genv in let env0 = env in let im0 = im in let stk0 = stk in
        let this0 = this in let bcs0 = bcs in let ecs0 = ecs in
-         f10  <|allocmap := am0; hallocmap := hm0; fnmap := fm0;
+         f10  <|allocmap := am0; hallocmap := hm0; fnmap := fnm0;
                   fnencode := fem0; fndecode := fdm0;
                  genv := genv0 ;
                  env := env0; initmap := im0; stack := stk0;
@@ -741,7 +741,7 @@ val t6_2_1 = let
   val th2 = SIMP_RULE (srw_ss()) [Once phase1_cases, Cong LET_CONG,
                                   state_NewGVar_def,
                                   phase1_fndefn_def, NewGVar_def] th1
-  val _ = print "2 "
+  val _ = print "2 ";
   val th3 = SIMP_RULE (srw_ss()) [open_path_thm, open_classnode_thm,
                                   Cong LET_CONG, pairTheory.EXISTS_PROD,
                                   fieldty_via_def, FieldDecls_def,
@@ -752,7 +752,7 @@ val t6_2_1 = let
                                   is_class_name_env_def, cinfo_thm,
                                   cinfo0_thm,
                                   RTC_class_lt_thm] th2
-  val _ = print "3 "
+  val _ = print "3 ";
   val th4 = SIMP_RULE (srw_ss()) [methodty_via_def, subobjs_thm, rsubobjs_thm,
                                   defined_classes_thm, MethodDefs_def,
                                   Cong LET_CONG, cinfo_thm, cinfo0_thm,
@@ -760,7 +760,7 @@ val t6_2_1 = let
                                   is_virtual_base_def,
                                   is_direct_base_def, get_virtual_bases_def,
                                   get_direct_bases_def, RTC_class_lt_thm] th3
-  val _ = print "4 "
+  val _ = print "4 ";
   val th5 = SIMP_RULE (srw_ss()) [injected_via_def, subobjs_thm, rsubobjs_thm,
                                   defined_classes_thm, InjectedClasses_def,
                                   Cong LET_CONG, cinfo_thm, cinfo0_thm,
@@ -769,9 +769,9 @@ val t6_2_1 = let
                                   is_direct_base_def, get_virtual_bases_def,
                                   get_direct_bases_def, RTC_class_lt_thm,
                                   nested_class_def] th4
-  val _ = print "5 "
+  val _ = print "5 ";
   val th6 = SIMP_RULE (srw_ss() ++ CONJ_ss) [Cong LET_CONG] th5
-  val _ = print "6 "
+  val _ = print "6 ";
   val th7 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
                                   pairTheory.EXISTS_PROD, open_path_thm,
                                   fieldty_via_def, FieldDecls_def,
@@ -783,9 +783,9 @@ val t6_2_1 = let
                                   cinfo0_thm, methodty_via_def, MethodDefs_def,
                                   injected_via_def, InjectedClasses_def,
                                   RTC_class_lt_thm] th6
-  val _ = print "7 "
+  val _ = print "7 ";
   val th8 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG, setfn_2] th7
-  val _ = print "8 "
+  val _ = print "8 ";
   val th9 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
                                   pairTheory.EXISTS_PROD, open_path_thm,
                                   fieldty_via_def, FieldDecls_def,
@@ -797,13 +797,13 @@ val t6_2_1 = let
                                   cinfo0_thm, methodty_via_def, MethodDefs_def,
                                   injected_via_def, InjectedClasses_def,
                                   RTC_class_lt_thm] th8
-  val _ = print "9 "
+  val _ = print "9 ";
   val th10 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG] th9
-  val _ = print "10 "
+  val _ = print "10 ";
   val th11 = SIMP_RULE (srw_ss()) [is_virtual_def, Cong LET_CONG,
                                    RTC_class_lt_thm, cinfo_thm, cinfo0_thm]
              th10
-  val _ = print "11 "
+  val _ = print "11 ";
   val th12 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
                                   pairTheory.EXISTS_PROD, open_path_thm,
                                   fieldty_via_def, FieldDecls_def,
@@ -815,21 +815,21 @@ val t6_2_1 = let
                                   cinfo0_thm, methodty_via_def, MethodDefs_def,
                                   injected_via_def, InjectedClasses_def,
                                   RTC_class_lt_thm, nested_class_def] th11
-  val _ = print "12 "
+  val _ = print "12 ";
   val th13 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG] th12
-  val _ = print "13 "
+  val _ = print "13 ";
   val th14 = SIMP_RULE (srw_ss() ++ CONJ_ss) [Cong LET_CONG] th13
-  val _ = print "14 "
+  val _ = print "14 ";
   val th15 = SIMP_RULE (srw_ss()) [Cong LET_CONG, FAPPLY_FUPDATE_THM] th14
-  val _ = print "15 "
+  val _ = print "15 ";
   val th16 = SIMP_RULE (srw_ss()) [Cong LET_CONG, newlocal_def] th15
-  val _ = print "16 "
+  val _ = print "16 ";
   val th17 = SIMP_RULE (srw_ss()) [Cong LET_CONG, expr_type_rewrites,
                                    lookup_type_def, lift_lookup_def,
                                    elookup_type_def] th16
-  val _ = print "17 "
+  val _ = print "17 ";
   val th18 = SIMP_RULE (srw_ss() ++ CONJ_ss) [Cong LET_CONG] th17
-  val _ = print "18 "
+  val _ = print "18 ";
   val th19 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
                                   pairTheory.EXISTS_PROD, open_path_thm,
                                   fieldty_via_def, FieldDecls_def,
@@ -841,9 +841,9 @@ val t6_2_1 = let
                                   cinfo0_thm, methodty_via_def, MethodDefs_def,
                                   injected_via_def, InjectedClasses_def,
                                   RTC_class_lt_thm, nested_class_def] th18
-  val _ = print "19 "
+  val _ = print "19 ";
   val th20 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG, setfn_2] th19
-  val _ = print "20 "
+  val _ = print "20 ";
   val th21 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
                                   pairTheory.EXISTS_PROD, open_path_thm,
                                   fieldty_via_def, FieldDecls_def,
@@ -855,13 +855,13 @@ val t6_2_1 = let
                                   cinfo0_thm, methodty_via_def, MethodDefs_def,
                                   injected_via_def, InjectedClasses_def,
                                   RTC_class_lt_thm, nested_class_def] th20
-  val _ = print "21 "
+  val _ = print "21 ";
   val th22 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG] th21
-  val _ = print "22 "
+  val _ = print "22 ";
   val th23 = SIMP_RULE (srw_ss()) [is_virtual_def, Cong LET_CONG,
                                    RTC_class_lt_thm, cinfo_thm, cinfo0_thm]
              th22
-  val _ = print "23 "
+  val _ = print "23 ";
   val th24 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
                                   pairTheory.EXISTS_PROD, open_path_thm,
                                   fieldty_via_def, FieldDecls_def,
@@ -873,14 +873,14 @@ val t6_2_1 = let
                                   cinfo0_thm, methodty_via_def, MethodDefs_def,
                                   injected_via_def, InjectedClasses_def,
                                   RTC_class_lt_thm, nested_class_def] th23
-  val _ = print "24 "
+  val _ = print "24 ";
   val th25 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG] th24
-  val _ = print "25 "
+  val _ = print "25 ";
   val th26 = SIMP_RULE (srw_ss() ++ CONJ_ss) [Cong LET_CONG] th25
-  val _ = print "26 "
+  val _ = print "26 ";
   val th27 = SIMP_RULE (srw_ss()) [Cong LET_CONG, mk_dynobj_id_def,
                                    FAPPLY_FUPDATE_THM] th26
-  val _ = print "27\n"
+  val _ = print "27\n";
 in
   save_thm("t6_final", SIMP_RULE (srw_ss()) [LET_THM] th27)
 end
