@@ -629,55 +629,78 @@ val t6_program_def = Define`
 
 val let_thms = prove(
   ``(LET (\x. v1) v2 = v1) /\ (LET (\x. f1 x) [] = f1 []) /\
-    (LET (\ (x,y). f x y) (v1,v2) = 
-       LET (\x. LET (\y. f x y) v2) v1) /\
+    (LET f (v1,v2) =
+       LET (\x. LET (\y. f (x, y)) v2) v1) /\
     (LET f' (IDConstant T [] sf) = f' (IDConstant T [] sf)) /\
     (LET f' (IDConstant F [] sf) = f' (IDConstant F [] sf)) /\
+    (LET f' (IDConstant b sfs sf) =
+       let b0 = b in let sfs0 = sfs in let sf0 = sf in
+         f' (IDConstant b0 sfs0 sf0)) /\
     (LET f2 (STRING c cs) = f2 (STRING c cs)) /\
-    (LET f3 (Function ty1 ty2) = 
+    (LET f3 (Function ty1 ty2) =
        LET (\ret. LET (\argtys. f3 (Function ret argtys)) ty2) ty1) /\
-    (LET f4 (Signed Int) = f4 (Signed Int))``,
+    (LET f3 (Signed Int) = f3 (Signed Int)) /\
+    (LET f3 (Class id) = let id0 = id in f3 (Class id0)) /\
+    (LET f5 (h :: t) = LET (\h0. LET (\t0. f5 (h0::t0)) t) h) /\
+    (LET f6 FEMPTY = f6 FEMPTY) /\
+    (LET f6 (fm |+ kv) = LET (\fm0. LET (\kv0. f6 (fm0 |+ kv0)) kv) fm) /\
+    (LET f7 <|current_nspath := cns; dynclasses := dcs; dynobjs := dos;
+              dynns := dns; global := glob;
+              accdecls := acs |> =
+       LET (\cns0. LET (\dcs0. LET (\dos0. LET (\dns0. LET (\glob0.
+             LET (\acs0. f7
+                  <|current_nspath := cns0; dynclasses := dcs0;
+                    dynobjs := dos0;
+                    dynns := dns0; global := glob0;
+                    accdecls := acs0 |>) acs) glob) dns) dos) dcs) cns) /\
+    (LET f8 T = f8 T) /\ (LET f8 F = f8 F) /\
+    (LET f9 dNormalObj = f9 dNormalObj) /\
+    (LET f9 dMember = f9 dMember) /\
+    (LET f10    <|allocmap := am; hallocmap := hm; fnmap := fm;
+                  fnencode := fem; fndecode := fdm;
+                 genv := genv ;
+                 env := env; initmap := im; stack := stk; thisvalue := this;
+                 blockclasses := bcs; exprclasses := ecs|> =
+       let am0 = am in let hm0 = hm in let fm0 = fm in let fem0 = fem in
+       let fdm0 = fdm in
+       let genv0 = genv in let env0 = env in let im0 = im in let stk0 = stk in
+       let this0 = this in let bcs0 = bcs in let ecs0 = ecs in
+         f10  <|allocmap := am0; hallocmap := hm0; fnmap := fm0;
+                  fnencode := fem0; fndecode := fdm0;
+                 genv := genv0 ;
+                 env := env0; initmap := im0; stack := stk0;
+                 thisvalue := this0;
+                 blockclasses := bcs0; exprclasses := ecs0|>) /\
+    (LET f11 NONE = f11 NONE) /\
+    (LET f11 (SOME x) = let x0 = x in f11 (SOME x0)) /\
+    (LET f12 ({}:'a -> bool) = f12 {}) /\
+    (LET f12 (x INSERT s) = let x0 = x in let s0 = s in f12 (x0 INSERT s0)) /\
+    (LET f13 ({}:frees_record) = f13 {}) /\
+    (LET f14 (Decl d) = f14 (Decl d)) /\
+    (LET f15 (FTNode i m) = f15 (FTNode i m)) /\
+    (LET f16 <| fields := fs; ancestors := ancs |> =
+       let fs0 = fs in let ancs0 = ancs in
+         f16 <| fields := fs0; ancestors := ancs0 |>) /\
+    (LET f17 (CFnDefn b ty nm pms st) =
+       let b0 = b in let ty0 = ty in let nm0 = nm in let pms0 = pms in
+          f17 (CFnDefn b0 ty0 nm0 pms0 st)) /\
+    (LET f17 (FldDecl sf ty) = let ty0 = ty in let sf0 = sf in
+                                                 f17 (FldDecl sf0 ty0)) /\
+    (LET f18 Public = f18 Public) /\
+    (LET f19 (SFName str) = f19 (SFName str)) /\
+    (LET f20 (<| typemap := tm; tempmap := tm'; valmap := vm |>) =
+         f20 <| typemap := tm; tempmap := tm'; valmap := vm |>) /\
+    (LET f21 (Ret e) = f21 (Ret e)) /\
+    (LET f22 (VStrDec id ci) =
+       let id0 = id in let ci0 = ci in f22 (VStrDec id0 ci0)) /\
+    (LET f22 (VDec ty id) =
+       let id0 = id in let ty0 = ty in f22 (VDec ty0 id0)) /\
+    (LET f23 (Var id) = let id0 = id in f23 (Var id0))
+``,
   SRW_TAC [][LET_THM]);
 val _ = augment_srw_ss [rewrites [let_thms]]
 
-val t6_2_1 = let 
-  val t = ``NREL phase1 2 ^(mk_initial (rhs (concl t6_program_def))) (p,s)``
-  val th0 = SIMP_CONV (srw_ss()) [NREL_rwt, pairTheory.EXISTS_PROD, 
-                                  empty_p1_def, 
-                                  statesTheory.initial_state_def] t 
-  val th1 = SIMP_RULE (srw_ss()) [Once phase1_cases, NewGVar_def, LET_THM, 
-                                  state_NewGVar_def] th0
-  val th2 = SIMP_RULE (srw_ss()) [Once phase1_cases, 
-                                  phase1_fndefn_def, NewGVar_def] th1
-in 
-  th2
-end
-                      
-(* 
-
-CONV_RULE
-               (SIMP_CONV (srw_ss()) [open_classnode_def, LET_THM])
-               t6_2_0
-
-val t6_2_2 = CONV_RULE
-               (SIMP_CONV (srw_ss())
-                          [FieldDecls_def, fieldty_via_def,
-                           methodty_via_def, MethodDefs_def,
-                           injected_via_def, InjectedClasses_def,
-                           strip_CETemp_def,
-                           pairTheory.EXISTS_PROD,
-                           subobjs_thm, rsubobjs_thm,
-                           is_direct_base_def,
-                           cinfo_thm, cinfo0_thm,
-                           get_direct_bases_def,
-                           finite_mapTheory.FLOOKUP_DEF,
-                           defined_classes_thm, is_class_name_thm,
-                           is_class_name_env_def,
-                           RTC_class_lt_thm, is_virtual_base_def,
-                           get_virtual_bases_def])
-               t6_2_1
-
-
+val LET_CONG = prove(``(v = v') ==> (LET f v = LET f v')``, SRW_TAC [][])
 
 val RTC_REFL = prove(``RTC R x x``, SRW_TAC [][relationTheory.RTC_RULES])
 val pGSPEC_U = prove(
@@ -691,27 +714,175 @@ val pGSPEC_SING = prove(
 val pGSPEC_F = prove(
   ``GSPEC (\ (p,q). (f p q, F)) = {}``,
   SRW_TAC [][pred_setTheory.EXTENSION]);
-val _ = augment_srw_ss [rewrites [pGSPEC_F, pGSPEC_SING, pGSPEC_U,
-                                  pred_setTheory.INSERT_UNION_EQ,
-                                  okfield_def, RTC_REFL, fieldname_def,
-                                  fieldtype_def, FLOOKUP_DEF]]
-
-val t6_2_3 = SIMP_RULE (srw_ss() ++ DNF_ss) [] t6_2_2
-
 val setfn_2 = prove(
   ``~(x = y) ==> ({(x,u); (y,v)} ' x = u) /\
                  ({(x,u); (y,v)} ' y = v)``,
   SRW_TAC [][] THEN MATCH_MP_TAC SETFN_UNIQUE THEN
   SRW_TAC [][]);
 
-val t6_2_4 = SIMP_RULE (srw_ss()) [is_virtual_def,
-                                   RTC_class_lt_thm, cinfo_thm,
-                                   cinfo0_thm, setfn_2,
-                                   defined_classes_thm,
-                                   FAPPLY_FUPDATE_THM
-                                   ]
-             t6_2_3
+val setfn_1 = prove(``{(x,v)} ' x = v``,
+                    MATCH_MP_TAC SETFN_UNIQUE THEN SRW_TAC [][]);
 
-val t6_final = save_thm("t6_2_final", t6_2_4);
-*)
+val _ = augment_srw_ss [rewrites [pGSPEC_F, pGSPEC_SING, pGSPEC_U,
+                                  pred_setTheory.INSERT_UNION_EQ,
+                                  okfield_def, RTC_REFL, fieldname_def,
+                                  fieldtype_def, FLOOKUP_DEF, setfn_1]]
+
+
+val t6_2_1 = let
+  val t = ``NREL phase1 2 ^(mk_initial (rhs (concl t6_program_def))) (p,s)``
+  val th0 = SIMP_CONV (srw_ss()) [NREL_rwt, pairTheory.EXISTS_PROD,
+                                  empty_p1_def,
+                                  statesTheory.initial_state_def] t
+  val _ = print "0 "
+  val th1 = SIMP_RULE (srw_ss()) [Once phase1_cases, NewGVar_def, LET_THM,
+                                  state_NewGVar_def] th0
+  val _ = print "1 "
+  val th2 = SIMP_RULE (srw_ss()) [Once phase1_cases, Cong LET_CONG,
+                                  state_NewGVar_def,
+                                  phase1_fndefn_def, NewGVar_def] th1
+  val _ = print "2 "
+  val th3 = SIMP_RULE (srw_ss()) [open_path_thm, open_classnode_thm,
+                                  Cong LET_CONG, pairTheory.EXISTS_PROD,
+                                  fieldty_via_def, FieldDecls_def,
+                                  subobjs_thm, rsubobjs_thm,
+                                  defined_classes_thm, is_virtual_base_def,
+                                  is_direct_base_def, get_virtual_bases_def,
+                                  get_direct_bases_def, is_class_name_thm,
+                                  is_class_name_env_def, cinfo_thm,
+                                  cinfo0_thm,
+                                  RTC_class_lt_thm] th2
+  val _ = print "3 "
+  val th4 = SIMP_RULE (srw_ss()) [methodty_via_def, subobjs_thm, rsubobjs_thm,
+                                  defined_classes_thm, MethodDefs_def,
+                                  Cong LET_CONG, cinfo_thm, cinfo0_thm,
+                                  is_class_name_thm, is_class_name_env_def,
+                                  is_virtual_base_def,
+                                  is_direct_base_def, get_virtual_bases_def,
+                                  get_direct_bases_def, RTC_class_lt_thm] th3
+  val _ = print "4 "
+  val th5 = SIMP_RULE (srw_ss()) [injected_via_def, subobjs_thm, rsubobjs_thm,
+                                  defined_classes_thm, InjectedClasses_def,
+                                  Cong LET_CONG, cinfo_thm, cinfo0_thm,
+                                  is_class_name_thm, is_class_name_env_def,
+                                  is_virtual_base_def,
+                                  is_direct_base_def, get_virtual_bases_def,
+                                  get_direct_bases_def, RTC_class_lt_thm,
+                                  nested_class_def] th4
+  val _ = print "5 "
+  val th6 = SIMP_RULE (srw_ss() ++ CONJ_ss) [Cong LET_CONG] th5
+  val _ = print "6 "
+  val th7 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
+                                  pairTheory.EXISTS_PROD, open_path_thm,
+                                  fieldty_via_def, FieldDecls_def,
+                                  subobjs_thm, rsubobjs_thm,
+                                  defined_classes_thm, is_virtual_base_def,
+                                  is_direct_base_def, get_virtual_bases_def,
+                                  get_direct_bases_def, is_class_name_thm,
+                                  is_class_name_env_def, cinfo_thm,
+                                  cinfo0_thm, methodty_via_def, MethodDefs_def,
+                                  injected_via_def, InjectedClasses_def,
+                                  RTC_class_lt_thm] th6
+  val _ = print "7 "
+  val th8 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG, setfn_2] th7
+  val _ = print "8 "
+  val th9 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
+                                  pairTheory.EXISTS_PROD, open_path_thm,
+                                  fieldty_via_def, FieldDecls_def,
+                                  subobjs_thm, rsubobjs_thm,
+                                  defined_classes_thm, is_virtual_base_def,
+                                  is_direct_base_def, get_virtual_bases_def,
+                                  get_direct_bases_def, is_class_name_thm,
+                                  is_class_name_env_def, cinfo_thm,
+                                  cinfo0_thm, methodty_via_def, MethodDefs_def,
+                                  injected_via_def, InjectedClasses_def,
+                                  RTC_class_lt_thm] th8
+  val _ = print "9 "
+  val th10 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG] th9
+  val _ = print "10 "
+  val th11 = SIMP_RULE (srw_ss()) [is_virtual_def, Cong LET_CONG,
+                                   RTC_class_lt_thm, cinfo_thm, cinfo0_thm]
+             th10
+  val _ = print "11 "
+  val th12 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
+                                  pairTheory.EXISTS_PROD, open_path_thm,
+                                  fieldty_via_def, FieldDecls_def,
+                                  subobjs_thm, rsubobjs_thm,
+                                  defined_classes_thm, is_virtual_base_def,
+                                  is_direct_base_def, get_virtual_bases_def,
+                                  get_direct_bases_def, is_class_name_thm,
+                                  is_class_name_env_def, cinfo_thm,
+                                  cinfo0_thm, methodty_via_def, MethodDefs_def,
+                                  injected_via_def, InjectedClasses_def,
+                                  RTC_class_lt_thm, nested_class_def] th11
+  val _ = print "12 "
+  val th13 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG] th12
+  val _ = print "13 "
+  val th14 = SIMP_RULE (srw_ss() ++ CONJ_ss) [Cong LET_CONG] th13
+  val _ = print "14 "
+  val th15 = SIMP_RULE (srw_ss()) [Cong LET_CONG, FAPPLY_FUPDATE_THM] th14
+  val _ = print "15 "
+  val th16 = SIMP_RULE (srw_ss()) [Cong LET_CONG, newlocal_def] th15
+  val _ = print "16 "
+  val th17 = SIMP_RULE (srw_ss()) [Cong LET_CONG, expr_type_rewrites,
+                                   lookup_type_def, lift_lookup_def,
+                                   elookup_type_def] th16
+  val _ = print "17 "
+  val th18 = SIMP_RULE (srw_ss() ++ CONJ_ss) [Cong LET_CONG] th17
+  val _ = print "18 "
+  val th19 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
+                                  pairTheory.EXISTS_PROD, open_path_thm,
+                                  fieldty_via_def, FieldDecls_def,
+                                  subobjs_thm, rsubobjs_thm,
+                                  defined_classes_thm, is_virtual_base_def,
+                                  is_direct_base_def, get_virtual_bases_def,
+                                  get_direct_bases_def, is_class_name_thm,
+                                  is_class_name_env_def, cinfo_thm,
+                                  cinfo0_thm, methodty_via_def, MethodDefs_def,
+                                  injected_via_def, InjectedClasses_def,
+                                  RTC_class_lt_thm, nested_class_def] th18
+  val _ = print "19 "
+  val th20 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG, setfn_2] th19
+  val _ = print "20 "
+  val th21 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
+                                  pairTheory.EXISTS_PROD, open_path_thm,
+                                  fieldty_via_def, FieldDecls_def,
+                                  subobjs_thm, rsubobjs_thm,
+                                  defined_classes_thm, is_virtual_base_def,
+                                  is_direct_base_def, get_virtual_bases_def,
+                                  get_direct_bases_def, is_class_name_thm,
+                                  is_class_name_env_def, cinfo_thm,
+                                  cinfo0_thm, methodty_via_def, MethodDefs_def,
+                                  injected_via_def, InjectedClasses_def,
+                                  RTC_class_lt_thm, nested_class_def] th20
+  val _ = print "21 "
+  val th22 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG] th21
+  val _ = print "22 "
+  val th23 = SIMP_RULE (srw_ss()) [is_virtual_def, Cong LET_CONG,
+                                   RTC_class_lt_thm, cinfo_thm, cinfo0_thm]
+             th22
+  val _ = print "23 "
+  val th24 = SIMP_RULE (srw_ss()) [Cong LET_CONG, open_classnode_thm,
+                                  pairTheory.EXISTS_PROD, open_path_thm,
+                                  fieldty_via_def, FieldDecls_def,
+                                  subobjs_thm, rsubobjs_thm,
+                                  defined_classes_thm, is_virtual_base_def,
+                                  is_direct_base_def, get_virtual_bases_def,
+                                  get_direct_bases_def, is_class_name_thm,
+                                  is_class_name_env_def, cinfo_thm,
+                                  cinfo0_thm, methodty_via_def, MethodDefs_def,
+                                  injected_via_def, InjectedClasses_def,
+                                  RTC_class_lt_thm, nested_class_def] th23
+  val _ = print "24 "
+  val th25 = SIMP_RULE (srw_ss() ++ DNF_ss) [Cong LET_CONG] th24
+  val _ = print "25 "
+  val th26 = SIMP_RULE (srw_ss() ++ CONJ_ss) [Cong LET_CONG] th25
+  val _ = print "26 "
+  val th27 = SIMP_RULE (srw_ss()) [Cong LET_CONG, mk_dynobj_id_def,
+                                   FAPPLY_FUPDATE_THM] th26
+  val _ = print "27\n"
+in
+  save_thm("t6_final", SIMP_RULE (srw_ss()) [LET_THM] th27)
+end
+
 val _ = export_theory()
