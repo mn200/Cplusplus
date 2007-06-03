@@ -15,6 +15,7 @@ in end
 
 (* C++ ancestor theories  *)
 open statesTheory aggregatesTheory instantiationTheory
+     name_resolutionTheory
 
 val _ = new_theory "templates"
 
@@ -42,11 +43,11 @@ val id_tcalls_def = Define`
   (id_tcalls b sfs [] last =
      case last of
         SFName _ -> {}
-     || SFTempCall s targs -> {(IDConstant b sfs (SFName s), targs)}) /\
+     || SFTempCall s targs -> {IDConstant b sfs last}) /\
   (id_tcalls b sfs (h :: t) last =
      case h of
         SFName _ -> id_tcalls b (sfs ++ [h]) t last
-     || SFTempCall s targs -> (IDConstant b sfs (SFName s), targs) INSERT
+     || SFTempCall s targs -> (IDConstant b sfs h) INSERT
                               id_tcalls b (sfs ++ [h]) t last)
 `;
 
@@ -284,7 +285,144 @@ val _ = export_rewrites ["extdecl_ttypes_def"]
 
    This means that we need to do things slightly differently.
 
+   The transformation process takes "states" to "states", where a
+   state couples a phase-1 state with a pair of lists of declarations:
+   the ground declarations and the template declarations.  After the
+   program's actual declarations are read in, only the ground
+   declaration list can grow.
+
+   The Basic Loop is 
+
+     1. scan ground declarations for a reference to a type that has
+        not got an exact declaration in the pattern list.  Get the
+        appropriate instantiation of this type, and add it to the
+        ground declaraiton list.  (Only add the class declaration;
+        don't include any member definitions.)
+
+        Put it into the namespace belonging to the argument types, and
+        use phase1 analysis to resolve any free names.
+
+     2. scan the ground declarations for references to undefined
+        functions or static member objects.  For each such,
+        instantiate, adding to the appropriate namespace as before.
+
+     REPEAT until quiescent.
+        
 *)
+
+(* restricts an instantiation to be with respect to a particular set of 
+   free varirables *)
+val _ = set_fixity "only_changes" (Infixl 500)
+val only_changes_def = Define`
+  inst only_changes frees = 
+    !id. DISJOINT (cppidfrees id) frees ==> 
+         (cppID_inst inst id = SOME id)
+`;
+
+val targsfrees_def = Define`
+  targsfrees talist = FOLDL (\a ta. tafrees ta UNION a) {} talist
+`;
+
+
+(* "returns" the uninstantiated cinfo for the given class identifier *)
+val best_class_match_def = Define`
+  best_class_match Temps id sub (id', ci) =
+    (?targs. (cppID_inst sub id' = SOME id) /\
+             MEM (TemplateDef targs (Decl (VStrDec id' ci))) Temps /\
+             sub only_changes targsfrees targs) /\
+    !id2 ci2 sub2 targs.  
+        MEM (TemplateDef targs (Decl (VStrDec id2 ci2))) Temps /\
+        sub2 only_changes targsfrees targs /\
+        (cppID_inst sub2 id2 = SOME id) ==>
+        ?sub'. (cppID_inst sub' id2 = SOME id') /\
+               sub' only_changes targsfrees targs
+`;
+
+
+val declared_type_def = Define`
+  (declared_type (Decl (VStrDec id ci)) = {id}) /\
+  (declared_type x = {})
+`
+val _ = export_rewrites ["declared_type_def"]
+
+val declared_types_def = Define`
+  (declared_types [] = {}) /\
+  (declared_types (e::es) = declared_type e UNION declared_types es)
+`;
+val _ = export_rewrites ["declared_types_def"]
+
+val used_ttypes_def = Define`
+  used_ttypes pats decls = 
+      { id | ?d id' ci sub targs. 
+               MEM d decls /\
+               id IN extdecl_ttypes d /\
+               MEM (TemplateDef targs (Decl (VStrDec id' ci))) pats /\
+               sub only_changes targsfrees targs /\
+               (cppID_inst sub id' = SOME id) }
+`;
+
+(* removes function bodies, turning them into  *)
+val strip_centry_defn = Hol_defn "strip_centry" `
+  (strip_centry cnm (CFnDefn virtp retty sf pms (SOME (SOME body))) = 
+     (CFnDefn virtp retty sf pms NONE, 
+      [FnDefn retty (mk_member cnm sf) pms body])) /\
+  (strip_centry cnm (NClass sf (SOME ci)) = 
+     let (ci', ds) = strip_cinfo (mk_member cnm sf) ci
+     in
+       (NClass sf (SOME ci'), ds)) /\
+  (strip_centry cnm (CETemplateDef targs (NClass (SFName s) (SOME ci))) = 
+     let (ci',ds) = strip_cinfo (mk_member cnm (SFTempCall s targs)) ci
+     in
+       (CETemplateDef targs (NClass (SFName s) (SOME ci')), ds)) /\
+  (strip_centry cnm (CETemplateDef targs 
+                                   (CFnDefn virtp retty sf pms 
+                                            (SOME (SOME body)))) = 
+     (CETemplateDef targs (CFnDefn virtp retty sf pms NONE), 
+      [TemplateDef targs (FnDefn retty (mk_member cnm sf) pms body)])) /\
+  (strip_centry cnm x = (x, [])) /\
+
+  (strip_cinfo cnm ci = 
+     let (flds, ds) = FOLDL (\ (ces,ds) (ce,b,p). 
+                               let (ce',ds0) = strip_centry cnm ce
+                               in
+                                 (ces ++ [(ce',b,p)], ds ++ ds0))
+                            ([], [])
+                            ci.fields
+     in
+       (ci with fields := flds, ds))
+`
+
+val (strip_centry_def, strip_centry_ind) = Defn.tprove(
+  strip_centry_defn,
+  WF_REL_TAC `measure (\s. case s of INL (cnm, ce) -> class_entry_size ce
+                                  || INR (cnm, ci) -> class_info_size ci)` THEN
+  SRW_TAC [ARITH_ss][] THEN 
+  Cases_on `ci` THEN FULL_SIMP_TAC (srw_ss()) [] THEN 
+  Induct_on `l` THEN SRW_TAC [][] THEN
+  FULL_SIMP_TAC (srw_ss() ++ ARITH_ss) []);
+val _ = save_thm("strip_centry_def", strip_centry_def)
+val _ = save_thm("strip_centry_ind", strip_centry_ind)
+val _ = export_rewrites ["strip_centry_def"]
+
+
+val template_phase1_def = Define`
+  template_phase1 pats (ps0, grds0) (ps, grds) = 
+    ?id id' sub ci0 stripped_ci final_ci. 
+      id IN used_ttypes pats grds0 /\
+      ~(id IN declared_types grds0) /\
+      best_class_match pats id sub (id', ci0) /\
+      phase1 (P1Decl (
+        
+
+    case FINDL (\d. ?tid sub id ci. 
+                      tid IN extdecl_ttypes d /\
+                      best_class_match pats tid sub (id,ci) /\
+                      !ci'. 
+                             
+  
+
+
+(*
 
 val _ = Hol_datatype `inststate = Running of 'a | Done of 'b | Failed`
 val _ = Hol_datatype `instneed_type = NeedFn | NeedVr`
@@ -760,15 +898,6 @@ val setmax_unique = store_thm(
     METIS_TAC []
   ]);
 
-(* "returns" the uninstantiated cinfo for the given class identifier *)
-val best_class_match_def = Define`
-  best_class_match Temps id sub (id', ci) =
-    (cppID_inst sub id' = SOME id) /\
-    Decl (VStrDec id' ci) IN Temps /\
-    !id2 ci2 sub2.  Decl (VStrDec id2 ci2) IN Temps /\
-                    (cppID_inst sub2 id2 = SOME id) ==>
-                    ?sub'. cppID_inst sub' id2 = SOME id'
-`;
 
 (* "returns" the uninstantiated decl for the given function identifier *)
 val best_function_match_def = Define`
@@ -1111,7 +1240,7 @@ val program_instantiate_def = Define`
 `;
 
 
-
+*)
 
 val _ = export_theory();
 
