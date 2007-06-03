@@ -443,11 +443,11 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 (* RULE-ID: decl-vdec-nonclass *)
 (!s0 ty name s.
-     vdeclare s0 ty (Base name) s /\
+     vdeclare s0 ty name s /\
      object_type ty /\
      ~class_type (strip_array ty)
    ==>
-     declmng mng (VDec ty (Base name), s0) ([], s))
+     declmng mng (VDec ty name, s0) ([], s))
 
    /\
 
@@ -468,7 +468,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (!s0 s a name cnm ty subdecls sz.
      (strip_array ty = Class cnm) /\
      array_type ty /\
-     vdeclare s0 ty (Base name) s /\
+     vdeclare s0 ty name s /\
      sizeof T (sizeofmap s0) (Class cnm) sz /\
      (subdecls =
        GENLIST (\n. VDecInitA
@@ -480,8 +480,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                                 base_se)))
                (array_size ty))
    ==>
-     declmng mng (VDec ty (Base name), s0)
-                 (subdecls, s))
+     declmng mng (VDec ty name, s0) (subdecls, s))
 
    /\
 
@@ -501,11 +500,11 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    declaration of a object. *)
 (!s0 ty cnm name args s1 a pth.
      (ty = Class cnm) /\
-     vdeclare s0 (Class cnm) (Base name) s1 /\
-     (SOME (a,pth) = lookup_addr s1 (Base name))
+     vdeclare s0 (Class cnm) name s1 /\
+     (SOME (a,pth) = lookup_addr s1 name)
    ==>
      declmng mng
-             (VDecInit ty (Base name) (DirectInit0 args),
+             (VDecInit ty name (DirectInit0 args),
               s0)
              ([VDecInitA ty
                          (ObjPlace a)
@@ -551,24 +550,24 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    copy-initialisation *)
 (!s0 ty name arg s a pth loc.
      (!cnm. ~(ty = Class cnm)) /\
-     vdeclare s0 ty (Base name) s /\
-     (SOME (a,pth) = lookup_addr s (Base name)) /\
-     (loc = if ref_type ty then RefPlace NONE (Base name) else ObjPlace a)
+     vdeclare s0 ty name s /\
+     (SOME (a,pth) = lookup_addr s name) /\
+     (loc = if ref_type ty then RefPlace NONE name else ObjPlace a)
    ==>
      declmng mng
-             (VDecInit ty (Base name) (DirectInit0 [arg]), s0)
+             (VDecInit ty name (DirectInit0 [arg]), s0)
              ([VDecInitA ty loc (CopyInit (mExpr arg base_se))], s))
 
    /\
 
 (* RULE-ID: decl-vdecinit-start-evaluate-copy *)
 (!s0 ty name arg s a pth loc.
-     vdeclare s0 ty (Base name) s /\
-     (SOME (a,pth) = lookup_addr s (Base name)) /\
-     (loc = if ref_type ty then RefPlace NONE (Base name) else ObjPlace a)
+     vdeclare s0 ty name s /\
+     (SOME (a,pth) = lookup_addr s name) /\
+     (loc = if ref_type ty then RefPlace NONE name else ObjPlace a)
    ==>
      declmng mng
-             (VDecInit ty (Base name) (CopyInit arg), s0)
+             (VDecInit ty name (CopyInit arg), s0)
              ([VDecInitA ty loc (CopyInit arg)], s))
 
    /\
