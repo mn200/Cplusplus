@@ -1368,6 +1368,26 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
      phase1 (P1Decl (TemplateDef targs (FnDefn retty fnm pms body)) :: ds, s)
             (ds, phase1_fndefn tafs retty fnm pms body s))
 
+   /\
+  
+  (* RULE-ID: [phase1-decl-template-instantiation] *)
+  (* explicit instantiation declarations can be almost entirely ignored *)
+  (!s id id' ds.
+     (id' = if is_abs_id id then id 
+            else 
+              let h = IDhd id in
+              let str = sfld_string h 
+              in
+                if str IN FDOM s.dynclasses then 
+                  idattach_locn (s.dynclasses ' str) id
+                else if is_qualified id then 
+                  idattach_locn (T, MAP SFName (s.dynns ' str), []:bool list) id
+                else
+                  idattach_locn (s.dynobjs ' str) id)
+   ==>
+     phase1 (P1Decl (TemplateInst id) :: ds, s) 
+            (ds, s with accdecls := (s.accdecls ++ [TemplateInst id'])))
+
 `;
 
 val _ = export_theory ()

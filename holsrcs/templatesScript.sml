@@ -140,11 +140,6 @@ val expr_ttypes_def = Define`
   (expropt_ttypes (SOME e) = expr_ttypes e)
 `;
 
-val mem_init_id_ttypes_def = Define`
-  (mem_init_id_ttypes (MI_C cnm) = cidttypes cnm) /\
-  (mem_init_id_ttypes (MI_fld s) = {})
-`;
-
 (* what template calls are made inside a statement?
    This question is only asked of forms that are
    entirely ground, and have had their names resolved  *)
@@ -201,7 +196,7 @@ val stmt_ttypes_defn = Defn.Hol_defn "stmt_ttypes" `
      FOLDL (\a (nm,ty). a UNION ttypes ty) {} params UNION
      (case bodyopt of NONE -> {} || SOME st -> stmt_ttypes st) UNION
      FOLDL (\a (memid, argsopt).
-              a UNION mem_init_id_ttypes memid UNION
+              a UNION cidttypes memid UNION
               exprlopt_ttypes argsopt)
            {} meminits) /\
   (centry_ttypes (Destructor virtp bodyopt) =
@@ -255,7 +250,8 @@ val extdecl_ttypes_defn = Defn.Hol_defn "extdecl_ttypes" `
        centry_ttypes (Destructor T (SOME body))
      else {}) /\
   (extdecl_ttypes (NameSpace n edecs) =
-     FOLDL (\a ed. a UNION extdecl_ttypes ed) {} edecs)
+     FOLDL (\a ed. a UNION extdecl_ttypes ed) {} edecs) /\
+  (extdecl_ttypes (TemplateInst id) = cidttypes id)
 `;
 
 val (extdecl_ttypes_def, extdecl_ttypes_ind) = Defn.tprove(
