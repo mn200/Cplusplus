@@ -322,9 +322,24 @@ val realise_destructor_calls_def = Define`
 `;
 
 
+val _ = new_constant("typeid_info", ``:state -> CPP_Type -> CExpr -> bool``)
 
+val type_info_cnm_def = Define`
+  type_info_cnm = IDConstant T [SFName "std"] (SFName "type_info")
+`;
 
-
+val typeid_info_characterised = new_axiom(
+  "typeid_info_characterised",
+  ``!s ty e.
+      typeid_info s ty e ==>
+      (?a p id.
+         (e = LVal a (Class id) p) /\
+         ((id = type_info_cnm) /\ (p = [id])
+               \/
+          (s,{}) |- path id to type_info_cnm via p)) /\
+      !ty2. ~(ty = ty2) ==> ~typeid_info s ty2 e``);
+(* would be nice to have a description of the functions supported by
+   ::std::type_info here *)
 
 val return_cont_def = Define`
   return_cont se ty = if ref_type ty then LVC I se
@@ -774,6 +789,56 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ~(range_set a sz SUBSET s.initmap))
    ==>
      ^mng (mExpr (PostInc (LVal a t [])) se0) s (s, ev UndefinedExpr se0))
+
+   /\
+
+(* RULE-ID: typeid-expr-polymorphic-lvalue-evaluates *)
+(!e0 se0 s0 s e se cnm.
+     ^mng (mExpr e0 se0) s0 (s, mExpr e se) /\
+     expr_type s0 LValue e0 (Class cnm) /\
+     polymorphic s0 cnm
+   ==>
+     ^mng (mExpr (ExpTypeID e0) se0) s0
+          (s, mExpr (ExpTypeID e) se))
+
+   /\
+
+(* RULE-ID: typeid-expr-polymorphic-lvalue-completes *)
+(!s a p cnm se type_value.
+     polymorphic s cnm /\
+     typeid_info s (Class cnm) type_value
+   ==>
+     ^mng (mExpr (ExpTypeID (LVal a (Class cnm) p)) se) s
+          (s, mExpr type_value se))
+
+   /\
+
+(* RULE-ID: typeid-expr-non-polymorphic-lvalue-completes *)
+(!s e ty se type_value.
+     expr_type s LValue e ty /\
+     typeid_info s ty type_value /\
+     (!cnm. (ty = Class cnm) ==> ~polymorphic s cnm)
+   ==>
+     ^mng (mExpr (ExpTypeID e) se) s (s, mExpr type_value se))
+
+   /\
+
+(* RULE-ID: typeid-expr-rvalue-completes *)
+(!s e ty se type_value.
+     expr_type s RValue e ty /\
+     (!ty. ~expr_type s LValue e ty) /\
+     typeid_info s ty type_value
+   ==>
+     ^mng (mExpr (ExpTypeID e) se) s (s, mExpr type_value se))
+
+   /\
+
+(* RULE-ID: typeid-type-completes *)
+(!s ty ty0 se type_value.
+     typeid_info s ty0 type_value /\
+     (ty0 = if ref_type ty then (@ty0. ty = Ref ty0) else ty)
+   ==>
+     ^mng (mExpr (TyTypeID ty) se) s (s, mExpr type_value se))
 
    /\
 

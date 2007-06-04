@@ -1233,6 +1233,9 @@ val expr_inst_def = Define`
      OPTION_MAP (CApUnary cuop) (expr_inst sigma e)) /\
   (expr_inst sigma (Addr e) = OPTION_MAP Addr (expr_inst sigma e)) /\
   (expr_inst sigma (Deref e) = OPTION_MAP Deref (expr_inst sigma e)) /\
+  (expr_inst sigma (ExpTypeID e) =
+     OPTION_MAP ExpTypeID (expr_inst sigma e)) /\
+  (expr_inst sigma (TyTypeID ty) = OPTION_MAP TyTypeID (type_inst sigma ty)) /\
   (expr_inst sigma (MemAddr cid fld) =
      OP2CMB MemAddr (cppID_inst sigma cid) (sfld_inst sigma fld)) /\
   (expr_inst sigma (Assign bopopt e1 e2) =
@@ -1476,7 +1479,7 @@ val extdecl_inst_defn = Defn.Hol_defn "extdecl_inst" `
      OP2CMB ClassDestDef (cppID_inst sub cnm) (stmt_inst sub body)) /\
   (extdecl_inst sub (NameSpace s edecs) =
      OPTION_MAP (NameSpace s) (olmap (extdecl_inst sub) edecs)) /\
-  (extdecl_inst sub (TemplateDef targs ed) = 
+  (extdecl_inst sub (TemplateDef targs ed) =
      SOME (TemplateDef targs ed))
 `
 

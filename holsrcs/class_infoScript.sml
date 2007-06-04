@@ -800,4 +800,10 @@ val is_abstract_def = Define`
                (cinfo s b').fields
 `;
 
+(* polymorphic - as per 10.3 *)
+val polymorphic_def = Define`
+  polymorphic s cnm = ?fnm retty ptys. is_virtual s cnm fnm retty ptys
+`;
+
+
 val _ = export_theory();

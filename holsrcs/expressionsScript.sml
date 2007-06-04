@@ -52,6 +52,10 @@ val _ = Hol_datatype
          | PostInc of CExpr
          | New of CPP_Type => CExpr list option
 
+           (* two different forms of the typeid operator *)
+         | ExpTypeID of CExpr
+         | TyTypeID of CPP_Type
+
          (* these are "fake expression constructors" *)
 
 
@@ -135,6 +139,8 @@ val rec_expr_P_def = Define`
     (rec_expr_P (FnApp_sqpt e args) P =
       P (FnApp_sqpt e args) /\ rec_expr_P e P /\ rec_exprl_P args P) /\
     (rec_expr_P (LVal a t p) P = P (LVal a t p)) /\
+    (rec_expr_P (ExpTypeID e) P = P (ExpTypeID e) /\ rec_expr_P e P) /\
+    (rec_expr_P (TyTypeID t) P = P (TyTypeID t)) /\
     (rec_expr_P (FVal fnid ty eopt) P =
        P (FVal fnid ty eopt) /\ rec_expr_opt eopt P) /\
     (rec_expr_P (RValreq e) P = P (RValreq e) /\ rec_expr_P e P) /\
