@@ -1006,14 +1006,23 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: constructor-function-call *)
-(!cnm mdp subp pdecls a args se0 params s0 mem_inits this body cpfx.
+(!cnm mdp subp pdecls a args se0 params s0 mem_inits this body newstmt cpfx.
      find_constructor_info s0 cnm args params mem_inits body /\
      (pdecls = MAP (\ ((n,ty),a). VDecInit ty
                                            (Base n)
                                            (CopyInit (mExpr a base_se)))
                    (ZIP (params, args))) /\
      (SOME this = ptr_encode s0 a (Class cnm) [cnm]) /\
-     (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits)
+     (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits) /\
+     (newstmt =
+        if is_catch body then
+          let (bod,handlers) = dest_catch body
+          in
+            Block T pdecls [Catch (Block F cpfx [bod])
+                                  (MAP (\ (e,st).
+                                          (e, Block F [] [st; Throw NONE]))
+                                       handlers)]
+        else Block T (pdecls ++ cpfx) [body])
    ==>
      ^mng (mExpr (FnApp_sqpt (ConstructorFVal mdp subp a cnm) args) se0)
           s0
@@ -1021,8 +1030,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                       stack updated_by (CONS (s0.env, s0.thisvalue)) ;
                       blockclasses updated_by stackenv_newscope ;
                       exprclasses updated_by stackenv_newscope |>,
-           EStmt (Block T (pdecls ++ cpfx) [body])
-                 (RVC (\e. ConstructedVal subp a cnm) se0)))
+           EStmt newstmt (RVC (\e. ConstructedVal subp a cnm) se0)))
 
    /\
 

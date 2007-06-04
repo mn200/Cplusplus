@@ -311,6 +311,14 @@ val exception_stmt_def = Define`
   (exception_stmt s = F)
 `;
 
+val is_catch_def = Define`
+  (is_catch (Catch st handlers) = T) /\
+  (is_catch st = F)
+`;
+val dest_catch_def = Define`
+  dest_catch (Catch st handlers) = (st,handlers)
+`;
+
 (* external declarations can appear at the top level of a translation unit *)
 val _ = Hol_datatype`
   ext_decl = FnDefn of CPP_Type => CPP_ID => (string # CPP_Type) list =>
