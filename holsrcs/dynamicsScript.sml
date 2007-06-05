@@ -420,7 +420,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      ^mng (mExpr (Cnullptr t) se) s
-          (s, ev (ECompVal (THE (ptr_encode s 0 t (default_path t)))
+          (s, ev (ECompVal (THE (ptr_encode s 0 t (SND (default_path t))))
                            (Ptr t))
                  se))
 
@@ -435,10 +435,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: var-to-lvalue *)
-(!vname ty se s a p.
-     (lookup_type s vname = SOME ty) /\
-     object_type ty /\
-     (lookup_addr s vname = SOME (a,p))
+(!vname cnm ty ty0 se s a p.
+     (lookup_type s vname = SOME ty0) /\
+     object_type ty0 /\
+     (lookup_addr s vname = SOME (a,cnm,p)) /\
+     (ty = if class_type ty0 then Class cnm else ty0)
    ==>
      ^mng (mExpr (Var vname) se) s
           (s, ev (LVal a ty p) se))
@@ -728,7 +729,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ((item cenv).info = SOME (cinfo, userdefs)) /\
      MEM (FldDecl fldname ty, T, prot) cinfo.fields /\
      (lookup_addr s (mk_member cname fldname) = SOME (addr, pth)) /\
-     (SOME ptrval = ptr_encode s addr ty pth)
+     (SOME ptrval = ptr_encode s addr ty (SND pth))
    ==>
      ^mng (mExpr (MemAddr cname fldname) se) s
           (s, ev (ECompVal ptrval (Ptr ty)) se))
@@ -873,15 +874,16 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      ^mng (mExpr (SVar (LVal a (Class cnm1) p) fldid) se) s
           (s, ev (LVal (a + subobj_offset s (cnm1, p ^ p') + offn) ty
-                       (default_path ty)) se))
+                       (SND (default_path ty))) se))
 
    /\
 
 (* RULE-ID: static-data-member-field-selection *)
-(!s se cnm1 p p' fldid ty a statpath.
+(!s se cnm cnm1 p p' fldid ty0 ty a statpath.
      (s,{}) |- path (LAST p) to (class_part fldid) via p' /\
-     (s,{}) |- LAST p' has least (IDtl fldid) -: (ty, T) via [LAST p'] /\
-     (lookup_addr s fldid = SOME (a, statpath))
+     (s,{}) |- LAST p' has least (IDtl fldid) -: (ty0, T) via [LAST p'] /\
+     (lookup_addr s fldid = SOME (a, cnm, statpath)) /\
+     (ty = if class_type ty0 then Class cnm else ty0) 
    ==>
      ^mng (mExpr (SVar (LVal a (Class cnm1) p) fldid) se) s
           (s, ev (LVal a ty statpath) se))
