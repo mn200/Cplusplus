@@ -58,9 +58,9 @@ val _ = Hol_datatype`
   class_envinfo = <|
     (* ironically, the location of the static variables is only available
        dynamically, as classes are initialised *)
-    statvars : string |-> addr # CPP_ID list ;
+    statvars : string |-> addr # CPP_ID # CPP_ID list ;
     info     : state_class_info ;
-    refs     : string # addr |-> addr # CPP_ID list
+    refs     : string # addr |-> addr # CPP_ID # CPP_ID list
 |>`
 val empty_class_envinfo_def = Define`
   empty_class_envinfo = <| statvars := FEMPTY; info := NONE; refs := FEMPTY |>
@@ -69,7 +69,7 @@ val empty_class_envinfo_def = Define`
 val _ = type_abbrev ("class_env", ``:(StaticField,class_envinfo)fmaptree``)
 
 val _ = Hol_datatype`
-  envinfo = <| varmap   : string |-> addr # CPP_ID list ;
+  envinfo = <| varmap   : string |-> addr # CPP_ID # CPP_ID list ;
                typemap  : StaticField |-> CPP_Type ;
                classenv : StaticField |-> class_env
 |>`;

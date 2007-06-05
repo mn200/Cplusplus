@@ -15,12 +15,12 @@ val _ = Hol_datatype `basic_integral_type = Char | Short | Int | Long`;
 val _ = Hol_datatype `
 
    (* a CPP_ID may denote a type or an object *)
-   CPP_ID = IDConstant of bool => StaticField list => StaticField
+   CPP_ID = IDConstant of bool => IDComp list => IDComp
 
    ;
 
-   StaticField = SFTempCall of string => TemplateArg list
-               | SFName of string
+   IDComp = IDTempCall of string => TemplateArg list
+               | IDName of string
 
    ;
 
@@ -65,6 +65,11 @@ val _ = Hol_datatype `
      TypeID of CPP_ID
 `;
 val _ = export_rewrites [ "CPP_ID_size_def" ]
+
+(* for backwards compatibility *)
+val _ = type_abbrev ("StaticField", ``:IDComp``)
+val _ = overload_on ("SFName", ``IDName``)
+val _ = overload_on ("SFTempCall", ``IDTempCall``)
 
 val Base_def = Define`
   Base n = IDConstant F [] (SFName n)

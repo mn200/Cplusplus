@@ -275,7 +275,7 @@ val cppid_non_typeid = store_thm(
     ?nm. (id = IDConstant F [] (SFName nm)) /\ (s.typemap nm = ty)``,
   IDC_TAC `id` THEN SRW_TAC [][] THEN
   Cases_on `b` THEN FSRW_TAC [IDhd_inst_EQ_SOME] THEN
-  SRW_TAC [][] THEN FSRW_TAC [] THEN Cases_on `S'` THEN
+  SRW_TAC [][] THEN FSRW_TAC [] THEN Cases_on `I'` THEN
   FSRW_TAC [olmap_EQ_SOME]);
 
 val SNOC_11 = store_thm(
@@ -296,8 +296,8 @@ val cppid_inst_lemma = prove(
     FSRW_TAC [] THEN SRW_TAC [][],
     Cases_on `l` THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
     FSRW_TAC [IDhd_inst_EQ_SOME] THEN SRW_TAC [][] THENL [
-      Cases_on `S'` THEN FSRW_TAC [],
-      Cases_on `S'` THEN FSRW_TAC [] THEN SRW_TAC [][],
+      Cases_on `I'` THEN FSRW_TAC [],
+      Cases_on `I'` THEN FSRW_TAC [] THEN SRW_TAC [][],
       FSRW_TAC [] THEN SRW_TAC [][],
       FSRW_TAC [] THEN SRW_TAC [][]
     ],
@@ -683,7 +683,7 @@ val cppidinst_sz_EQ_1 = store_thm(
     SRW_TAC [][DECIDE ``2n <= x + 1 = 1 <= x``, one_leq_sfldinst_sz],
     SRW_TAC [][EQ_IMP_THM] THEN SRW_TAC [][] THEN
     Cases_on `l` THEN FSRW_TAC [] THENL [
-      Cases_on `S'` THEN FSRW_TAC [] THEN
+      Cases_on `I'` THEN FSRW_TAC [] THEN
       POP_ASSUM MP_TAC THEN
       Q.MATCH_ABBREV_TAC `(x = 1n) ==> F` THEN
       Q_TAC SUFF_TAC `2 <= x` THEN1 DECIDE_TAC THEN
@@ -692,7 +692,7 @@ val cppidinst_sz_EQ_1 = store_thm(
       Q.MATCH_ABBREV_TAC `(x = 1n) ==> F` THEN
       Q_TAC SUFF_TAC `2 <= x` THEN1 DECIDE_TAC THEN
       Q.UNABBREV_ALL_TAC THEN MATCH_MP_TAC LEQ_FOLDL_I THEN
-      Q.SPEC_THEN `S'` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
+      Q.SPEC_THEN `I'` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
       Q.SPEC_THEN `h` MP_TAC (GEN_ALL one_leq_sfldinst_sz) THEN
       DECIDE_TAC
     ]
@@ -1155,7 +1155,7 @@ val type_match_size_eq_renaming = store_thm(
                     DECIDE_TAC) THEN
       SRW_TAC [][renaming_upto_def, tempfree_sing_def],
       FSRW_TAC [] THEN
-      Cases_on `id1` THEN FSRW_TAC [] THEN Cases_on `S'` THEN
+      Cases_on `id1` THEN FSRW_TAC [] THEN Cases_on `I'` THEN
       FSRW_TAC [] THENL [
         SRW_TAC [][] THEN FSRW_TAC [] THEN SRW_TAC [][] THEN
         FSRW_TAC [] THEN SRW_TAC [][] THEN

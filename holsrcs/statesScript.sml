@@ -154,8 +154,7 @@ val _ = new_constant(
   ``:state -> num -> CPP_Type -> CPP_ID list -> byte list option``)
 
 val default_path_def = Define`
-  (default_path (Class cn) = [cn]) /\
-  (default_path otherwise = [])
+  (default_path (Class cn) = (cn, [cn]))
 `;
 
 

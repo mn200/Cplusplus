@@ -38,7 +38,7 @@ val lval2rval_def = Define`
           \/
               (?sz t' bytes.
                   (t = Array t' sz) /\ (se0 = se) /\
-                  (SOME bytes = ptr_encode s n t' (default_path t')) /\
+                  (SOME bytes = ptr_encode s n t' (SND (default_path t'))) /\
                   (e = ECompVal bytes (Ptr t'))))
 `
 
@@ -618,7 +618,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      (if class_type ty1 then
         (s0,{}) |- dest_class ty1 casts p into p'
       else (p' = p)) /\
-     (s = new_addr_binding refnm aopt (a,p') s0)
+     (s = new_addr_binding refnm aopt (a,dest_class ty2,p') s0)
    ==>
      declmng mng
              (VDecInitA (Ref ty1)
