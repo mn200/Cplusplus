@@ -46,58 +46,49 @@ val _ = Hol_datatype`
               | SubObjConstruct of construction_locn
 `;
 
-val _ = Hol_datatype
-  `state = <| allocmap : addr -> bool ;
-                         (* the set of stack-allocated addresses *)
+val _ = Hol_datatype `
+   state = <| 
+     allocmap : addr -> bool ;  (* the set of stack-allocated addresses *)
+     hallocmap: addr -> bool ;  (* the set of heap-allocated addresses *)
+     constmap : addr -> bool ;  (* the set of read-only addresses *)
+     initmap  : addr -> bool ;  (* the set of initialised addresses *)
 
-              hallocmap: addr -> bool ;
-                         (* the set of heap-allocated addresses *)
+     fnmap    : fnid |-> fn_info ;
+                (* map from function 'names' to type information about
+                   the given functions *)
+     fnencode : fnid |-> byte list ;
+                (* map encoding function 'name' as a byte sequence
+                   so that its address can be stored in memory *)
+     fndecode : byte list |-> fnid ;
+                (* map inverting fnencode *)
 
+     genv: environment ; (* non-local environment *)
+     env : environment ; (* local version of the above *)
 
-              constmap : addr -> bool ;
-                         (* the set of read-only addresses *)
+     locmap   : addr -> byte ;
+                (* memory.  Domain might also be ( void * ) words *)
 
-              fnmap    : fnid |-> fn_info ;
-                         (* map from function 'names' to type information about
-                            the given functions *)
+     stack    : (environment #CExpr option) list ;
+                (* stack of environment and this info.  Updated
+                   as blocks are entered and left *)
 
-              fnencode : fnid |-> byte list ;
-                         (* map encoding function 'name' as a byte sequence
-                            so that its address can be stored in memory *)
+     thisvalue: CExpr option ;
+                (* the value (i.e., this will always be an ECompVal
+                   with a pointer value) of the this expression *)
 
-              fndecode : byte list |-> fnid ;
-                         (* map inverting fnencode *)
+     blockclasses : constructed list list ;
+     exprclasses  : construction_locn list list
+       (* the stack of objects that need to have destructors
+          called.  First field is for automatic objects that have
+          block-delimited lifetimes.  Second is for temporary
+          objects that need to be destroyed at the end of the
+          full enclosing expression *)
+     ;
 
-              genv: environment ;
-              env : environment ; (* dynamic version of the above *)
-
-              initmap  : addr -> bool ;
-                         (* the set of initialised addresses *)
-
-              locmap   : addr -> byte ;
-                         (* memory.  Domain should be ( void * ) words *)
-
-              stack    : (environment #CExpr option) list ;
-                         (* stack of environment and this info.  Updated
-                            as blocks are entered and left *)
-
-              thisvalue: CExpr option ;
-                         (* the value (i.e., this will always be an ECompVal
-                            with a pointer value) of the this expression *)
-
-              blockclasses : constructed list list ;
-              exprclasses  : construction_locn list list
-                (* the stack of objects that need to have destructors
-                   called.  First field is for automatic objects that have
-                   block-delimited lifetimes.  Second is for temporary
-                   objects that need to be destroyed at the end of the
-                   full enclosing expression *)
-              ;
-
-              current_exns : CExpr list ;
-              current_nspace : string list option
-
-             |>`;
+     current_exns : CExpr list  
+                    (* stack of exceptions that might be subjected 
+                       to a bare throw *)
+   |>`;
 val _ = type_abbrev("CState", ``:state``)
 
 val initial_state_def = Define`
