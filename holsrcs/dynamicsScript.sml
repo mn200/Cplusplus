@@ -276,7 +276,7 @@ val construct_ctor_pfx_def = Define`
                (@inits. value_init s T T nsdty (a + a') inits)
           || SOME(nm', SOME args) -> (* direct initialisation, with args as
                                         initialiser *)
-               [initA_member_call a (mk_member cnm (SFName nsdname))
+               [initA_member_call a (mk_member cnm (IDName nsdname))
                                   nsdty (a + a') args]
     in
     let nsds = FLAT (MAP do_nsd data_fields)
@@ -285,7 +285,7 @@ val construct_ctor_pfx_def = Define`
 `;
 
 val callterminate =
-    ``FnApp (Var  (IDConstant T [SFName "std"] (SFName "terminate"))) []``
+    ``FnApp (Var  (IDConstant T [IDName "std"] (IDName "terminate"))) []``
 
 val realise_destructor_calls_def = Define`
   (* parameters
@@ -325,7 +325,7 @@ val realise_destructor_calls_def = Define`
 val _ = new_constant("typeid_info", ``:state -> CPP_Type -> CExpr -> bool``)
 
 val type_info_cnm_def = Define`
-  type_info_cnm = IDConstant T [SFName "std"] (SFName "type_info")
+  type_info_cnm = IDConstant T [IDName "std"] (IDName "type_info")
 `;
 
 val typeid_info_characterised = new_axiom(
@@ -720,7 +720,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: mem-addr-static-nonfn *)
 (* 5.3.1 p2 if the address is taken of a qualified-ident that is actually a
    static member, then a normal address is generated.
-   As it's an object type, it must be an SFName.
+   As it's an object type, it must be an IDName.
 *)
 (!cname cenv fldname se s addr ty cinfo prot pth ptrval userdefs.
      cname IN defined_classes s /\
@@ -935,13 +935,13 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
  *)
 (!a C Cs Cs' Ds fld dyn_retty se s static_retty body0 args0 args body.
      (s,{}) |- LAST Cs has least method
-             (SFName fld) -: (static_retty,F,args0,body0) via Ds /\
-     (s,{}) |- (C,Cs ^ Ds) selects (SFName fld) -: (dyn_retty,F,args,body)
+             (IDName fld) -: (static_retty,F,args0,body0) via Ds /\
+     (s,{}) |- (C,Cs ^ Ds) selects (IDName fld) -: (dyn_retty,F,args,body)
          via Cs'
    ==>
      ^mng (mExpr (SVar (LVal a (Class C) Cs)
-                       (IDConstant F [] (SFName fld))) se) s
-          (s, ev (FVal (mk_member (LAST Cs') (SFName fld))
+                       (IDConstant F [] (IDName fld))) se) s
+          (s, ev (FVal (mk_member (LAST Cs') (IDName fld))
                        (Function dyn_retty (MAP SND args))
                        (SOME (LVal a (Class C) Cs')))
                  se))

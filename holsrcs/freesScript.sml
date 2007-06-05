@@ -78,23 +78,23 @@ val tyfrees_defn = Defn.Hol_defn "tyfrees" `
            (sfldfrees sf UNION
             (if b then {}
              else case IDhd (IDConstant b sfs sf) of
-                    SFName s -> tyfree_sing s
-                 || SFTempCall s targs -> tempfree_sing s) )
+                    IDName s -> tyfree_sing s
+                 || IDTempCall s targs -> tempfree_sing s) )
            sfs)
 
      /\
 
-  (sfldfrees (SFTempCall s tal) = FOLDL (\a ta. a UNION tafrees ta) {} tal) /\
-  (sfldfrees (SFName s) = {})
+  (sfldfrees (IDTempCall s tal) = FOLDL (\a ta. a UNION tafrees ta) {} tal) /\
+  (sfldfrees (IDName s) = {})
 
      /\
 
   (tafrees (TType ty) = tyfrees ty) /\
   (tafrees (TTemp (IDConstant b sfs sf)) =
      case sf of
-       SFName s -> if (sfs = []) /\ ~b then tempfree_sing s
+       IDName s -> if (sfs = []) /\ ~b then tempfree_sing s
                    else cppidfrees (IDConstant b sfs sf)
-    || SFTempCall s targs -> {}) /\
+    || IDTempCall s targs -> {}) /\
   (tafrees (TVal tva) = tvalfrees tva)
 
      /\

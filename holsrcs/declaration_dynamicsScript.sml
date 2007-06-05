@@ -197,11 +197,11 @@ val _ = add_record_field ("classmap", ``state_classmap``)
    variable, or a reference.  If the latter, then the pcopt field will be
    SOME a0, where a0 is the address of the parent. *)
 val cenv_new_addr_binding_def = Define`
-  (cenv_new_addr_binding [sf] s pcopt a (cenv : StaticField |-> class_env) =
+  (cenv_new_addr_binding [sf] s pcopt a (cenv : IDComp |-> class_env) =
      let cdata = cenv ' sf in
      let (ci,udfs) = THE (item cdata).info
      in
-        if ?prot ty. MEM (FldDecl (SFName s) ty,T,prot) ci.fields then
+        if ?prot ty. MEM (FldDecl (IDName s) ty,T,prot) ci.fields then
           cenv |+ (sf, FTNode (item cdata with statvars
                                  updated_by (\fm. fm |+ (s,a)))
                               (map cdata))
@@ -235,9 +235,9 @@ val enew_addr_binding_def = Define`
 `;
 
 val new_addr_binding_def = Define`
-  (new_addr_binding (IDConstant T sfs (SFName str)) pcopt a s =
+  (new_addr_binding (IDConstant T sfs (IDName str)) pcopt a s =
       s with genv updated_by enew_addr_binding sfs str pcopt a) /\
-  (new_addr_binding (IDConstant F sfs (SFName str)) pcopt a s =
+  (new_addr_binding (IDConstant F sfs (IDName str)) pcopt a s =
       s with env updated_by enew_addr_binding sfs str pcopt a)
 `;
 
@@ -245,9 +245,9 @@ val new_addr_binding_def = Define`
    variables - all other sorts will already have their type information
    recorded in the state *)
 val new_type_binding_def = Define`
-  (new_type_binding (IDConstant F [] (SFName str)) ty s =
+  (new_type_binding (IDConstant F [] (IDName str)) ty s =
      s with env := FTNode (item s.env with typemap
-                             updated_by (\fm. fm |+ (SFName str, ty)))
+                             updated_by (\fm. fm |+ (IDName str, ty)))
                           (map s.env)) /\
   (new_type_binding id ty s = s)
 `;

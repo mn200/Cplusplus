@@ -42,12 +42,12 @@ val _ = new_theory "templates"
 val id_tcalls_def = Define`
   (id_tcalls b sfs [] last =
      case last of
-        SFName _ -> {}
-     || SFTempCall s targs -> {IDConstant b sfs last}) /\
+        IDName _ -> {}
+     || IDTempCall s targs -> {IDConstant b sfs last}) /\
   (id_tcalls b sfs (h :: t) last =
      case h of
-        SFName _ -> id_tcalls b (sfs ++ [h]) t last
-     || SFTempCall s targs -> (IDConstant b sfs h) INSERT
+        IDName _ -> id_tcalls b (sfs ++ [h]) t last
+     || IDTempCall s targs -> (IDConstant b sfs h) INSERT
                               id_tcalls b (sfs ++ [h]) t last)
 `;
 
@@ -79,8 +79,8 @@ val ttypes_def = Define`
   (cidttypes (IDConstant b sfs sf) = id_tcalls b [] sfs sf UNION
                                      sfldl_ttypes sfs UNION sfld_ttypes sf) /\
 
-  (sfld_ttypes (SFTempCall s tal) = talttypes tal) /\
-  (sfld_ttypes (SFName s) = {}) /\
+  (sfld_ttypes (IDTempCall s tal) = talttypes tal) /\
+  (sfld_ttypes (IDName s) = {}) /\
 
   (tattypes (TType ty) = ttypes ty) /\
   (tattypes (TTemp tid) = {}) /\
@@ -456,10 +456,10 @@ val strip_centry_defn = Hol_defn "strip_centry" `
      let (ci', ds) = strip_cinfo (mk_member cnm sf) ci
      in
        (NClass sf (SOME ci'), ds)) /\
-  (strip_centry cnm (CETemplateDef targs (NClass (SFName s) (SOME ci))) =
-     let (ci',ds) = strip_cinfo (mk_member cnm (SFTempCall s targs)) ci
+  (strip_centry cnm (CETemplateDef targs (NClass (IDName s) (SOME ci))) =
+     let (ci',ds) = strip_cinfo (mk_member cnm (IDTempCall s targs)) ci
      in
-       (CETemplateDef targs (NClass (SFName s) (SOME ci')), ds)) /\
+       (CETemplateDef targs (NClass (IDName s) (SOME ci')), ds)) /\
   (strip_centry cnm (CETemplateDef targs
                                    (CFnDefn virtp retty sf pms
                                             (SOME (SOME body)))) =
@@ -507,7 +507,7 @@ val only_changes_def = Define`
 val _ = set_fixity "is_sub_tid" (Infix(NONASSOC, 425))
 val is_sub_tid_def = Define`
   (IDConstant b1 sfs1 sf1) is_sub_tid (IDConstant b2 sfs2 sf2) =
-     (b1 = b2) /\ (?s targs. sf1 = SFTempCall s targs) /\
+     (b1 = b2) /\ (?s targs. sf1 = IDTempCall s targs) /\
      ?rst. sfs2 = sfs1 ++ sf1::rst
 `;
 
@@ -739,7 +739,7 @@ val template_phase2_constructors_def = Define`
     ?id id' s args sub bod edec meminits pms types.
       MEM edec grds0 /\
       (id,types) IN edec_constructors ps0.global edec /\
-      (IDtl id = SFTempCall s args) /\
+      (IDtl id = IDTempCall s args) /\
       ~((id,types) IN defined_constructors grds0) /\
       (!sub_id. sub_id is_sub_tid id ==> sub_id IN declared_types grds0) /\
       id IN declared_types grds0 /\

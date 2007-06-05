@@ -20,7 +20,7 @@ val _ = Hol_datatype `
    ;
 
    IDComp = IDTempCall of string => TemplateArg list
-               | IDName of string
+          | IDName of string
 
    ;
 
@@ -67,17 +67,14 @@ val _ = Hol_datatype `
 val _ = export_rewrites [ "CPP_ID_size_def" ]
 
 (* for backwards compatibility *)
-val _ = type_abbrev ("StaticField", ``:IDComp``)
-val _ = overload_on ("SFName", ``IDName``)
-val _ = overload_on ("SFTempCall", ``IDTempCall``)
 
 val Base_def = Define`
-  Base n = IDConstant F [] (SFName n)
+  Base n = IDConstant F [] (IDName n)
 `;
 
 val sfld_basename_def = Define`
-  (sfld_basename (SFName s) = s) /\
-  (sfld_basename (SFTempCall s args) = s)
+  (sfld_basename (IDName s) = s) /\
+  (sfld_basename (IDTempCall s args) = s)
 `;
 val _ = overload_on ("sfld_string", ``sfld_basename``)
 val _ = export_rewrites ["sfld_basename_def"]
@@ -133,7 +130,7 @@ val IDhd_def = Define`
 val _ = export_rewrites ["IDhd_def"]
 
 val dest_sfname_def = Define`
-  (dest_sfname (SFName s) = s)
+  (dest_sfname (IDName s) = s)
 `;
 val _ = export_rewrites ["dest_sfname_def"]
 

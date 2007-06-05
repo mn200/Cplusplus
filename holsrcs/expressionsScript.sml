@@ -43,7 +43,7 @@ val _ = Hol_datatype
          | CApUnary of c_unops => CExpr
          | Deref of CExpr
          | Addr of CExpr
-         | MemAddr of CPP_ID => StaticField
+         | MemAddr of CPP_ID => IDComp
          | Assign of c_binops option => CExpr => CExpr
          | SVar of CExpr => CPP_ID
          | FnApp of CExpr => CExpr list

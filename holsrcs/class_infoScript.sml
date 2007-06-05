@@ -658,10 +658,10 @@ val class_part_def = Define`
 val elookup_type_def = Define`
   (elookup_type env (IDConstant b [] sf) =
      FLOOKUP (item env).typemap sf) /\
-  (elookup_type env (IDConstant b (SFName h :: t) sf) =
-     if SFName h IN FDOM (item env).classenv then
+  (elookup_type env (IDConstant b (IDName h :: t) sf) =
+     if IDName h IN FDOM (item env).classenv then
        case celookup_class (item env).classenv
-                           (class_part (IDConstant b (SFName h :: t) sf))
+                           (class_part (IDConstant b (IDName h :: t) sf))
        of
           NONE -> NONE
        || SOME cenv -> (case (item cenv).info of
@@ -683,25 +683,25 @@ val elookup_type_def = Define`
 
 (* looks up an object identifier and returns its address *)
 val elookup_addr_def = Define`
-  (* must be a SFName, a template id could only be to a function, which is
+  (* must be a IDName, a template id could only be to a function, which is
      not an object *)
-  (elookup_addr env (IDConstant b [] (SFName n)) =
+  (elookup_addr env (IDConstant b [] (IDName n)) =
      FLOOKUP (item env).varmap n) /\
-  (elookup_addr env (IDConstant b (SFName h::t) (SFName n)) =
-     if SFName h IN FDOM (item env).classenv then
+  (elookup_addr env (IDConstant b (IDName h::t) (IDName n)) =
+     if IDName h IN FDOM (item env).classenv then
        case celookup_class
               (item env).classenv
-              (class_part (IDConstant b (SFName h::t) (SFName n)))
+              (class_part (IDConstant b (IDName h::t) (IDName n)))
        of
           NONE -> NONE
        || SOME cenv -> FLOOKUP (item cenv).statvars n
      else
        case FLOOKUP (map env) h of
           NONE -> NONE
-       || SOME e' -> elookup_addr e' (IDConstant b t (SFName n))) /\
-  (elookup_addr env (IDConstant b sf1 (SFName n)) =
+       || SOME e' -> elookup_addr e' (IDConstant b t (IDName n))) /\
+  (elookup_addr env (IDConstant b sf1 (IDName n)) =
      case celookup_class (item env).classenv
-                         (class_part (IDConstant b sf1 (SFName n)))
+                         (class_part (IDConstant b sf1 (IDName n)))
      of
         NONE -> NONE
      || SOME cenv -> FLOOKUP (item cenv).statvars n) /\
@@ -723,9 +723,9 @@ val lookup_class_def = Define` lookup_class = lift_lookup elookup_class `;
 
 *)
 val lookup_offset_def = Define`
-  (lookup_offset s mdp (IDConstant b sfs (SFName fld)) =
+  (lookup_offset s mdp (IDConstant b sfs (IDName fld)) =
      let coffs = constituent_offsets s mdp
-                        (class_part (IDConstant b sfs (SFName fld)))
+                        (class_part (IDConstant b sfs (IDName fld)))
      in
        case FINDL (\ (cc, off). ?ty. cc = NSD fld ty) coffs of
           NONE -> NONE
@@ -776,7 +776,7 @@ val covariant_def = Define`
 val is_virtual_def = Define`
   is_virtual s cnm fnm retty paramtys =
     ?bnm params body prot retty' sfnm.
-       (fnm = SFName sfnm) /\
+       (fnm = IDName sfnm) /\
        (s,{}) |- cnm <= bnm  /\
        MEM (CFnDefn T retty' fnm params body, F, prot)
            (cinfo s bnm).fields /\

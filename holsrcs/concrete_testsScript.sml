@@ -19,14 +19,14 @@ val state1_def = Define`
     env :=
      FTNode (<| classenv :=
                   FEMPTY |+
-                   (SFName "c",
+                   (IDName "c",
                     FTNode (<| info :=
                                  SOME (<| fields :=
-                                            [(FldDecl (SFName "foo")
+                                            [(FldDecl (IDName "foo")
                                                       (Signed Char),
                                               F,
                                               Public);
-                                             (FldDecl (SFName "bar")
+                                             (FldDecl (IDName "bar")
                                                       (Signed Int), F,
                                               Public)];
                                             ancestors := [] |>, {}) |>)
@@ -237,27 +237,27 @@ val t2_program_def = Define`
     TemplateDef [TTemp (Base "U")]
                 (Decl (VDec (Function
                              (TypeID (IDConstant F []
-                                      (SFTempCall "U" [TType (Signed Int)])))
+                                      (IDTempCall "U" [TType (Signed Int)])))
                              [TypeID (IDConstant F []
-                                      (SFTempCall "U" [TType BChar]))])
+                                      (IDTempCall "U" [TType BChar]))])
                             (Base "f")));
     NameSpace "n" [Decl (VDecInit (Signed Int)
                                   (Base "v1")
                                   (CI (Var (Base "c"))));
                    Decl (VDecInit (Signed Int)
                                   (Base "v2")
-                                  (CI (Var (IDConstant T [] (SFName "c")))));
+                                  (CI (Var (IDConstant T [] (IDName "c")))));
                    Decl (VDecInit (Signed Int)
                                   (Base "v3")
-                                  (CI (Var (IDConstant F [SFName "n2"]
-                                                         (SFName "y")))));
+                                  (CI (Var (IDConstant F [IDName "n2"]
+                                                         (IDName "y")))));
                    Decl (VDecInit (Signed Int)
                                   (Base "v4")
                                   (CI (Var (Base "x"))));
                    Decl (VDecInit (Signed Int)
                                   (Base "v5")
-                                  (CI (Var (IDConstant F [SFName "n"]
-                                                       (SFName "x")))))]
+                                  (CI (Var (IDConstant F [IDName "n"]
+                                                       (IDName "x")))))]
  ]
 `
 
@@ -476,13 +476,13 @@ local
   val th = theorem "t3_step_2"
   val s_t = lhs (rand (rand (concl th)))
   val assertion = can prove(``LAST ^s_t.accdecls =
-                          FnDefn (Signed Int) (IDConstant T [] (SFName "f"))
+                          FnDefn (Signed Int) (IDConstant T [] (IDName "f"))
                                  [("n", Signed Int)]
                                  (Ret (mExpr
                                        (CApBinary
                                           CPlus
-                                          (Var (IDConstant F [] (SFName "n")))
-                                          (Var (IDConstant T [] (SFName "x")))
+                                          (Var (IDConstant F [] (IDName "n")))
+                                          (Var (IDConstant T [] (IDName "x")))
                                           )
                                        base_se))``,
                          SRW_TAC [][])
@@ -515,13 +515,13 @@ local
   val th = theorem "t4_step_2"
   val s_t = lhs (rand (rand (concl th)))
   val assertion = can prove(``LAST ^s_t.accdecls =
-                          FnDefn (Signed Int) (IDConstant T [] (SFName "f"))
+                          FnDefn (Signed Int) (IDConstant T [] (IDName "f"))
                                  [("x", Signed Int)]
                                  (Ret (mExpr
                                        (CApBinary
                                           CPlus
-                                          (Var (IDConstant F [] (SFName "x")))
-                                          (Var (IDConstant F [] (SFName "x")))
+                                          (Var (IDConstant F [] (IDName "x")))
+                                          (Var (IDConstant F [] (IDName "x")))
                                           )
                                        base_se))``,
                          SRW_TAC [][])
@@ -575,7 +575,7 @@ val t5_program_def = Define`
                                                    (Var (Base "j"))
                                                    (Var (Base "x")))
                                                 (Var (IDConstant
-                                                        T [] (SFName "x")))))
+                                                        T [] (IDName "x")))))
                                   base_se)])
                            EmptyStmt;
                        Ret (mExpr (Var (Base "j")) base_se)])]
@@ -609,11 +609,11 @@ val t6_program_def = Define`
           [VStrDec (Base "s")
              (SOME
                <| ancestors := [];
-                  fields := [(CFnDefn F (Signed Int) (SFName "g") []
+                  fields := [(CFnDefn F (Signed Int) (IDName "g") []
                                 (SOME (SOME (Ret (mExpr (Var (Base "x"))
                                                         base_se)))),
                                 F, Public);
-                             (FldDecl (SFName "x") (Signed Int), F, Public)]
+                             (FldDecl (IDName "x") (Signed Int), F, Public)]
                |>);
            VDec (Class (Base "s")) (Base "val")]
           [Standalone
@@ -687,7 +687,7 @@ val let_thms = prove(
     (LET f17 (FldDecl sf ty) = let ty0 = ty in let sf0 = sf in
                                                  f17 (FldDecl sf0 ty0)) /\
     (LET f18 Public = f18 Public) /\
-    (LET f19 (SFName str) = f19 (SFName str)) /\
+    (LET f19 (IDName str) = f19 (IDName str)) /\
     (LET f20 (<| typemap := tm; tempmap := tm'; valmap := vm |>) =
          f20 <| typemap := tm; tempmap := tm'; valmap := vm |>) /\
     (LET f21 (Ret e) = f21 (Ret e)) /\

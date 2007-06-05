@@ -66,12 +66,12 @@ val empty_class_envinfo_def = Define`
   empty_class_envinfo = <| statvars := FEMPTY; info := NONE; refs := FEMPTY |>
 `;
 
-val _ = type_abbrev ("class_env", ``:(StaticField,class_envinfo)fmaptree``)
+val _ = type_abbrev ("class_env", ``:(IDComp,class_envinfo)fmaptree``)
 
 val _ = Hol_datatype`
   envinfo = <| varmap   : string |-> addr # CPP_ID # CPP_ID list ;
-               typemap  : StaticField |-> CPP_Type ;
-               classenv : StaticField |-> class_env
+               typemap  : IDComp |-> CPP_Type ;
+               classenv : IDComp |-> class_env
 |>`;
 
 (* strings are the keys here, because these are ever-deepening
@@ -104,9 +104,9 @@ val elookup_class_def = Define`
      FLOOKUP ((item env).classenv) sf) /\
   (* if top name might be a namespace name or a class name, class names take
      priority *)
-  (elookup_class env (IDConstant b (SFName h :: t) sf) =
-      if SFName h IN FDOM (item env).classenv then
-        celookup_class (item env).classenv (IDConstant b (SFName h :: t) sf)
+  (elookup_class env (IDConstant b (IDName h :: t) sf) =
+      if IDName h IN FDOM (item env).classenv then
+        celookup_class (item env).classenv (IDConstant b (IDName h :: t) sf)
       else
         case FLOOKUP (map env) h of
            NONE -> NONE
@@ -123,7 +123,7 @@ val is_class_name_env_def = Define`
 `;
 
 val update_classenv_def = Define`
-  (update_classenv [] i (cenv : StaticField |-> class_env) = NONE) /\
+  (update_classenv [] i (cenv : IDComp |-> class_env) = NONE) /\
   (update_classenv [h] i cenv =
      SOME (cenv |+ (h, FTNode <| info := SOME i ;
                                  statvars := FEMPTY ;

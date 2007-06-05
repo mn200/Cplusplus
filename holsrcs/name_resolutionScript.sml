@@ -39,9 +39,9 @@ val eid_is_member_def = Define`
   eid_is_member (env : environment) id =
     case id of
        IDConstant b [] sf -> F
-    || IDConstant b (SFTempCall s targs :: sfs) sf -> T
-    || IDConstant b (SFName s :: sfs) sf ->
-         if SFName s IN FDOM (item env).classenv then T
+    || IDConstant b (IDTempCall s targs :: sfs) sf -> T
+    || IDConstant b (IDName s :: sfs) sf ->
+         if IDName s IN FDOM (item env).classenv then T
          else eid_is_member (map env ' s) (IDConstant b sfs sf)
 `
 val _ = export_rewrites ["eid_is_member_def"]
@@ -71,8 +71,8 @@ val id_objtype_def = Define`
 val _ = Hol_datatype`
   P1state = <|
     current_nspath : string list ;
-    dynclasses : string |-> bool # StaticField list # TemplateArg list ;
-    dynobjs : string |-> bool # StaticField list # TemplateArg list #
+    dynclasses : string |-> bool # IDComp list # TemplateArg list ;
+    dynobjs : string |-> bool # IDComp list # TemplateArg list #
                          dynobj_type ;
     dynns : string |-> string list ;
     global : state ;
@@ -88,10 +88,10 @@ val _ = Hol_datatype`
 
 val ecresolve_nspaces_def = Define`
   (ecresolve_nspaces env [] = []) /\
-  (ecresolve_nspaces env (SFName s :: t) =
-     if SFName s IN FDOM (item env).classenv then []
+  (ecresolve_nspaces env (IDName s :: t) =
+     if IDName s IN FDOM (item env).classenv then []
      else s :: ecresolve_nspaces (map env ' s) t) /\
-  (ecresolve_nspaces env (SFTempCall _ _ :: _) = [])
+  (ecresolve_nspaces env (IDTempCall _ _ :: _) = [])
 `
 val _ = export_rewrites ["ecresolve_nspaces_def"]
 
@@ -110,7 +110,7 @@ val cresolve_nspaces_def = Define`
         else
           let ns = ps.dynns ' s
           in
-            ecresolve_nspaces ps.global.env (MAP SFName ns ++ sfs))
+            ecresolve_nspaces ps.global.env (MAP IDName ns ++ sfs))
 `;
 
 (* ----------------------------------------------------------------------
@@ -123,24 +123,24 @@ val resolve_classid_def = Define`
        let (b,sfs,targs) = ps.dynclasses ' (sfld_string sf)
        in
          IDConstant b sfs sf) /\
-  (resolve_classid ps (IDConstant F (SFName s :: sfs) sf) =
+  (resolve_classid ps (IDConstant F (IDName s :: sfs) sf) =
      if s IN FDOM ps.dynclasses then
        let (b,pre_sfs,targs) = ps.dynclasses ' s
        in
-         IDConstant b (pre_sfs ++ SFName s :: sfs) sf
+         IDConstant b (pre_sfs ++ IDName s :: sfs) sf
      else
        let sfnms = ps.dynns ' s
        in
-         IDConstant T (MAP SFName sfnms ++ SFName s :: sfs) sf) /\
-  (resolve_classid ps (IDConstant F (SFTempCall s targs :: sfs) sf) =
+         IDConstant T (MAP IDName sfnms ++ IDName s :: sfs) sf) /\
+  (resolve_classid ps (IDConstant F (IDTempCall s targs :: sfs) sf) =
      let (b,pre_sfs,targs') = ps.dynclasses ' s
      in
-       IDConstant b (pre_sfs ++ SFTempCall s targs :: sfs) sf)
+       IDConstant b (pre_sfs ++ IDTempCall s targs :: sfs) sf)
 `;
 
 val break_sfld_def = Define`
-  (break_sfld (SFName s) = ([], s)) /\
-  (break_sfld (SFTempCall s targs) = (targs, s))
+  (break_sfld (IDName s) = ([], s)) /\
+  (break_sfld (IDTempCall s targs) = (targs, s))
 `;
 val _ = export_rewrites ["break_sfld_def"]
 
@@ -189,7 +189,7 @@ val open_ftnode_def = Define`
                            s.global.genv))
         || SOME ft -> (ft, s.global.genv)
     in
-    let sfpth = MAP SFName pth in
+    let sfpth = MAP IDName pth in
     let cenv = (item env_at_pth).classenv in
     let tyenv = (item env_at_pth).typemap
     in
@@ -297,7 +297,7 @@ val _ = export_rewrites ["open_classpath_def"]
 
 
 (* ----------------------------------------------------------------------
-    open_path : (string -> bool) -> bool -> StaticField list ->
+    open_path : (string -> bool) -> bool -> IDComp list ->
                 P1state -> P1state
 
     The set of strings records template argument names, which need to
@@ -320,7 +320,7 @@ val open_nspath_def = Define`
      let env = THE (apply_path root env0)
      in
        if sf IN FDOM (item env).classenv then
-         let root = IDConstant absp (MAP SFName root) sf in
+         let root = IDConstant absp (MAP IDName root) sf in
          let rootcenv = open_classnode avds root ps
          in
            open_classpath avds rootcenv root sfs
@@ -338,7 +338,7 @@ val open_path_def = Define`
       case todo of
          [] -> ps
       || h::t -> if h IN FDOM (item env).classenv then
-                   let root = IDConstant absp (MAP SFName ps.current_nspath) h
+                   let root = IDConstant absp (MAP IDName ps.current_nspath) h
                    in
                      open_classpath avoids
                                     (open_classnode avoids root ps)
@@ -354,7 +354,7 @@ val open_path_def = Define`
 
 val EnterNSpace_def = Define`
   EnterNSpace n s =
-    open_path {} T [SFName n]
+    open_path {} T [IDName n]
               (s with dynns := s.dynns |+ (n,s.current_nspath))
 `;
 (* the with clause is necessary in the circumstance where this is the
@@ -364,7 +364,7 @@ val ExitNSpace_def = Define`
   ExitNSpace s =
     open_path {}
               T
-              (FRONT (MAP SFName s.current_nspath))
+              (FRONT (MAP IDName s.current_nspath))
               (open_ftnode [] (empty_p1 s.accdecls s.global))
 `;
 
@@ -375,13 +375,13 @@ val rewrite_type_def = Define`
                             else if s IN FDOM ps.dynclasses then
                               let (b,sfs,targs) = ps.dynclasses ' s
                               in
-                                TypeID (IDConstant b sfs (SFName s))
+                                TypeID (IDConstant b sfs (IDName s))
                             else if s IN FDOM ps.dynns then
                               let sfnms = ps.dynns ' s
                               in
                                 TypeID (IDConstant T
-                                                   (MAP SFName sfnms)
-                                                   (SFName s))
+                                                   (MAP IDName sfnms)
+                                                   (IDName s))
                             else
                               TypeID (Base s)) ;
             valmap := TVAVar ;
@@ -422,12 +422,12 @@ val state_NewGVar_def = Define`
 
 val NewGVar_def = Define`
   NewGVar ty sfnm s =
-    let sfnm' = IDConstant T (MAP SFName s.current_nspath) sfnm in
+    let sfnm' = IDConstant T (MAP IDName s.current_nspath) sfnm in
     let (targs,sfstr) = break_sfld sfnm in
     let ty' = rewrite_type (FOLDL (\a ta. a UNION tafrees ta) {} targs) s ty
     in
       s with <| dynobjs :=
-                  s.dynobjs |+ (sfstr, (T,MAP SFName s.current_nspath,targs,
+                  s.dynobjs |+ (sfstr, (T,MAP IDName s.current_nspath,targs,
                                         dNormalObj)) ;
                 global updated_by state_NewGVar ty s.current_nspath sfnm ;
                 accdecls := (s.accdecls ++ [Decl (VDec ty' sfnm')]) |>
@@ -470,12 +470,12 @@ val idattach_locn_def = Define`
 val _ = export_rewrites ["idattach_locn_def"]
 
 val is_unqvar_def = Define`
-  (is_unqvar (Var (IDConstant b sfs (SFName s))) = ~b /\ (sfs = [])) /\
+  (is_unqvar (Var (IDConstant b sfs (IDName s))) = ~b /\ (sfs = [])) /\
   (is_unqvar e = F)
 `;
 val _ = export_rewrites ["is_unqvar_def"]
 val dest_unqvar_def = Define`
-  dest_unqvar (Var (IDConstant F [] (SFName s))) = s
+  dest_unqvar (Var (IDConstant F [] (IDName s))) = s
 `;
 val _ = export_rewrites ["dest_unqvar_def"]
 
@@ -573,7 +573,7 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
                let ps' = FOLDL foldthis ps atys
                in
                  Var (idattach_locn (ps'.dynobjs ' fnm)
-                                    (IDConstant F [] (SFName fnm)))
+                                    (IDConstant F [] (IDName fnm)))
          else
            phase1_expr e
      in
@@ -630,7 +630,7 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
                  if s IN FDOM ps.dynclasses then
                    idattach_locn (ps.dynclasses ' s) id
                  else
-                   IDConstant T (MAP SFName (ps.dynns ' s) ++ (h::t)) sf
+                   IDConstant T (MAP IDName (ps.dynns ' s) ++ (h::t)) sf
              in
                if id_objtype ps.global qid = dMember then
                  let cnm = class_part qid in
@@ -650,7 +650,7 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
                     else
                       let ns = ps.dynns ' s
                       in
-                        idattach_locn (T, MAP SFName ns, []:bool list) cid
+                        idattach_locn (T, MAP IDName ns, []:bool list) cid
      in
        (* there's nothing to do to the field.  Though it may actually be a
           field of some class ancestral to cid', the whole point of the
@@ -690,20 +690,20 @@ val phase1_init_def = Define`
 val _ = export_rewrites ["phase1_init_def"]
 
 (* ----------------------------------------------------------------------
-    newlocal : P1state -> StaticField -> P1state
+    newlocal : P1state -> IDComp -> P1state
    ---------------------------------------------------------------------- *)
 
 (* can't declare a local variable that is a template, so only consider a
-   SFName parameter  *)
+   IDName parameter  *)
 val newlocal_def = Define`
-  newlocal ps (SFName s) ty =
+  newlocal ps (IDName s) ty =
      ps with <| dynobjs := ps.dynobjs |+ (s, (F, [], [], dNormalObj)) ;
                 global := ps.global with
                             env updated_by
                               (\ft. FTNode
                                     (item ft with
                                       typemap updated_by
-                                              (\fm. fm |+ (SFName s,ty)))
+                                              (\fm. fm |+ (IDName s,ty)))
                                     (map ft)) |>
 `
 
@@ -715,7 +715,7 @@ val newlocal_def = Define`
    ---------------------------------------------------------------------- *)
 
 val cenv_new_class_def = Define`
-  (cenv_new_class [sf] info (cenv : StaticField |-> class_env) =
+  (cenv_new_class [sf] info (cenv : IDComp |-> class_env) =
      cenv |+ (sf, FTNode <| statvars := FEMPTY;
                             info := info;
                             refs := FEMPTY |>
@@ -754,12 +754,12 @@ val new_class_def = Define`
 val _ = export_rewrites ["new_class_def"]
 
 (* ----------------------------------------------------------------------
-    new_class_field : (bool # StaticField list) ->
+    new_class_field : (bool # IDComp list) ->
                       (class_entry # bool # protection) -> state -> state
    ---------------------------------------------------------------------- *)
 
 val cenew_class_field_def = Define`
-  (cenew_class_field [sf] cebp (cenv : StaticField |-> class_env) =
+  (cenew_class_field [sf] cebp (cenv : IDComp |-> class_env) =
      cenv |+ (sf, FTNode
                    (item (cenv ' sf) with
                     info updated_by
@@ -874,7 +874,7 @@ val _ = export_rewrites ["extract_class_names_def"]
    ---------------------------------------------------------------------- *)
 
 val local_class_def = Define`
-  local_class (IDConstant F [] (SFName s)) ps =
+  local_class (IDConstant F [] (IDName s)) ps =
     ps with dynclasses := ps.dynclasses |+ (s, (F, [], []))
 `;
 
@@ -883,10 +883,10 @@ val local_class_def = Define`
 
 (* P1state -> CPP_ID -> CPP_ID *)
 val resolve_meminit_id_def = Define`
-  (resolve_meminit_id cnm ps (IDConstant F [] (SFName s)) =
+  (resolve_meminit_id cnm ps (IDConstant F [] (IDName s)) =
      if s IN FDOM ps.dynobjs then
-       mk_member cnm (SFName s)
-     else idattach_locn (ps.dynclasses ' s) (IDConstant F [] (SFName s))) /\
+       mk_member cnm (IDName s)
+     else idattach_locn (ps.dynclasses ' s) (IDConstant F [] (IDName s))) /\
   (resolve_meminit_id cnm ps memid = resolve_classid ps memid)
 `;
 
@@ -947,7 +947,7 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
                          in
                            (SOME (SOME enm, ty'),
                             phase1_stmt avds
-                                        (newlocal ps (SFName enm) ty')
+                                        (newlocal ps (IDName enm) ty')
                                         est))
                 handlers)) /\
   (phase1_stmt avds ps ClearExn = ClearExn)
@@ -975,7 +975,7 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
   (phase1_cinfo_opt avds ps cnm NONE =
      (NONE,
       case cnm of
-        IDConstant F [] (SFName s) ->
+        IDConstant F [] (IDName s) ->
           ps with
            <| dynclasses updated_by (\fm. fm |+ (s, (F, [], [])));
               global := ps.global with
@@ -983,7 +983,7 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
                             (\ft. FTNode
                                    (item ft with
                                       classenv updated_by
-                                        (\fm. fm |+ (SFName s,
+                                        (\fm. fm |+ (IDName s,
                                                      FTNode
                                                        empty_class_envinfo
                                                        FEMPTY)))
@@ -1019,25 +1019,25 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
      declared immediately *)
   (* they can be abstract though, which is this case *)
   (phase1_centry avds ps cnm
-                 (CFnDefn v retty (SFName s) pms (SOME NONE)) =
+                 (CFnDefn v retty (IDName s) pms (SOME NONE)) =
      CFnDefn v (rewrite_type avds ps retty)
-             (SFName s)
+             (IDName s)
              (MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms)
              (SOME NONE)) /\
   (phase1_centry avds ps cnm
-                 (CFnDefn v retty (SFName s) pms (SOME (SOME bod))) =
+                 (CFnDefn v retty (IDName s) pms (SOME (SOME bod))) =
      let retty' = rewrite_type avds ps retty in
      let pms' = MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms in
-     let ps' = FOLDL (\ ps (nm,ty). newlocal ps (SFName nm) ty) ps pms' in
+     let ps' = FOLDL (\ ps (nm,ty). newlocal ps (IDName nm) ty) ps pms' in
      let bod' = phase1_stmt avds ps' bod
      in
-       CFnDefn v retty' (SFName s) pms' (SOME (SOME bod'))) /\
+       CFnDefn v retty' (IDName s) pms' (SOME (SOME bod'))) /\
   (phase1_centry avds ps cnm (FldDecl sf ty) =
      let ty' = rewrite_type avds ps ty in FldDecl sf ty') /\
   (phase1_centry avds ps cnm (Constructor pms meminits bodo) =
      let pms' = (MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms) in
      let param_scope =
-       FOLDL (\ps (nm,ty). newlocal ps (SFName nm) ty) ps pms' in
+       FOLDL (\ps (nm,ty). newlocal ps (IDName nm) ty) ps pms' in
      let meminits' = MAP (phase1_meminit avds cnm param_scope ps) meminits
      in
        Constructor pms' meminits'
@@ -1114,7 +1114,7 @@ val phase1_fndefn_def = Define`
       || IDConstant T (sf1::sfs) sf2 ->
             (fnm, ps, open_path avds.tyfvs T (sf1::sfs) ps)
       || IDConstant F [] sf ->
-            (IDConstant T (MAP SFName ps.current_nspath) sf,
+            (IDConstant T (MAP IDName ps.current_nspath) sf,
              NewGVar funty sf ps,
              NewGVar funty sf ps)
       || IDConstant F (sf1::sfs) sf2 ->
@@ -1123,7 +1123,7 @@ val phase1_fndefn_def = Define`
             in
               (fnm', ps, open_path avds.tyfvs b sfs ps)
     in
-    let ps' = FOLDL (\ps (n,ty). newlocal ps (SFName n) ty) body_ps pms' in
+    let ps' = FOLDL (\ps (n,ty). newlocal ps (IDName n) ty) body_ps pms' in
     let body' = phase1_stmt avds ps' body
     in
       declared_ps with
@@ -1139,16 +1139,16 @@ val phase1_fndefn_def = Define`
 (* see phase1_centry (part of phase1_stmt) for what happens to class entries
    in local class definitions *)
 val phase1_gcentry_defn = Hol_defn "phase1_gcentry" `
-  (phase1_gcentry avds ps cnm (CFnDefn v retty (SFName s) pms bod) =
+  (phase1_gcentry avds ps cnm (CFnDefn v retty (IDName s) pms bod) =
      let retty' = rewrite_type avds ps retty in
      let pms' = MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms in
-     let ps' = FOLDL (\ps (nm,ty). newlocal ps (SFName nm) ty) ps pms' in
+     let ps' = FOLDL (\ps (nm,ty). newlocal ps (IDName nm) ty) ps pms' in
      let bod' = case bod of
                    NONE -> NONE
                 || SOME NONE -> SOME NONE
                 || SOME (SOME st) -> SOME (SOME (phase1_stmt avds ps' st))
      in
-        CFnDefn v retty' (SFName s) pms' bod') /\
+        CFnDefn v retty' (IDName s) pms' bod') /\
   (phase1_gcentry avds ps cnm (FldDecl sf ty) =
      FldDecl sf (rewrite_type avds ps ty)) /\
   (phase1_gcentry avds ps cnm (CETemplateDef targs ce) =
@@ -1159,7 +1159,7 @@ val phase1_gcentry_defn = Hol_defn "phase1_gcentry" `
   (phase1_gcentry avds ps cnm (Constructor pms meminits bodo) =
      let pms' = (MAP (\ (nm,ty). (nm, rewrite_type avds ps ty)) pms) in
      let param_scope =
-       FOLDL (\ps (nm,ty). newlocal ps (SFName nm) ty) ps pms' in
+       FOLDL (\ps (nm,ty). newlocal ps (IDName nm) ty) ps pms' in
      let meminits' = MAP (phase1_meminit avds cnm param_scope ps) meminits
      in
        Constructor pms' meminits'
@@ -1211,21 +1211,21 @@ val phase1_gclassdefn_def = Define`
      *)
 
      case cnm of
-        IDConstant F [] (SFName s) ->
-           (let csfs = MAP SFName ps.current_nspath in
-            let fullnm = IDConstant T csfs (SFName s)
+        IDConstant F [] (IDName s) ->
+           (let csfs = MAP IDName ps.current_nspath in
+            let fullnm = IDConstant T csfs (IDName s)
             in
               ps with <| dynclasses updated_by (\fm. fm |+ (s, (T, csfs, [])));
                          global updated_by new_class fullnm NONE;
                          accdecls := (ps.accdecls ++
                                         [Decl (VStrDec fullnm NONE)]) |>)
-     || IDConstant b sfs (SFTempCall s targs) ->
+     || IDConstant b sfs (IDTempCall s targs) ->
           let ns = cresolve_nspaces ps cnm in
           let fullnm = resolve_classid ps cnm
           in
             ps with <| dynclasses updated_by
                          (\fm. if ns = ps.current_nspath then
-                                 fm |+ (s, (T, MAP SFName ns, targs))
+                                 fm |+ (s, (T, MAP IDName ns, targs))
                                else fm);
                        global updated_by new_class fullnm NONE;
                        accdecls := (ps.accdecls ++
@@ -1237,7 +1237,7 @@ val phase1_gclassdefn_def = Define`
      let fullnm =
            case cnm of
               IDConstant b [] sf ->
-                 IDConstant b (MAP SFName ps.current_nspath) sf
+                 IDConstant b (MAP IDName ps.current_nspath) sf
            || IDConstant b sfs sf -> resolve_classid ps cnm in
      let ps0 = ps with global updated_by
                  new_class fullnm
@@ -1304,7 +1304,7 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
      T
    ==>
      phase1 (P1Decl (Decl (VDec ty (Base snm))) :: ds, s)
-            (ds, NewGVar ty (SFName snm) s))
+            (ds, NewGVar ty (IDName snm) s))
 
    /\
 
@@ -1319,15 +1319,15 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
                (P1Decl
                   (TemplateDef
                      targs
-                     (Decl (VDec ty (IDConstant F [] (SFName sfnm))))))
+                     (Decl (VDec ty (IDConstant F [] (IDName sfnm))))))
                ds, s)
-            (ds, NewGVar ty (SFTempCall sfnm targs) s))
+            (ds, NewGVar ty (IDTempCall sfnm targs) s))
 
    /\
 
   (* RULE-ID: [phase1-decl-vdecinit] *)
   (!s s' ds ty sfnm init.
-     (s' = NewGVar ty (SFName sfnm) s)
+     (s' = NewGVar ty (IDName sfnm) s)
    ==>
      phase1 (P1Decl (Decl (VDecInit ty (Base sfnm) init)) :: ds, s)
             (ds, mk_last_init (phase1_init {} s' init) s'))
@@ -1381,7 +1381,7 @@ val (phase1_rules, phase1_ind, phase1_cases) = Hol_reln`
                 if str IN FDOM s.dynclasses then 
                   idattach_locn (s.dynclasses ' str) id
                 else if is_qualified id then 
-                  idattach_locn (T, MAP SFName (s.dynns ' str), []:bool list) id
+                  idattach_locn (T, MAP IDName (s.dynns ' str), []:bool list) id
                 else
                   idattach_locn (s.dynobjs ' str) id)
    ==>

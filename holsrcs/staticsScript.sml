@@ -314,13 +314,13 @@ val MEM_splits = prove(
 (* SANITY *)
 val hasfld_imp_lfi = store_thm(
   "hasfld_imp_lfi",
-  ``(st,{}) |- C has least (SFName s) -: (ftype,stat) via p' /\
+  ``(st,{}) |- C has least (IDName s) -: (ftype,stat) via p' /\
     object_type ftype /\
     ~stat ==>
     ?i. lookup_field_info
-          (MAP (\ (n,ty). (SFName n, ty))
+          (MAP (\ (n,ty). (IDName n, ty))
                (THE (nsdmembers st (LAST p'))))
-          (SFName s)
+          (IDName s)
           (i,ftype)``,
   SRW_TAC [][fieldty_via_def, FieldDecls_def, nsdmembers_def] THEN
   Cases_on `centry` THEN

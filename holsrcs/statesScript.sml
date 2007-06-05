@@ -53,13 +53,13 @@ val _ = Hol_datatype `
      constmap : addr -> bool ;  (* the set of read-only addresses *)
      initmap  : addr -> bool ;  (* the set of initialised addresses *)
 
-     fnmap    : fnid |-> fn_info ;
+     fnmap    : CPP_ID |-> fn_info ;
                 (* map from function 'names' to type information about
                    the given functions *)
-     fnencode : fnid |-> byte list ;
+     fnencode : CPP_ID |-> byte list ;
                 (* map encoding function 'name' as a byte sequence
                    so that its address can be stored in memory *)
-     fndecode : byte list |-> fnid ;
+     fndecode : byte list |-> CPP_ID ;
                 (* map inverting fnencode *)
 
      genv: environment ; (* non-local environment *)
