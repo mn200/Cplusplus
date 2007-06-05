@@ -319,15 +319,16 @@ hardware checks such values for validity before even allowing them
 into address registers.)
 
 \paragraph{Memory}
-Memory is represented as an array from natural numbers to bytes.  The
-address 0 is reserved the representation for the null pointer.
+Memory is represented as a function from natural numbers to bytes.
+The address 0 is reserved as the representation for the null pointer.
 Strictly speaking, one might imagine that the map should be from some
-machine word (an array of four bytes, say) to bytes.  Even with the
-domain of the map being $\mathbb{N}$, any given process will only be
-able to address a finite amount of memory because it will only be able
-to generate a finite number of addresses.
+machine word (an array of four bytes, say) to bytes.  However, even
+with the domain of the map being $\mathbb{N}$, any given program will
+only be able to address a finite amount of memory because it will only
+be able to generate a finite number of addresses.  (All pointer types
+have a fixed, finite number of bytes making up their representations.)
 
-\subsection{Hierarchical Environments and States}
+\subsection{Hierarchical Environments}
 
 To reflect the hierarchical nesting of namespaces and classes, the
 model uses a type of hierarchical environments, giving maps from
@@ -349,7 +350,7 @@ The operation to lookup up the sub-tree at a particular key list position
 is \texttt{apply_path}:
 \begin{alltt}
   (apply_path [] ft = SOME ft) \(\land\)
-  (apply_path (h::t) ft = if h IN FDOM (map ft) then
+  (apply_path (h::t) ft = if h \(\in\) FDOM (map ft) then
                              apply_path t (map ft ' h)
                           else NONE)
 
@@ -370,24 +371,24 @@ namespace components into values of type \texttt{envinfo}.  An
 \texttt{envinfo} is a record of three components, each of which are
 finite-maps.
 \begin{verbatim}
-  envinfo = <|
-    varmap   : string |-> addr # CPP_ID # CPP_ID list ;
-    typemap  : IDComp |-> CPP_Type ;
-    classenv : IDComp |-> class_env
-  |>
+   envinfo = <|
+     varmap   : string |-> addr # CPP_ID # CPP_ID list ;
+     typemap  : IDComp |-> CPP_Type ;
+     classenv : IDComp |-> class_env
+   |>
 \end{verbatim}
 The \texttt{varmap} is a map from variable names to their l-value
 information.\footnote{It should be clear that an address is necessary
-  to specify an object's identity.  The additional type and identifier list are
-  used to store the dynamic information about class types that is
-  necessary to implement polymorphism.  For more on this, see
-  Section~\ref{sec:multiple-inheritance} below.}  The domain of this
-map can be strings because only functions can have template-structured
-names, and these do not live in memory in the same way as objects.
-The \texttt{typemap} maps ID components to types, giving static
-information both for objects and functions.  The \texttt{classenv}
-field gives information about any classes that might be declared at
-this level of the namespace hierarchy.
+  to specify an object's identity.  The additional identifier and
+  identifier list are used to store the dynamic information about
+  class types that is necessary to implement polymorphism.  For more
+  on this, see Section~\ref{sec:multiple-inheritance} below.}  The
+domain of this map can be strings because only functions can have
+template-structured names, and these do not live in memory in the same
+way as objects.  The \texttt{typemap} maps ID components to types,
+giving static information both for objects and functions.  The
+\texttt{classenv} field gives information about any classes that might
+be declared at this level of the namespace hierarchy.
 
 The \texttt{environment} type is then an abbreviation for a
 \begin{verbatim}
@@ -397,10 +398,78 @@ At each point in the namespace tree, indexed by a path (or list) of
 names, there is an \texttt{envinfo} value about the objects and
 classes stored in that scope.
 
+The \texttt{class_env} type is an abbreviation for another sort of
+\texttt{fmaptree}
+\begin{verbatim}
+   (IDComp, class_envinfo) fmaptree
+\end{verbatim}
+In other words, a \texttt{class_env} is a structured map, where the
+components can be full-blown \texttt{IDComp} values.  This is
+necessary because classes can be constructed from template calls
+(whereas namespaces are necessarily identified by just strings).
+
+The information attached to each node of a \texttt{class_env} is the
+following record type:
+\begin{verbatim}
+   class_envinfo = <|
+      (* ironically, the location of the static variables is 
+         only available dynamically, as classes are 
+         initialised *)
+      statvars : string |-> addr # CPP_ID # CPP_ID list ;
+      info     : state_class_info ;
+      refs     : string # addr |-> addr # CPP_ID # CPP_ID list
+   |>
+\end{verbatim}
+The \texttt{statvars} field records the same information for a class's
+static variables as the \texttt{envinfo} records for normal
+variables.  The \texttt{refs} field records per-class information
+about reference members.  Both of these fields are only used
+dynamically (as static variables are declared, and as new classes are
+constructed respectively).  Finally, the \texttt{info} field records
+the static information associated with a class. 
+
 
 
 \section{Phase 1: Name Resolution}
 \label{sec:phase1}
+
+Name resolution must occur in a separate phase before dynamic
+evaluation, and must rewrite declarations so that their name
+dependencies are made explicit.  This is exemplified by the program in
+Figure~\ref{fig:name-res-separate-phase}, where the name \texttt{x}
+that occurs in the function \texttt{ns1::f} must be a reference to the
+\texttt{x} that occurs in the outermost, global namespace.  A \naive{}
+execution of the sequence of declarations in the program would put the
+global \texttt{x} into its namespace, and then enter namespace
+\texttt{ns1}, where it would first declare the function \texttt{f},
+and then the second \texttt{x}.  A later call to \texttt{ns1::f} would
+correctly open up the entirety of the namespace, and immediately mask
+the global \texttt{x} with \texttt{ns1::x}, causing the evaluation of
+the body to proceed erroneously.
+\begin{figure}[htbp]
+\begin{verbatim}
+   int x = 3; 
+   namespace ns1 { 
+     int f(int n) { return n + x; }
+     int x = 2;
+   }
+\end{verbatim}
+\caption{A program demonstrating the need to have name resolution be a
+  separate phase before dynamic evaluation.}
+\label{fig:name-res-separate-phase}
+\end{figure}
+
+Even if one imagined a version of the dynamics that did perform name
+resolution as it evaluated declarations, this semantics would still
+need to transform the body of \texttt{ns1::f} to include the correct
+reference to \texttt{::x}.  The rest of this section of the report
+will describe the relation that turns the program in
+Figure~\ref{fig:name-res-separate-phase} into 
+\begin{verbatim}
+   int ::x = 3;
+   int ::ns1::f(int n) { return n + ::x; }
+   int ::ns1::x = 2;
+\end{verbatim}
 
 \subsection{Template Names}
 
@@ -764,6 +833,505 @@ final deliverable.
 
 \section{Phase 3: Dynamics}
 \label{sec:phase3}
+
+\subsection{Dynamic States}
+\label{sec:dynamic-states}
+
+The dynamic semantics updates large values of the type \texttt{state}
+(see \HOLfile{states}), given in full in Figure~\ref{fig:state-type}.
+The first four components of the state are sets of addresses.  The
+\texttt{allocmap} and \texttt{initmap} sets are from my C
+model~\cite{Norrish98}, and record which addresses have been allocated
+and initialised, respectively.  The new field \texttt{hallocmap} is
+necessary to allow memory to be allocated on the heap, and for its
+life-span to persist beyond the end of the current block.  The second
+new field, \texttt{constmap} records which memory has been allocated
+with the \texttt{const} \emph{cv}-qualifier.  (Updating such memory
+causes undefined behaviour.)
+
+\begin{figure}[htbp]
+\footnotesize
+\begin{verbatim}
+   state = <| 
+     allocmap : addr -> bool ;  (* the set of stack-allocated addresses *)
+     hallocmap: addr -> bool ;  (* the set of heap-allocated addresses *)
+     constmap : addr -> bool ;  (* the set of read-only addresses *)
+     initmap  : addr -> bool ;  (* the set of initialised addresses *)
+
+     fnmap    : CPP_ID |-> fn_info ;
+                (* map from function 'names' to type information about
+                   the given functions *)
+     fnencode : CPP_ID |-> byte list ;
+                (* map encoding function 'name' as a byte sequence
+                   so that its address can be stored in memory *)
+     fndecode : byte list |-> CPP_ID ;
+                (* map inverting fnencode *)
+
+     genv: environment ; (* non-local environment *)
+     env : environment ; (* local version of the above *)
+
+     locmap   : addr -> byte ;
+                (* memory.  Domain might also be ( void * ) words *)
+
+     stack    : (environment # CExpr option) list ;
+                (* stack of environment and this info.  Updated
+                   as blocks are entered and left *)
+
+     thisvalue: CExpr option ;
+                (* the value (i.e., this will always be an ECompVal
+                   with a pointer value) of the this expression *)
+
+     blockclasses : constructed list list ;
+     exprclasses  : construction_locn list list
+       (* the stack of objects that need to have destructors
+          called.  First field is for automatic objects that have
+          block-delimited lifetimes.  Second is for temporary
+          objects that need to be destroyed at the end of the
+          full enclosing expression *)
+     ;
+
+     current_exns : CExpr list  
+                    (* stack of exceptions that might be subjected 
+                       to a bare throw *)
+   |>
+\end{verbatim}
+  \caption{The HOL type of dynamic state.  There are two environment
+    values, \texttt{genv}, and \texttt{env}.  The former is for
+    non-local, persistent identifiers, the latter for local
+    identifiers.  Because there is no such thing as a local namespace,
+    there will only be a top-level node in the \texttt{env} field
+    (which may, however point to an arbitrarily deep
+    \texttt{class_env}).}
+\label{fig:state-type}
+\end{figure}
+
+\subsection{Basic Object-Orientation}
+\label{sec:basic-oo}
+
+The inspiration for this part of the semantics is the article by
+Wasserrab~\emph{et al}~\cite{wasserrab-nst-OOPSLA06}, which provides a
+detailed model for multiple inheritance.  For the moment, my model
+doesn't handle multiple inheritance, but I have nonetheless adopted
+much of this article's basic technology as it certainly handles the
+single-inheritance situation.
+
+\subsubsection{Class Declaration}
+\label{sec:class-declaration}
+A class declaration is similar to the C model's declaration of a
+\texttt{struct} type.  A class declaration takes two parameters, the
+name of the class, and an optional ``class-info''
+argument.\footnote{The information argument is optional to allow the
+  situation where a forward declaration of a class occurs.}  The
+class-info, if present, is a list of fields, coupled with an optional
+ancestor class.  The latter allows single-inheritance.  The fields are
+of two sorts, ``data'' fields or function definitions.  (A field
+declaration of a function, though strictly not data, emulates the
+situation where a member function is declared elsewhere.)  Both sorts
+of fields are accompanied by a flag indicating whether or not they are
+static, and a protection indicator (i.e., \texttt{public},
+\texttt{protected}, or \texttt{private}).  For the moment, both
+static-ness and protection information is entirely ignored, so that
+all members are assumed to be \texttt{public} and non-static.
+
+Member function definitions give the function's name, return-type,
+parameter list (types and names), and function body.  This is a close
+match for the abstract syntax.  All functions are assumed to be
+virtual.
+
+When a class declaration is encountered (only at the top-level;
+neither nested or local classes are supported yet), its member
+functions are entered into the state's function map.  The same
+function map is used for normal (non-class) functions, so there is a
+type of ``function-id'', declared
+\begin{verbatim}
+   fnid = GlobalFn of string | MFn of string => string
+\end{verbatim}
+meaning that such an identifier can be either global, in which case it
+is given by one string (the function's name); or it can be a member
+function, in which case it is given by a pair of strings: the class's
+name and the function's name.
+
+\subsubsection{Class Values and Dynamic Dispatch}
+\label{sec:class-values}
+There is no support for classes as r-values in the semantics as yet.
+Instead, all expressions of class-type must be l-values.  This
+restriction is based on the problems that will arise when multiple
+inheritance is implemented.  In particular, with multiple inheritance
+in place, it is no longer true that one can extract the byte sequence
+for a given l-value by starting at the base address and taking as many
+bytes from memory as the size of the type.  In particular, virtual
+base classes may be at completely different places in memory, not
+necessarily even contiguous with the rest of the object.  (This is
+demonstrated for the \texttt{g++} compiler by the little program in
+\texttt{notes/mult-inheritance-layout.cpp}.)
+
+Absence of support for r-values means that, in this model, one can not
+assign classes, pass them as parameters, or return them from
+functions.  However, because references are supported (see below),
+much idiomatic \cpp{} is still covered by the model.
+
+The presence of classes means that the model's presentation of
+l-values changes from the way it was in the original C model.  In
+particular, an l-value that is statically typed as a base class needs
+to know dynamically that it is really of a derived type.  This
+information is traditionally recorded in \texttt{vtable} fields.
+Following Wasserrab~\emph{et al}, my model instead records an
+additional path accompanying every l-value.  This path is a list of
+strings, listing the path through the ancestry-tree that leads from
+the most-derived class to the current class type.
+
+Consider, for example, the code in Figure~\ref{fig:oo-example}.  The
+body of function \texttt{g} constructs the l-value \texttt{*b} when it
+calls \texttt{f}.  As in the C model, this l-value will be associated
+with some address, and the static type, which is \texttt{Class~B}.
+But the additional path information that accompanies the l-value will
+be the list \texttt{[D2,D1,B]}.  The last element of such paths is always
+the static class type.  The prefix of the list makes it clear that
+this is a \texttt{B} l-value that is dynamically a \texttt{D2}.  And
+when field selection occurs, the \texttt{f} chosen will be
+\texttt{D1}'s.
+
+\begin{figure}[hbtp]
+\begin{verbatim}
+   class B {
+     public: virtual int f() { return 3; }
+   };
+
+   class D1 : public B {
+     public: int f() { return 4; }
+   };
+
+   class D2 : public D1 { };
+
+   int g(class B *b) { return b->f(); }
+
+   int main()
+   {
+     D2 d;
+     return g(&d);
+   }
+\end{verbatim}
+\caption{C++ code demonstrating OO-polymorphism.  The program will
+  return 4. Though it appears as if \texttt{B}'s function \texttt{f}
+  is called, the version of \texttt{f} called will actually be that
+  attached to \texttt{D1}.}
+\label{fig:oo-example}
+\end{figure}
+
+The rule encoding all this is \ruleid{function-member-select}:
+\[
+\infer{
+  \begin{array}{l}
+    \statebrack{\textsf{Ex}((\clvalue(a,\texttt{Class}\;C,p))\;\mathbf{.}\;
+      \mathit{fld},\mathit{se}),\sigma} \rightarrow \\
+    \qquad\left\langle\textsf{Ex}\left(\cfvalue\left(
+        \begin{array}{l}
+          \texttt{MFn}\;(\last(p'))\;\mathit{fld},\\
+          (\funtype{\mathit{argtys}}{\mathit{ret}}),\\
+          \SOME{(\clvalue\;a\;(\texttt{Class}\;(\last(p')))\;p')}
+        \end{array}\right),
+      \mathit{se}\right),\sigma\right\rangle
+  \end{array}}{
+  \sigma \vdash \hd(p) \textrm{ has least } \mathit{fld} :
+  \funtype{\mathit{argtys}}{\mathit{ret}} \textrm{ via } p'}
+\]
+
+In the figure, the expression of interest is \texttt{b->f()}, which is
+syntactic sugar for \texttt{((*b).f)()}.  (Note how the member
+selection is syntactically subordinate to the function application.)
+The \ruleid{function-member-select} rule governs the evaluation of
+\texttt{(*b).f} once the left-hand-side (\texttt{*b}) has evaluated to
+an l-value.\footnote{Even when the model allows for class r-values,
+  they will be given a memory location (and thus, a life-time).  This
+  will enable them to also be l-values.  In essence, it is not
+  possible to create an object of any sort without giving it a
+  location.  Contrast numbers, which can be ``created'', and not given
+  a memory location, simply by writing them down.}
+
+In our model, the l-value's address will be the same as the address of
+its most-derived class.  In other words, the $a$ of the rule will be
+the same as the address of the object \texttt{d}.  This is not what
+happens in typical compilers, which will actually make the pointer to
+the \texttt{B} sub-class point at the address of that sub-object's
+fields in the wider object's memory layout.  Then, the fact that the
+most-derived class is a \texttt{D2} is implicitly recorded in the
+\texttt{vtable}, which will contain a pointer to \texttt{D1::f}.
+
+In the rule above, the variable $C$ containing the name of the static
+class will be \texttt{B}, and $p$, the path variable, will be
+\texttt{[D2,D1,B]}.  The $\mathit{fld}$ variable will be \texttt{f}.
+Then, the hypothesis will check the class hierarchy to determine where
+an \texttt{f} can be found, starting at the head of the path, i.e., at
+\texttt{D2}.  This will reveal that there is an \texttt{f} at path
+\texttt{[D2,D1]}.  This will be the value for $p'$.
+
+The RHS of the reduction arrow $\exprarrow$ features a new sort of
+expression constructor, \cfvalue{}.  This is a ``function l-value'', a
+designation of a particular function within the program.  The first
+argument is the function identifier, as described earlier in
+Section~\ref{sec:class-declaration}.  In this case, the function
+identifier points at a class's member function given by two strings:
+the name of the class where the function body is declared, and the
+field-name.  In our example, the function identifier will be
+\texttt{MFn~D1~f}, or simply \texttt{D1::f} in more traditional \cpp{}
+notation.  The second argument of the \cfvalue{} constructor is the
+type of the function.  The third argument is an optional expression
+containing the l-value for the object associated with a member
+function call.  (The use of $\SOME{\;}$ marks that this is an optional
+value.)  This third argument is not present if the function is a
+normal one (i.e., not a class-member).
+
+There are two rules for performing function applications, but the only
+difference between them is that the member function version sets up
+the value of the \texttt{this} expression form.  Otherwise, both rules
+extract the body for the given function-identifier, and set up
+parameters in the same way.
+
+\paragraph{Field Selection}
+Field selection is also based on the notion of being able to find the
+most-derived declaration of the given field in the ancestor hierarchy.
+There is no need to worry about adjusting \texttt{this} pointers, or
+performing analyses with dynamic types as field selections are always
+done with respect to a class's static type.  However, there is an
+additional complexity, stemming from the need to give addresses to
+selected fields, so that they can become well-formed l-values.  In
+turn, this relies on knowing how a class is laid out in memory.
+
+The standard \emph{does} require that fields belonging to a particular
+class type be laid out in the order in which they appear (as long as
+they have the same access-specifiers, but I'm not modelling those just
+yet).  But there is no specification of how base sub-objects are laid
+out.  (Recall, moreover, that in the presence of a virtual base-class,
+an object that is not most-derived may be split over distinct parts of
+memory.)
+
+With just single inheritance to model, I use an under-specified
+function \texttt{class\_layout} which takes a set of sub-object paths,
+and returns them in a list.  This then drives the calculation of field
+offsets and class sizes.
+
+\paragraph{What of vtables?}
+The use of paths does away with the need for vtables.  On the other
+hand, we wouldn't want to specify the model in such a way as to
+preclude this perfectly reasonable implementation strategy.  In
+particular, vtables will be catered for just as in the standard, by
+maintaining that it is only in POD (``plain old data'') types where
+one can rely on the address of the first field being the same as the
+address of the containing \texttt{struct}.  The calculation of sizes
+will also be under-specified to allow for the presence of extra,
+user-invisible data at the start of a class.  (This latter hasn't been
+done yet.)
+
+\paragraph{An Axiom}
+The mechanisation includes an axiomatisation stating that two
+otherwise unspecified constants, \texttt{ptr\_encode} and
+\texttt{ptr\_decode} are mutual inverses.  These partial functions map
+between the dynamic arguments that constitute l-values (address and
+path), and the lists of bytes that make up pointers.
+
+\subsection{Reference Types}
+\label{sec:reftypes}
+
+Reference types pose problems in the contexts where they are
+distinctive:
+\begin{itemize}
+\item passed as parameters to functions;
+\item returned from functions;
+\item when they are initialised.
+\end{itemize}
+
+Otherwise, it is obvious how the existing semantics should treat
+references: they are l-values.  References are only created from
+l-values, and in the reverse direction, values will turn into r-values
+as required.  They will do the right things when of \texttt{class}
+types because they will have the Wasserrab style paths attached.  In
+other words, a reference to a base class may actually be an l-value
+referring to a derived class.
+
+The remaining sub-sections explain what happens in the three
+interesting situations.
+
+\paragraph{Omissions}
+\begin{itemize}
+\item The semantics does not handle references to functions.
+  Supporting these will require more rules in the dynamic semantics,
+  but these rules will be directly analogous to the rules presented
+  below: wherever an \clvalue{} constructor (which is for l-values of
+  object type) appears, there will need to also be a rule for
+  \cfvalue{}, which is for function values.
+\item The semantics does not handle initialisation of references
+  belonging to classes because these have to happen in the
+  \emph{mem-initialisors} of a class's constructor function(s), and
+  constructor functions are not yet modelled.
+\item The semantics doesn't handle initialisation of \ckey{const}
+  references from r-values because it does not yet handle
+  \ckey{const}.
+\end{itemize}
+
+
+\subsubsection{References as Parameters}
+
+When a formal parameter is of reference type, the actual parameter
+needs to stay an l-value rather than reduce to an r-value.  When the
+called function's environment is being established in its local stack
+frame, the binding for the formal name can be directly to the actual
+l-value's address and type.  In other words, nothing is allocated in
+memory to represent the reference.  This is not very likely in an
+actual environment, which will probably have an address in memory
+somewhere.  (The only way to detect this (and this would require
+undefined behaviour) would be know where local variables were
+allocated, and to scan this area byte-by-byte, presumably starting at
+the address of some other, non-reference, local parameter.)
+
+This requires a change to the existing semantics, to remove function
+arguments from the $\cal L$ (l-value) context.  In order to allow some
+function arguments to decay into r-values, a new rule
+\ruleid{function-application-lval2rval} is introduced:
+\[
+\infer{
+  \statebrack{\textsf{Ex}(f(\mathit{pfx} \frown e_0 ::
+    \mathit{sfx}),
+    \mathit{se}_0),s_0}
+  \rightarrow
+  \statebrack{\textsf{Ex}(f(\mathit{pfx}\frown e ::
+    \mathit{sfx}),\mathit{se}),
+    s}}{%
+  \statebrack{\mathit{se}_0,e_0,s_0}\lvtorv\statebrack{\mathit{se},e,s} &
+  f\mbox{ expects an r-value at position }|\mathit{pfx}|}
+\]
+The variables $\mathit{pfx}$ and $\mathit{sfx}$ are lists of
+expressions corresponding to the other actual parameters being passed
+to the function $f$.  The $\frown$ operator is list concatenation, and
+$::$ is ``cons'', taking an element and putting onto the front of
+another list ($::$ binds tighter than $\frown$).
+
+The rule that determines that a function application's sequence point
+has been reached (\ruleid{function-call-sqpt}) must also change.
+Previously, this rule checked that the function and all of the
+arguments had been fully evaluated, and being ``fully evaluated''
+meant ``had been evaluated to a value (consisting of a list of
+bytes)''.  The new rule checks that every parameter is either a
+byte-list value (when the function doesn't expect a reference type),
+or an l-value.
+
+\subsubsection{References Returned from Functions}
+
+This requires a number of changes to the semantics.  First, there
+shouldn't be an \crvreq{} tag wrapped around the expressions that are
+arguments to \texttt{return} statements.  Secondly, the continuation
+that accompanies all statement evaluations (as of Deliverable-1),
+needs to be adjusted so that it is one of two possibilities, a
+continuation accepting a value, or a continuation accepting an
+l-value.  The decision as to which sort of continuation it will be is
+set up when a function call is made, because the desired return type
+of the function is known at this point.
+
+The new type of continuations is an algebraic type with two
+constructors:
+\begin{verbatim}
+   conttype =
+       RVC of (byte list -> CPP_Type -> CExpr)
+     | LVC of (num -> CPP_Type -> string list -> CExpr)
+\end{verbatim}
+The rules for \texttt{return} are able to examine the type of
+continuation directly.  So that \ruleid{return-lval2rval} is
+\[
+\infer{\statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(e_0,\mathit{se}_0)\ckey{;},\;\ckey{RVC}(c)),s_0}\stmtarrow
+  \statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(e,\mathit{se})\ckey{;},\;\ckey{RVC}(c)),s}}{
+  \statebrack{\mathit{se}_0,e_0,s_0}\lvtorv\statebrack{\mathit{se},e,s}}
+\]
+Every statement is accompanied by a continuation, the second argument
+of the \textsf{St} tag. Also note that the first argument of a
+\ckey{return} might itself be another statement.  If the original
+expression contained a function call, the body of the called function,
+a statement, would eventually become the top of the expression.  In
+this rule, the use of the inner \textsf{Ex} tag precludes this
+possibility.
+
+There are two rules allowing a \ckey{return} statement to pass its
+expression-value to the continuation.  The rule for returning normal
+values is \ruleid{return-rvalue}:
+\[
+\infer{%
+  \begin{array}[t]{l}
+    \statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(\cvalue{m}{\tau},\mathit{se})\ckey{;},\;\ckey{RVC}(c)),
+      \;\sigma}%
+    \;\;\rightarrow\\
+    \qquad\left\langle\!\!\begin{array}{l}
+      \textsf{Ex}(c\;m\;\tau,\mathit{empty\_se}),\\
+      \sigma[\textsf{stack} := \mathit{stack}', \textsf{this} :=
+      \mathit{this}, \Gamma := g, \Sigma := s, A
+      := a]\end{array}\right\rangle
+  \end{array}}{
+  \mathit{se}\mbox{ is empty of side effects} & \textsf{stack}_\sigma = (s,g,a,\mathit{this})
+  :: \mathit{stack}'}
+\]
+The \textsf{stack} and \textsf{this} fields of the state are not in
+the original thesis semantics.  The \textsf{stack} field records the
+stack of environment information.  The environment information
+includes maps for variable typing ($\Gamma$), address information for
+variables ($A$), class information ($\Sigma$) and the current
+(l-)value for \ckey{this}, if there is one.   Use of the
+\textsf{stack} is a necessary part of moving to a small-step semantics
+for statements.
+
+The rule for returning a reference \ruleid{return-lvalue} is similar:
+\[
+\infer{%
+  \begin{array}[t]{l}
+    \statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(\clvalue(\mathit{ad},\tau,p),
+      \mathit{se})\ckey{;},\;\ckey{LVC}(c)),
+      \;\sigma}%
+    \;\;\rightarrow\\
+    \qquad\left\langle\!\!\begin{array}{l}
+      \textsf{Ex}(c\;\mathit{ad}\;\tau\;p,\mathit{empty\_se}),\\
+      \sigma[\textsf{stack} := \mathit{stack}', \textsf{this} :=
+      \mathit{this}, \Gamma := g, \Sigma := s, A
+      := a]\end{array}\right\rangle
+  \end{array}}{
+  \mathit{se}\mbox{ is empty of side effects} & \textsf{stack}_\sigma = (s,g,a,\mathit{this})
+  :: \mathit{stack}'}
+\]
+
+\subsubsection{Declaring References}
+
+When a reference is declared, it must also be initialised, and the
+initialising expression must be an l-value.  But normal
+initialisations need to be able to turn l-values into r-values so
+there is an ``lvalue-to-rvalue'' rule for variable declarations that
+are accompanied by initialisations.  This rule is
+\ruleid{block-vdecinit-lval2rval}:
+\[
+\infer{\begin{array}{l}
+    \statebrack{\textsf{St}(\mathbf{\{}
+  (\textsf{VDecInit}\;\tau\;\mathit{name}\;(\textsf{Ex}(e_0,\mathit{se}_0))
+  :: \mathit{vds})\;\mathit{sts} \mathbf{\}}, c),\sigma_0}
+\rightarrow\\[2mm]
+\qquad\statebrack{\textsf{St}(\mathbf{\{}
+  (\textsf{VDecInit}\;\tau\;\mathit{name}\;(\textsf{Ex}(e,\mathit{se}))
+  :: \mathit{vds})\;\mathit{sts} \mathbf{\}}, c)),\sigma}\end{array}}{
+\tau \mbox{ not a reference type} &
+\statebrack{\mathit{se}_0,e_0,\sigma_0}\lvtorv
+  \statebrack{\mathit{se},e,\sigma}}
+\]
+where $\textsf{VDecInit}\;\tau\;\mathit{name}\;e$ is a value in the
+abstract syntax type corresponding to the declaration of variable
+$\mathit{name}$ with type $\tau$, to be initialised with expression
+$e$.  The braces in the syntax above indicate that this happens in the
+context of a statement-block.  (There are corresponding rules for
+variable declarations and initialisations at the top-level of a
+translation unit.)
+
+A variable declaration of reference type is ready to ``fire'' when its
+initialising expression has reduced to an l-value, and when there are
+no remaining side effects in the side effect record.  At this point,
+the variable address map in the state is updated to point at the
+l-value's address, and the type map is also updated to make the type
+of the name the same as the type of the l-value.
+
+
+
+
 
 \subsection{Polymorphism \& Multiple Inheritance}
 \label{sec:multiple-inheritance}
@@ -1880,6 +2448,21 @@ earlier.
 
 \section{Validation}
 \label{sec:validation}
+
+Deliverable-2 includes a directory \texttt{holsrcs/testfiles}.  In
+this directory there is some preliminary work towards the creation of
+a symbolic evaluator, for demonstrating that programs in the model can
+behave as one might expect.  This work builds on the ideas
+in~\cite{netsem:popl2006}, allowing symbolic exploration of a semantic
+definition that features non-deterministic branching.  For the moment,
+the code only handles a sequence of external declarations not
+requiring any expression evaluation.
+
+In order to make using this tool even easier, I will need to develop
+some sort of parser for C++ source code as having to write out
+abstract syntax trees by hand is a major annoyance.  It's possible
+that the front-end of \texttt{g++} might be usable in this regard.
+
 
 \section{Omissions}
 \label{sec:omissions}
