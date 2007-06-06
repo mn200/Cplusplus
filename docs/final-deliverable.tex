@@ -13,6 +13,7 @@
 \include{cpp-macros}
 
 \newcommand{\ie}{\emph{i.e.}}
+\newcommand{\eg}{\emph{e.g.}}
 \newcommand{\naive}{na\"\i{}ve}
 \newcommand{\lbr}{\texttt{\{}}
 \newcommand{\rbr}{\texttt{\}}}
@@ -175,6 +176,37 @@ signature in the file
 \begin{alltt}
    holsrcs/thynameTheory.sig
 \end{alltt}
+
+\subsubsection{HOL Syntax}
+
+\paragraph{Pairs} The type of pairs of $\sigma$s and $\tau$s is
+written \texttt{$\sigma$~\#~$\tau$}.  Pair values are written inside
+parentheses, with components separated by commas, \eg,
+\texttt{(1,4)}. 
+
+\paragraph{Lists} Lists can either be empty (\texttt{[]}) or the
+result of ``cons''-ing an element onto the front of an
+existing list.  The list consisting of element \texttt{h} followed by
+list \texttt{t} is written \texttt{h::t}. The type of lists comes
+equipped with various standard functional language operations such as 
+\begin{alltt}
+   MAP   : ('a -> 'b) -> 'a list -> 'b list
+   FOLDL : ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+   ZIP   : 'a list -> 'b list -> ('a # 'b) list
+\end{alltt}
+
+\paragraph{Finite Maps} The finite map is a form of function where the
+domain is guaranteed to be finite.  The type of finite maps from
+$\sigma$ to $\tau$ is written \texttt{:$\sigma$~|->~$\tau$}.  The HOL
+syntax for the application of a finite map \texttt{fm} to an element
+\texttt{x}, is \texttt{fm~'~x}, with an apostrophe separating
+function and argument.  (Note that the result of the application is
+unspecified if the argument is not in the map's domain.)
+
+The empty finite map (one with no domain) is \texttt{FEMPTY}, and
+updating a map \texttt{fm} so that its value at \texttt{k} is
+\texttt{v} (ignoring whether or not \texttt{fm} may have already had a
+value for \texttt{k}), is written \texttt{fm |+ (k,v)}.
 
 \section{Basic Types}
 \label{sec:basic-types}
@@ -1236,7 +1268,140 @@ l-value turns into a list of bytes (an \texttt{ECompVal}), ready for
 further manipulations to occur.
 
 \paragraph{Operators} The rules governing the behaviour of the
-standard operators are as in the original C semantics.  
+standard operators are as in the original C semantics.  The rules for
+the standard computational binary operators (arithmetic and shift
+operators) are presented in Figure~\ref{fig:capbinary-rules}, and
+depend on an auxiliary relation \texttt{binop_meaning}, which is
+defined in \HOLfile{operators}.  Being a relation, it allows for
+nondeterminism and failure.
+
+Were the model to cope with operator overloading correctly, these
+rules would remain unchanged.  Operator overloading would be resolved
+in Phases~1 and~2, allowing uses of overloaded operators to be
+rewritten to the function calls that they really are. 
+\begin{figure}[htbp]
+\index{CApBinary@\texttt{CApBinary}}
+\begin{alltt}
+(* RULE-ID: binop-fails *)
+     (\(\forall\)res restype. \(\neg\)binop_meaning s f \(\!\)v1 (strip_const type1)
+                                       v2 (strip_const type2)
+                                       res restype)
+   \(\Rightarrow\)
+     mng (s, EX (CApBinary f (ECompVal v1 type1) 
+                             (ECompVal v2 type2)) se0) 
+         (s, EX UndefinedExpr se0)
+\end{alltt}
+
+\begin{alltt}
+(* RULE-ID: binop-computes *)
+     binop_meaning s f v1 (strip_const type1)
+                       v2 (strip_const type2)
+                       res restype
+   \(\Rightarrow\)
+     mng (s, EX (CApBinary f (ECompVal v1 type1) 
+                             (ECompVal v2 type2)) se) 
+         (s, EX (ECompVal res restype) se)
+\end{alltt}
+\caption{Rules for the standard binary operators}
+\label{fig:capbinary-rules}
+\end{figure}
+
+There are analogous rules for the standard unary operators (arithmetic
+and logical negation, unary plus, and bit-wise complement), presented
+in Figure~\ref{fig:capunary-rules}. 
+\begin{figure}[htbp]
+\index{CApUnary@\texttt{CApUnary}}
+\begin{alltt}
+(* RULE-ID: unop-computes *)
+     unop_meaning f ival (strip_const t) result rt
+   \(\Rightarrow\)
+     mng (s, EX (CApUnary f (ECompVal ival t)) se) 
+         (s, EX (ECompVal result rt) se)
+\end{alltt}
+
+\begin{alltt}
+(* RULE-ID: unop-fails *)
+     (\(\forall\)res rt. \(\neg\)unop_meaning f ival (strip_const t) res rt)
+   \(\Rightarrow\)
+     mng (s0, EX (CApUnary f (ECompVal ival t)) se0) 
+         (s0, EX UndefinedExpr se0)
+\end{alltt}
+\caption{Rules for the standard unary operators}
+\label{fig:capunary-rules}
+\end{figure}
+
+\paragraph{Sequential Operators}
+The logical operators \texttt{\&\&} and \texttt{||}, the ternary
+conditional operator \texttt{?:}, and the comma operator all evaluate
+their arguments in a prescribed order, and must exhaust the pending
+side effects that may have accumulated in a state before they can move
+from one argument to the next, if indeed they move on at all.   For
+example, the rule where logical-and returns false is 
+\begin{alltt}
+(* RULE-ID: and-false *)
+     is_zero t v
+   \(\Rightarrow\)
+     mng (s, EX (CAnd (ECompVal v t) sub2) se) 
+         (s, EX (ECompVal (signed_int 0) Bool) se)
+\end{alltt}
+When the first argument is true (non-zero), the truth value of the
+second argument is the result.  The conversion of the second argument
+to a truth value is achieved by negating twice:
+\begin{alltt}
+(* RULE-ID: and-true *)
+     ~is_zero t v \(\land\)
+     is_null_se se
+   \(\Rightarrow\)
+     mng (s, EX (CAnd (ECompVal v t) sub2) se) 
+         (s, EX (CApUnary CNot (CApUnary CNot sub2)) base_se)
+\end{alltt}
+\index{is_null_se@\texttt{is_null_se}} 
+The \texttt{is_null_se} predicate tests whether or not a side effect
+record is empty of pending side effects. 
+
+\medskip
+\noindent 
+\index{CommaSep@\texttt{CommaSep}} The comma operator
+(\texttt{CommaSep} here) always evaluates both of its arguments.  As
+with the other operators, evaluation of the first argument is handled
+by the contextual evaluation rule; we need only provide a rule for
+when the left-hand expression has been fully evaluated.
+\begin{alltt}
+(* RULE-ID: comma-progresses *)
+     final_value (EX e1 se)
+   ==>
+     mng (s0, EX (CommaSep e1 e2) se) 
+         (s0, EX (RValreq e2) base_se)
+\end{alltt}
+\index{final_value@\texttt{final_value}}
+The \texttt{final_value} predicate (from \HOLfile{statements}) checks
+an extended expression to confirm that it represents a completely
+evaluated form.  Its definition is
+
+\begin{minipage}{\textwidth}
+\begin{alltt}
+   (final_value (EX e se) =
+      is_null_se se \(\land\)
+      ((\(\exists\)v t. (e = ECompVal v t)) \(\lor\)
+       (\(\exists\)a t p. (e = LVal a t p) \(\land\) 
+                class_type (strip_const t)))) \(\land\)
+
+   (final_value (ST s c) = F)
+\end{alltt}
+\end{minipage}
+
+\bigskip
+\index{RValreq@\texttt{RValreq}}
+\noindent The special \texttt{RValreq} form is used to force l-values to
+evaluate to r-values if possible.  (See~\cite[\S3.3.3]{Norrish98} for
+why this form is necessary.)
+
+\paragraph{Pointer Operations}
+The two significant pointer operations are dereferencing and
+address-taking (the \texttt{*} and \texttt{\&} operators
+respectively).  \cpp{} adds two class-related variants of these
+operations to the existing pair, which come across from C unchanged. 
+
 
 \subsection{Statements in a Small-step Style}
 \label{sec:small-step-stmts}
@@ -1372,59 +1537,53 @@ where $e_0$ and $e$ may be statements or expressions.
 
 The inspiration for this part of the semantics is the article by
 Wasserrab~\emph{et al}~\cite{wasserrab-nst-OOPSLA06}, which provides a
-detailed model for multiple inheritance.  For the moment, my model
-doesn't handle multiple inheritance, but I have nonetheless adopted
-much of this article's basic technology as it certainly handles the
-single-inheritance situation.
+detailed model for multiple inheritance in a simple \cpp-like
+language. 
 
 \subsubsection{Class Declaration}
 \label{sec:class-declaration}
-A class declaration is similar to the C model's declaration of a
-\texttt{struct} type.  A class declaration takes two parameters, the
-name of the class, and an optional ``class-info''
+A class declaration is similar to the original C model's declaration
+of a \texttt{struct} type.  A class declaration takes two parameters,
+the name of the class, and an optional ``class-info''
 argument.\footnote{The information argument is optional to allow the
   situation where a forward declaration of a class occurs.}  The
-class-info, if present, is a list of fields, coupled with an optional
-ancestor class.  The latter allows single-inheritance.  The fields are
-of two sorts, ``data'' fields or function definitions.  (A field
-declaration of a function, though strictly not data, emulates the
-situation where a member function is declared elsewhere.)  Both sorts
-of fields are accompanied by a flag indicating whether or not they are
-static, and a protection indicator (i.e., \texttt{public},
-\texttt{protected}, or \texttt{private}).  For the moment, both
-static-ness and protection information is entirely ignored, so that
-all members are assumed to be \texttt{public} and non-static.
+class-info, if present, is a list of fields, coupled with a list of
+ancestors.  The latter allows inheritance from zero or many ancestors.
+Each ancestor is coupled with a boolean flag indicating whether or not
+it is a \texttt{virtual} ancestor.  As the model ignores protection
+issues, there is no scope for indicating protection status for
+ancestors. 
+
+The fields are of two sorts, declarations of members (whether of
+``data'' fields or member functions), and nested classes.  Member
+declarations are accompanied by a flag indicating whether or not they
+are static, and a protection indicator (i.e., \texttt{public},
+\texttt{protected}, or \texttt{private}).  Again, protection
+information is entirely ignored: any field access is assumed to have
+been OK-ed earlier by the compiler. 
 
 Member function definitions give the function's name, return-type,
-parameter list (types and names), and function body.  This is a close
-match for the abstract syntax.  All functions are assumed to be
-virtual.
+parameter list (types and names), function body, and a flag indicating
+whether or not it is virtual.  (Of course, even in the absence of an
+explicit declaration that a member function is virtual, it may be so
+because of an ancestor's prior declaration.) 
 
-When a class declaration is encountered (only at the top-level;
-neither nested or local classes are supported yet), its member
-functions are entered into the state's function map.  The same
-function map is used for normal (non-class) functions, so there is a
-type of ``function-id'', declared
-\begin{verbatim}
-   fnid = GlobalFn of string | MFn of string => string
-\end{verbatim}
-meaning that such an identifier can be either global, in which case it
-is given by one string (the function's name); or it can be a member
-function, in which case it is given by a pair of strings: the class's
-name and the function's name.
+When a class declaration is encountered , its member functions are
+entered into the state's function map.  The same function map is used
+for normal (non-class) functions, but the structured nature of \cpp{}
+identifiers allows the model to distinguish both sorts of function. 
 
 \subsubsection{Class Values and Dynamic Dispatch}
 \label{sec:class-values}
-There is no support for classes as r-values in the semantics as yet.
-Instead, all expressions of class-type must be l-values.  This
-restriction is based on the problems that will arise when multiple
-inheritance is implemented.  In particular, with multiple inheritance
-in place, it is no longer true that one can extract the byte sequence
-for a given l-value by starting at the base address and taking as many
-bytes from memory as the size of the type.  In particular, virtual
-base classes may be at completely different places in memory, not
-necessarily even contiguous with the rest of the object.  (This is
-demonstrated for the \texttt{g++} compiler by the little program in
+Classes can not be converted into r-values like other values.  This is
+because of the problems that arise with multiple inheritance.  In
+particular, with multiple inheritance in place, it is no longer true
+that one can extract the byte sequence for a given l-value by starting
+at the base address and taking as many bytes from memory as the size
+of the type.  In particular, virtual base classes may be at completely
+different places in memory, not necessarily even contiguous with the
+rest of the object.  (This is demonstrated for the \texttt{g++}
+compiler by the little program in
 \texttt{notes/mult-inheritance-layout.cpp}.)
 
 Absence of support for r-values means that, in this model, one can not
@@ -1432,6 +1591,8 @@ assign classes, pass them as parameters, or return them from
 functions.  However, because references are supported (see below),
 much idiomatic \cpp{} is still covered by the model.
 
+\index{LVal constructor, support for dynamic types@\texttt{LVal} constructor, support for dynamic types}
+%
 The presence of classes means that the model's presentation of
 l-values changes from the way it was in the original C model.  In
 particular, an l-value that is statically typed as a base class needs
@@ -1440,18 +1601,23 @@ information is traditionally recorded in \texttt{vtable} fields.
 Following Wasserrab~\emph{et al}, my model instead records an
 additional path accompanying every l-value.  This path is a list of
 strings, listing the path through the ancestry-tree that leads from
-the most-derived class to the current class type.
+the most-derived class to the static class type.  Moreover, the type
+that accompanies every l-value (recall that the \texttt{LVal}
+constructor takes three arguments, an address, a type and a list of
+identifiers), will have as the type, the \emph{dynamic} type
+of the l-value.
 
 Consider, for example, the code in Figure~\ref{fig:oo-example}.  The
 body of function \texttt{g} constructs the l-value \texttt{*b} when it
 calls \texttt{f}.  As in the C model, this l-value will be associated
 with some address, and the static type, which is \texttt{Class~B}.
-But the additional path information that accompanies the l-value will
-be the list \texttt{[D2,D1,B]}.  The last element of such paths is always
-the static class type.  The prefix of the list makes it clear that
-this is a \texttt{B} l-value that is dynamically a \texttt{D2}.  And
-when field selection occurs, the \texttt{f} chosen will be
-\texttt{D1}'s.
+The actual l-value will be of the form 
+\begin{alltt}
+   LVal a (Class D2) [D2,D1,B]
+\end{alltt}
+The last element of the paths in l-values is always the static class
+of the value.  In the example, when field selection occurs, the
+\texttt{f} chosen will be \texttt{D1}'s.
 
 \begin{figure}[hbtp]
 \begin{verbatim}
