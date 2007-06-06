@@ -35,7 +35,7 @@ val stmt_preserve_continuations = store_thm(
                     (ee = ST st1 c1) /\
                     (see = (s, ST st2 c2)) ==>
                     (c2 = c1)``,
-  HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
+  HO_MATCH_MP_TAC mng_ind THEN SRW_TAC [][] THEN
   METIS_TAC [is_exnval_lemma]);
 
 
