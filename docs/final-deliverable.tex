@@ -8,6 +8,7 @@
 \usepackage{underscore}
 \usepackage{pstricks}
 \usepackage{pst-node}
+\usepackage{makeidx}
 
 \include{cpp-macros}
 
@@ -15,12 +16,13 @@
 \newcommand{\naive}{na\"\i{}ve}
 \newcommand{\lbr}{\texttt{\{}}
 \newcommand{\rbr}{\texttt{\}}}
-\newcommand{\HOLfile}[1]{\texttt{#1Script.sml}}
+\newcommand{\HOLfile}[1]{HOL:\texttt{#1}}
 
 \title{A Formal Semantics for \cpp}
 \author{Michael Norrish\\{\small \texttt{Michael.Norrish@nicta.com.au}}}
 \date{}
 
+\makeindex
 
 \begin{document}
 \maketitle
@@ -154,6 +156,26 @@ propositional structure of the rule explicit.  Also, the relation
 being defined is always the first symbol (\texttt{apeval} here) of the
 conclusion.
 
+Note also how the \texttt{apeval} constant of this example is applied
+to its three arguments in ``curried'' $\lambda$-calculus or
+functional-programming style.  This is in contrast with ``standard''
+mathematical style, where functions are typically applied to arguments
+in parentheses separated by commas, as in $f(x,y,z)$.  Such tuples do
+also appear in the model, but sequences of function or predicate
+arguments are often just separated by whitespace, as above.
+
+Where quotations are made from underlying HOL sources, the origin of
+the quotation will be identified using the form \HOLfile{thyname}.
+The source code for theory \texttt{thyname} is available in the file 
+\begin{alltt}
+   holsrcs/thynameScript.sml
+\end{alltt}
+When compiled, the corresponding theory will have a readable
+signature in the file
+\begin{alltt}
+   holsrcs/thynameTheory.sig
+\end{alltt}
+
 \section{Basic Types}
 \label{sec:basic-types}
 
@@ -224,11 +246,7 @@ In other words, values of identifier type are constructed by applying
 the function \texttt{IDConstant} to three arguments: a boolean
 indicating whether or not this is an ``absolute'' identifier
 (represented in the concrete syntax by prefixing it with \texttt{::});
-a list of ID components and one final ID component.\footnote{The term
-  ``static field'' is not ideal here; while
-  something like \texttt{C::fld} might indeed denote a static field of
-  the class \texttt{C}, it might be a great many other things as
-  well.}
+a list of ID components and one final ID component.
 
 An ID component might either be a simple name, or can be a simple name
 applied to multiple ``template arguments''.  There are three sorts of
@@ -238,11 +256,10 @@ template arguments: types, templates and values; giving
                | TTemp of CPP_ID
                | TVal of TemplateValueArg
 \end{verbatim}
-
-So, the type above would thus be represented as
+So, the type above would be represented as
 \begin{verbatim}
-   IDConstant F [SFTempCall "List" [TType (Signed Int)]]
-                (SFName "fldname")
+   IDConstant F [IDTempCall "List" [TType (Signed Int)]]
+                (IDName "fldname")
 \end{verbatim}
 
 
@@ -263,8 +280,8 @@ file \HOLfile{expressions}.
 Statements are similar again (see \HOLfile{statements}), with
 constructors such as \texttt{CIf}, \texttt{Ret} and \texttt{Block}.
 However, the type here is rather more complicated because statements
-not only include expressions (but must be mutually recursive with
-other syntactic categories: variable and class declarations, ``class
+not only include expressions but must be mutually recursive with other
+syntactic categories: variable and class declarations, ``class
 entries'' (those things that can appear with a \texttt{class}
 declaration), and initializers (those things that appear in variable
 declarations that also explicitly initialise the variable).
@@ -329,6 +346,7 @@ be able to generate a finite number of addresses.  (All pointer types
 have a fixed, finite number of bytes making up their representations.)
 
 \subsection{Hierarchical Environments}
+\label{sec:hierarchical-environments}
 
 To reflect the hierarchical nesting of namespaces and classes, the
 model uses a type of hierarchical environments, giving maps from
@@ -471,22 +489,80 @@ Figure~\ref{fig:name-res-separate-phase} into
    int ::ns1::x = 2;
 \end{verbatim}
 
+\subsection{The Name Resolution State}
+\label{sec:name-resol-state}
+
+In order to track the current set of names that are in scope, Phase~1
+uses two environments, as per
+Section~\ref{sec:hierarchical-environments} above, to capture what is
+known about the current nested scopes, as well as some extra fields to
+describe the names that are \emph{visible}.  For example, in the
+program of Figure~\ref{fig:name-res-separate-phase}, the global
+\texttt{x} is visible when \texttt{::ns1::f} is defined, but there is
+no \texttt{x} in the namespace \texttt{::ns1}, at least at that stage.
+
+The HOL definition (see \HOLfile{name_resolution}): 
+\begin{verbatim}
+   P1state = <|
+     current_nspath : string list ;
+     dynclasses : string |-> bool # IDComp list # 
+                             TemplateArg list ;
+     dynobjs : string |-> bool # IDComp list # 
+                          TemplateArg list # dynobj_type ;
+     dynns : string |-> string list ;
+     global : state ;
+     accdecls : ext_decl list 
+   |>
+\end{verbatim}
+The three \texttt{dyn} fields record what names are visible in three
+different categories: namespaces~(\texttt{dynns}),
+classes~(\texttt{dynclasses}) and objects~(\texttt{dynobjs}).  Each
+maps to information sufficient to provide an exact location for the
+name.  
+
+In the case of namespace names, it is enough to provide a path from
+the root, and such a path will just be of strings.  For objects and
+classes, the path has to be of ID components because objects and
+classes can be nested inside classes (and classes might be template
+classes).  The boolean also records whether or not the name is local
+or non-local.  The list of \texttt{TemplateArg} values records any
+template parameters that the name may be associated with if it is a
+template.  Finally, in the case of objects, it is also necessary to
+record what sort of object the name is.  The options are given in the
+type \texttt{dynobj_type}: 
+\begin{verbatim}
+   dynobj_type = 
+      dStatMember | dMember | dVirtualMember | dNormalObj
+\end{verbatim}
+Note that in this context an ``object'' might actually be a function
+(and it is functions that provide the interest); elsewhere funtions
+are not considered objects because they don't occupy allocated
+memory. 
+
+The \texttt{global} field of a \texttt{P1state} is a state from the
+dynamic semantics.  In Phase~1 the vast majority of the information
+stored in such a state is ignored; the state is part of the
+\texttt{P1state} only for its two environments, which are accessed as
+the fields \texttt{genv} (the global environment), and \texttt{env}
+(the local environment). 
+
+Finally, the \texttt{accdecls} field records the accumulating
+translated declarations.  It is this that provides the final output of
+Phase~1.  
+
 \subsection{Template Names}
 
-One significant issue, at least as far as the standard is concerned,
-is the resolution of names in templates.  When a template definition
-is instantiated, it is important to specify how the names occuring in
-the template bind.  Typically, such names might bind to global names
-that are in scope at the point of the template's definition, or to
-member functions associated with the template argument.
+One significant issue is the resolution of names in templates.  When a
+template definition is instantiated, it is important to specify how
+the names occuring in the template bind.  Typically, such names might
+bind to global names that are in scope at the point of the template's
+definition, or to member functions associated with the template
+argument.
 
 The rule is actually fairly straightforward, at least in principle:
-names are bound to argument names when the statically determined type
-of the name refers to the template parameter.  I do not model this
-issue as static processing can resolve it before compilation begins.
-In particular, if a name is determined to depend on a template
-parameter, then that name can be prefixed with an explicit use of
-\texttt{this->}, making it clear that a member is being referred to.
+function names are allowed to bind to template names when the
+statically determined types of the function arguments refer to
+template parameters.  Such names have to be left alone in Phase~1.
 
 
 
@@ -585,10 +661,10 @@ identifier.  If there are two, then the outermost is a class template,
 and the second will occur last, and will be a template member
 function.
 
-\subsubsection{Instantiation and Matching}
+\subsection{Instantiation and Matching}
 
-(This seection describes formalisation done in the script file
-\texttt{instantiation}.)
+(This seection describes formalisation done in
+\HOLfile{instantiation}.) 
 
 \medskip
 \noindent Types and identifiers can be \emph{instantiated}: mappings
@@ -631,7 +707,7 @@ transitivity, and antisymmetry (up to renaming of free variables).
 Given the partial order, it is straightforward to find the best match
 amongst a set of template definitions for a given template call.
 
-\subsubsection{Program Instantiation}
+\subsection{Program Instantiation}
 
 Siek and Taha have an elegant model for program instantiation.  A
 program is a sequence of definitions (of classes, and of static member
@@ -644,8 +720,8 @@ to be instantiated.
 For example, when analysing the program in Figure~\ref{fig:taha-prog},
 the Siek and Taha's model will see the reference to
 \texttt{Foo<T*>::f()} in the definition of \texttt{Bar<T>::g()} and
-instantiate the definition of \texttt{f} (it knows that it does not
-already have an instantiation for a type of the form \texttt{T*}).
+instantiate the definition of \texttt{Foo} (it knows that it does not
+already have an instantiation for a type of the form \texttt{Foo<T*>}).
 This instantiation will result in a template definition (one with free
 variables), which may or may not be required in the rest of the
 program.
@@ -658,8 +734,9 @@ program.
    template <class T> int Bar<T>::g() { return Foo<T*>::f(); }
 \end{verbatim}
   \caption{In Siek and Taha's model, the definition of
-    \texttt{Foo<T>::f()} will get instantiated to provide a definition
-    of \texttt{Foo<T*>::f()}.}
+    class \texttt{Foo<T>} will get instantiated to provide a definition
+    of class \texttt{Foo<T*>} when a reference to that type is seen
+    inside the definition of \texttt{Bar<T>::g}.}
 \label{fig:taha-prog}
 \end{figure}
 
@@ -819,13 +896,9 @@ definition are put onto the Declarations list.
 \label{tab:ground-decls}
 \end{table}
 
-
-\bigskip
-\noindent
-Unlike Siek and Taha's model, there hasn't been any validation of my
-model of program instantiation, whether by the proof of theorems, or
-by simulation of concrete examples.  I hope to address this in the
-final deliverable.
+\paragraph{Caveat} Unlike Siek and Taha's model, there hasn't been any
+validation of my model of program instantiation, whether by the proof
+of theorems, or by simulation of concrete examples.
 
 
 
@@ -834,12 +907,18 @@ final deliverable.
 \section{Phase 3: Dynamics}
 \label{sec:phase3}
 
+Much of the core semantics in this section is based on the C semantics
+presented in my PhD thesis~\cite{Norrish98}.  In particular, details
+of the way in which side effects are created and applied remain the
+same, as does the use of an evaluation context, and the way in
+unspecified order of evaluation is handled. 
+
 \subsection{Dynamic States}
 \label{sec:dynamic-states}
 
-The dynamic semantics updates large values of the type \texttt{state}
-(see \HOLfile{states}), given in full in Figure~\ref{fig:state-type}.
-The first four components of the state are sets of addresses.  The
+The dynamic semantics updates values of the type \texttt{state} (see
+\HOLfile{states}), given in full in Figure~\ref{fig:state-type}.  The
+first four components of the state are sets of addresses.  The
 \texttt{allocmap} and \texttt{initmap} sets are from my C
 model~\cite{Norrish98}, and record which addresses have been allocated
 and initialised, respectively.  The new field \texttt{hallocmap} is
@@ -904,6 +983,389 @@ causes undefined behaviour.)
     \texttt{class_env}).}
 \label{fig:state-type}
 \end{figure}
+
+\subsection{The Dynamic Relation}
+
+\newcommand{\mng}{\texttt{mng}}
+
+The fundamental relation in the dynamics semantics is \mng{} (or
+``meaning''), which is a binary relation on states and abstract syntax
+forms.  For reasons to do with the prevention of function call
+interleaving (explained below in Section~\ref{sec:small-step-stmts}),
+this one relation is used for both expression and statement forms.
+(One might otherwise imagine two mutually recursive relations: one for
+statements and the other for expressions.)
+
+Thus the type of \mng{} is 
+\begin{alltt}
+   : (state # ExtE) -> (state # ExtE) -> bool
+\end{alltt}
+making it a binary relation on pairs of states and \emph{extended
+  expressions}.  An extended expression is either
+\begin{itemize}
+\item a syntactic expression coupled with a side effect information
+  record (containing the three fields, \texttt{update\_map},
+  \texttt{ref\_map} and \texttt{pending\_ses}, ($R$, $\Upsilon$ and
+  $\Pi$ in the terminology of my thesis)); or
+\item a statement coupled with a continuation, which latter is a
+  function that takes a value and returns an expression.  This latter
+  is used to recreate the expression in which the function call
+  that generated the statement occurred.  Also, all expressions within
+  statements (such as those that appear as guards in loops and
+  \texttt{if}-statements), are actually extended expressions.
+\end{itemize}
+
+In \HOLfile{statements}, the declaration of extended expression
+(\texttt{ExtE}) is thus mutually recursive with the type of
+statements:
+\index{ExtE@\texttt{ExtE}}
+\index{EX@\texttt{EX}}
+\index{ST@\texttt{ST}}
+\begin{verbatim}
+   ExtE = EX of CExpr => se_info
+        | ST of CStmt => conttype
+\end{verbatim}
+
+Most of the time reduction occurs between expressions and expressions,
+or between statements and statements, allowing one to imagine that one
+has the $\rightarrow_e$ and $\rightarrow_s$ from the C semantics. 
+For example, when evaluating expressions, rules in the dynamics have
+conclusions of the form
+\begin{alltt}
+   mng (s0, EX e0 se0) (s, EX e se)
+\end{alltt}
+where \texttt{s0} and \texttt{s} are the initial and final states;
+\texttt{e0} and \texttt{e} are the initial and final expression forms;
+and \texttt{se0} and \texttt{se} are the initial and final ``side
+effect records''.
+
+Similarly, when evaluating statements, conclusions are typically of
+the form 
+\begin{alltt}
+   mng (s0, ST st0 c) (s, ST st c)
+\end{alltt}
+where \texttt{st0} and \texttt{st} are the initial and final statement
+forms.  Note that the continuation (\texttt{c} above) never changes
+within statement evaluation, meaning that statement rules will always
+actually repeat the given continuation from initial to final tuple.
+
+\subsection{Special Syntactic Forms}
+\label{sec:spec-synt-forms}
+
+In the abstract syntax types representing both expressions and
+statements, I have added special forms that only arise as a result of
+evaluation and could never be seen in an input program.  The most
+important of these are the forms for representing values and l-values
+within the expression type.  
+
+\index{ECompVal@\texttt{ECompVal}}
+The \texttt{ECompVal} constructor has type 
+\begin{alltt}
+   : byte list -> CPP_Type -> CExpr
+\end{alltt}
+and represents values as sequences of bytes, coupled with their type. 
+
+\index{LVal@\texttt{LVal}}
+The \texttt{LVal} constructor is used to represent l-values, and has
+type 
+\begin{alltt}
+   : addr -> CPP_Type -> CPP_ID list
+\end{alltt}
+Thus, an l-value is represented by a combination of its base address
+and its type, along with the list of identifiers that allow us to
+represent the dynamic types of basic object orientation; see
+Section~\ref{sec:basic-oo} below.
+
+In addition, there is an analogue to \texttt{LVal} for functions,
+called \texttt{FVal}.  This represents the identity of a function, and
+has type: 
+\begin{alltt}
+   : CPP_ID -> CPP_Type -> CExpr option -> CExpr
+\end{alltt}
+A function is identified by its name, its type, and if a (non-static)
+member function, the expression denoting the class object for which it
+is to be called.
+
+\index{UndefinedExpr@\texttt{UndefinedExpr}}
+Finally, there is the special value \texttt{UndefinedExpr} used to
+represent the occurrence of undefined behaviour within an expression.
+
+\subsection{Simple Expression Rules}
+\label{sec:simple-expr-rules}
+
+\paragraph{Literals} We begin with two rules for literals.  We don't
+have any rules for other literal forms, such as floating point
+constants, though it is clear what they would look like.
+\index{Cnum@\texttt{Cnum}}
+\begin{alltt}
+(* RULE-ID: number-literal *)
+     (REP_INT (Signed Int) n = SOME bl)
+   ==>
+     mng (s, EX (Cnum n) se) 
+         (s, EX (ECompVal bl (Signed Int)) se)
+\end{alltt}
+
+The only difference with character constants is that the underlying
+number is pushed into a different sized space:
+\index{Cchar@\texttt{Cchar}}
+\begin{alltt}
+(* RULE-ID: char-literal *)
+     (REP_INT BChar n = SOME bl)
+   \(\Rightarrow\)
+     mng (s, EX (Cchar n) se) (s, EX (ECompVal bl BChar) se)
+\end{alltt}
+
+\index{Var@\texttt{Var}}
+\paragraph{Variables} Looking up object variables becomes a little
+complicated in the presence of references and object orientation. 
+\begin{alltt}
+(* RULE-ID: var-to-lvalue *)
+     (lookup_type s vname = SOME ty0) \(\land\)
+     object_type ty0 \(\land\)
+     (lookup_addr s vname = SOME (a,cnm,p)) \(\land\)
+     (ty = if class_type ty0 then Class cnm else ty0)
+   \(\Rightarrow\)
+     mng (s, EX (Var vname) se) (s, EX (LVal a ty p) se)
+\end{alltt}
+\index{lookup_type@\texttt{lookup_type}}
+The call to \texttt{lookup_type} determines the variable's static
+type, which will have been set in the appropriate part of the state
+when the variable was declared.  The second premise checks to see that
+the variable is of object type.  If so, the variable will have an
+address.  Accompanying the address is information (\texttt{cnm} and
+\texttt{p}) that gives dynamic type information if the object is of
+class type.  
+
+It may not be clear how a variable may come to have a dynamic type
+that is separate from its static type.  In fact, this is only possible
+in the presence of references, which are treated as aliases for real
+variables.  Thus, in a function such as 
+\begin{verbatim}
+   int f(C &c) { return c.memfn(); }
+\end{verbatim}
+the variable \texttt{c} is initialised to ``point at'' some existing
+variable, and the address maps are set up so that \texttt{c} is indeed
+a perfect alias for some existing l-value.  But, the argument may in
+fact have been a derived class of \texttt{C}, and so \texttt{c}'s
+dynamic type won't be the same as its static type.
+
+Variables can also denote functions:
+\index{FVal@\texttt{FVal}}
+\begin{alltt}
+(* RULE-ID: var-to-fvalue *)
+     (lookup_type s vname = SOME ty) \(\land\)
+     function_type ty \(\land\)
+     vname IN FDOM s.fnencode
+   \(\Rightarrow\)
+     mng (s, EX (Var vname) se) (s, EX (FVal vname ty NONE) se)
+\end{alltt}
+
+
+\paragraph{Contextual Evaluation}
+\index{valid_econtext@\texttt{valid_econtext}}
+Just as in the C semantics, most nested evaluation of expressions is
+mediated through one rule:
+\begin{alltt}
+(* RULE-ID: econtext-expr *)
+     mng (s0, EX e0 se0) (s, EX e se) \(\land\)
+     valid_econtext f
+   \(\Rightarrow\)
+     mng (s0, EX (f e0) se0) (s, EX (f e) se)
+\end{alltt}
+Here, \texttt{f} is a function of type \texttt{:CExpr->CExpr},
+but restricted by the predicate \texttt{valid_econtext}.  This
+predicate restricts where evaluation can occur.  For example, a
+function satisfying \texttt{valid_econtext} would be 
+\[
+\lambda e.\;\;\texttt{CAnd}\;e\;e_2
+\]
+for all possible values $e_2$.  Such a function allows reduction to
+occur to the left of the \texttt{CAnd} constructor (\ie,
+\texttt{\&\&}).  The corresponding function with its ``hole'' on the
+right of the \texttt{CAnd} is not a valid context function.
+
+\index{UndefinedExpr@\texttt{UndefinedExpr}}
+If an undefined behaviour occurs, this is reflected by having the
+expression that caused it become the special \texttt{UndefinedExpr}
+value.  This value can rise to the top of any expression:
+\begin{alltt}
+(* RULE-ID: econtext-propagates-undefinedness *)
+     valid_econtext f
+   \(\Rightarrow\)
+     mng (s, EX (f UndefinedExpr) se) (s, EX UndefinedExpr se)
+\end{alltt}
+
+The notion of where a function l-value decays into a pointer to a
+function is also controlled by a context:
+\index{valid_fvcontext@\texttt{valid_fvcontext}}
+\begin{alltt}
+(* RULE-ID: fcontext *)
+     fnid IN FDOM s.fnencode \(\land\)
+     (s.fnencode ' fnid = bytes) \(\land\)
+     valid_fvcontext f
+   \(\Rightarrow\)
+     mng (s, EX (f (FVal fnid ty NONE)) se) 
+         (s, EX (f (ECompVal bytes (Ptr ty))) se)
+\end{alltt}
+The definition of \texttt{valid_fvcontext} is 
+\begin{alltt}
+   valid_fvcontext f =
+      valid_econtext f \(\land\)
+      \(\forall\)args. \(\neg\)(f = \(\lambda\)f'. FnApp f' args)
+\end{alltt}
+stating that a function l-value can decay as in the rule above, as
+long as it is not at the head of a function application.
+
+\index{valid_lvcontext@\texttt{valid_lvcontext}}
+\index{lval2rval@\texttt{lval2rval}}
+Finally, there is the rule allowing normal l-values to decay into
+their r-value forms (the ``l-value to r-value conversion''):
+\begin{alltt}
+(* RULE-ID: lvcontext *)
+     valid_lvcontext f \(\land\)
+     lval2rval (s0,e0,se0) (s,e,se)
+   \(\Rightarrow\)
+     mng (s0, EX (f e0) se0) (s, EX (f e) se)
+\end{alltt}
+The \texttt{lval2rval} relation can result in an
+\texttt{UndefinedExpr} if the l-value causes a reference to a value
+that has already been updated within the same phase of execution, as
+might happen in the expression \texttt{i++ + i} for example.
+Otherwise, if the l-value denotes an object not of class type, the
+l-value turns into a list of bytes (an \texttt{ECompVal}), ready for
+further manipulations to occur.
+
+\paragraph{Operators} The rules governing the behaviour of the
+standard operators are as in the original C semantics.  
+
+\subsection{Statements in a Small-step Style}
+\label{sec:small-step-stmts}
+
+One might imagine that stating the statement part of a dynamic
+semantics in a small-step style should be easy.  The literature
+contains many examples of how to express constructs such as
+\texttt{while} and \texttt{if} in this style.  However, this it is not
+as straightforward as one might think because of the need to prevent
+function bodies from interleaving.
+
+Imagine a program such as that in Figure~\ref{fig:two-functions}, and
+how one might evaluate the return-expression in \texttt{main}.  If one
+simply expanded the bodies of the called functions into the expression
+as the functions were ready to be called, one would be permitting the
+simultaneous evaluation of the bodies of \texttt{f} and \texttt{g}.
+But the \cpp{} standard explicitly forbids this (\S1.8~fn8), and the C
+standard also hints that it is forbidden.
+\begin{figure}[htbp]
+\begin{verbatim}
+   int global;
+   int f(int x) { return global * 2 + x; }
+   int g(int y) { while (y > 0) { global += 2; y--; } }
+
+   int main(void) {
+     global = 10;
+     return f(6) + g(10);
+   }
+\end{verbatim}
+\caption{Where Functions Must Not Interleave}
+\label{fig:two-functions}
+\end{figure}
+
+One has to arrange the semantics so that expression evaluation can
+continue non-deterministically until a function call is encountered
+and the function call is made (after arguments have been evaluated).
+At this point, all further evolution of the program must occur within
+the function body, no matter how deeply nested the function call may
+have been within an enclosing expression.  (This problem does not
+occur if statement evaluation is big-step because the hypothesis in
+the expression rule for a function call would be a statement rule that
+required the complete evaluation of the function body.)
+
+\index{FnApp@\texttt{FnApp}}
+However, there are four important rules that mix the types of extended
+expression.  The following rule governs (normal) function calls: 
+\begin{alltt}
+(* RULE-ID: global-function-call *)
+     find_best_fnmatch s0 fnid (MAP valuetype args) 
+                       rtype params body \(\land\)
+     (pdecls = MAP (\(\lambda\)((n,ty),a). 
+                       VDecInit ty (Base n)
+                                   (CopyInit (EX a base_se)))
+                   (ZIP (params, args)))
+   \(\Rightarrow\)
+     mng (EX (FnApp_sqpt (FVal fnid ftype NONE) args) se) s0
+         (s0, ST (Block F pdecls [body]) 
+                 (return_cont se rtype))
+\end{alltt}
+and where $\sigma$ is the same as $\sigma_0$ but with bindings
+established between the values in $\mathit{args}$ and the formal
+parameters in the function $f$.  The continuation accompanying the
+expression at this point is simply the identity.  When the body
+returns a value, that value will simply be substituted for what was
+the function call, and expression evaluation can continue.  (The
+\textsf{Ex} tag indicates that we are looking at an expression, while
+\textsf{St} indicates that the value is a statement with its continuation.)
+
+The next rule extends a continuation.  In the thesis semantics, we
+have the rule
+\[
+\infer{\langle {\cal E}[e_0], \sigma_0\rangle \rightarrow_e
+  \langle {\cal E}[e],\sigma\rangle}{
+  \langle e_0,\sigma_0\rangle \rightarrow_e \langle e,\sigma\rangle}
+\]
+with $\cal E$ a context (a function from expressions to expressions).
+In the new semantics we have
+\[
+\infer{\langle \textsf{Ex}({\cal E}[e_0], \mathit{se}_0), \sigma_0\rangle \rightarrow
+  \langle \textsf{Ex}({\cal E}[e],\mathit{se}),\sigma\rangle}{
+  \langle \textsf{Ex}(e_0,\mathit{se}_0),\sigma_0\rangle \rightarrow_e
+  \langle \textsf{Ex}(e,\mathit{se}),\sigma\rangle}
+\]
+which is directly analogous.  But in addition, we also have
+\[
+\infer{\langle \textsf{Ex}({\cal E}[e_0],\mathit{se}_0),
+  \sigma_0\rangle \rightarrow
+  \langle \textsf{St}(s, {\cal E} \circ c), \sigma\rangle}{
+  \langle \textsf{Ex}(e_0, \mathit{se}_0),\sigma_0\rangle
+  \rightarrow
+  \langle \textsf{St}(s, c), \sigma\rangle}
+\]
+which can be read as saying that if a nested expression evaluates to a
+statement (i.e., a function call has begun), then the same function
+call must be held to have begun at the outer level, but that the
+continuation must insert the return value somewhat deeper into the
+expression's syntax tree.  This is reflected by the (function)
+composition of $\cal E$ with the continuation $c$ from the rule's
+hypothesis.
+
+These rules have specified what happens when an expression evaluation
+switches to a statement evaluation.  In the opposite direction, when a
+function call is about to return, the rule is
+\[
+\infer{%
+  \langle\textsf{St}(\texttt{return}
+  (\textsf{Ex}(\underline{(v,\tau)}, \mathit{se})), c), \sigma_0\rangle
+  \rightarrow
+  \langle \textsf{Ex}(c\underline{(v,\tau)}, \mathit{empty\_se}),
+  \sigma\rangle}{
+  \mbox{$\mathit{se}$ is empty of side effects}}
+\]
+where $\sigma$ is identical to $\sigma_0$ except that the various maps
+for local variables, types and \texttt{struct}s have been reverted to
+the state they held before the function was entered.
+
+Note how the argument to the return statement is itself an extended
+expression.  This means that the argument will be tagged with
+\textsf{Ex} initially, but may later evolve to be a statement and
+continuation (tagged with \textsf{St}) if the return-expression
+includes a function call.  This means that the rule for evaluation of
+the argument of return is
+\[
+\infer{\langle \textsf{St}(\texttt{return}(e_0),c), \sigma_0\rangle
+  \rightarrow
+  \langle \textsf{St}(\texttt{return}(e),c),\sigma\rangle}{
+  \langle e_0, \sigma_0\rangle \rightarrow \langle e,\sigma\rangle}
+\]
+where $e_0$ and $e$ may be statements or expressions.
 
 \subsection{Basic Object-Orientation}
 \label{sec:basic-oo}
@@ -2613,6 +3075,8 @@ directory to create and check the logical theories.
 
 \bibliographystyle{plain}
 \bibliography{deliverables}
+
+\printindex
 
 \end{document}
 
