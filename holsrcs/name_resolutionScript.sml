@@ -558,22 +558,27 @@ val phase1_expr_defn = Defn.Hol_defn "phase1_expr" `
      let elist' = MAP phase1_expr elist in
      let e' =
          if is_unqvar e then
-           let fnm = dest_unqvar e
+           let fnm = dest_unqvar e in
+           let atys = @atys. listRel (expr_type ps.global RValue) elist'
+                             atys 
            in
-             if fnm IN FDOM ps.dynobjs then phase1_expr e
+             if ~ (DISJOINT avoids 
+                            (FOLDL (\a ty. a UNION tyfrees ty) {} atys))
+             then 
+               e 
+             else if fnm IN FDOM ps.dynobjs then 
+               phase1_expr e 
              else
-               let atys = @atys. listRel (expr_type ps.global RValue) elist'
-                                 atys in
                let foldthis ps0 ty =
                    let nss = FST (ass_nspaces_classes avoids ps0 ty) in
                    let nsl = SET_TO_LIST nss
                    in
                      FOLDL (\ps00 ns. open_ftnode ns ps00) ps0 nsl
                in
-               let ps' = FOLDL foldthis ps atys
-               in
-                 Var (idattach_locn (ps'.dynobjs ' fnm)
-                                    (IDConstant F [] (IDName fnm)))
+                 let ps' = FOLDL foldthis ps atys
+                 in
+                   Var (idattach_locn (ps'.dynobjs ' fnm)
+                                      (IDConstant F [] (IDName fnm)))
          else
            phase1_expr e
      in
