@@ -634,7 +634,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      is_zero t v
    ==>
      mng (s, EX (CAnd (ECompVal v t) sub2) se) 
-         (s, EX (ECompVal (signed_int 0) (Signed Int)) se)
+         (s, EX (ECompVal (signed_int 0) Bool) se)
 )
 
    /\
@@ -654,7 +654,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ~is_zero t v
    ==>
      mng (s, EX (COr (ECompVal v t) sub2) se) 
-         (s, EX (ECompVal (signed_int 1) (Signed Int)) se)
+         (s, EX (ECompVal (signed_int 1) Bool) se)
 )
 
    /\
