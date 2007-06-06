@@ -688,8 +688,8 @@ val phase1_init_def = Define`
   (phase1_init avoids s (DirectInit0 elist)  =
      DirectInit0 (MAP (phase1_expr avoids s) elist)) /\
 
-  (phase1_init avoids s (CopyInit (NormE e se))  =
-     CopyInit (NormE (phase1_expr avoids s e) se))
+  (phase1_init avoids s (CopyInit (EX e se))  =
+     CopyInit (EX (phase1_expr avoids s e) se))
 
 `;
 val _ = export_rewrites ["phase1_init_def"]
@@ -913,14 +913,14 @@ val phase1_meminit_def = Define`
    ---------------------------------------------------------------------- *)
 
 val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
-  (phase1_stmt avds ps (CLoop (NormE e se) bod) =
-     CLoop (NormE (phase1_expr avds ps e) se) (phase1_stmt avds ps bod)) /\
-  (phase1_stmt avds ps (CIf (NormE e se) st1 st2) =
-     CIf (NormE (phase1_expr avds ps e) se)
+  (phase1_stmt avds ps (CLoop (EX e se) bod) =
+     CLoop (EX (phase1_expr avds ps e) se) (phase1_stmt avds ps bod)) /\
+  (phase1_stmt avds ps (CIf (EX e se) st1 st2) =
+     CIf (EX (phase1_expr avds ps e) se)
          (phase1_stmt avds ps st1)
          (phase1_stmt avds ps st2)) /\
-  (phase1_stmt avds ps (Standalone (NormE e se)) =
-     Standalone (NormE (phase1_expr avds ps e) se)) /\
+  (phase1_stmt avds ps (Standalone (EX e se)) =
+     Standalone (EX (phase1_expr avds ps e) se)) /\
   (phase1_stmt avds ps EmptyStmt = EmptyStmt) /\
   (phase1_stmt avds ps (Block F vds sts) =
      let (vds',s') = FOLDL (\ (va,s0) vd. let (vd',s') = phase1_vdec avds s0 vd
@@ -930,15 +930,15 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
                            vds
      in
        Block F vds' (MAP (phase1_stmt avds s') sts)) /\
-  (phase1_stmt avds ps (Ret (NormE e se)) =
-     Ret (NormE (phase1_expr avds ps e) se)) /\
+  (phase1_stmt avds ps (Ret (EX e se)) =
+     Ret (EX (phase1_expr avds ps e) se)) /\
   (phase1_stmt avds ps EmptyRet = EmptyRet) /\
   (phase1_stmt avds ps Break = Break) /\
   (phase1_stmt avds ps Cont = Cont) /\
   (phase1_stmt avds ps (Trap tt st) = Trap tt (phase1_stmt avds ps st)) /\
   (phase1_stmt avds ps (Throw NONE) = Throw NONE) /\
-  (phase1_stmt avds ps (Throw (SOME (NormE e se))) =
-     Throw (SOME (NormE (phase1_expr avds ps e) se))) /\
+  (phase1_stmt avds ps (Throw (SOME (EX e se))) =
+     Throw (SOME (EX (phase1_expr avds ps e) se))) /\
   (phase1_stmt avds ps (Catch st handlers) =
      Catch (phase1_stmt avds ps st)
            (MAP (\ (epd, est).

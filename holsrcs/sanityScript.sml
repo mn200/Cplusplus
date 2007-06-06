@@ -22,7 +22,7 @@ val _ = new_theory "sanity";
 
 open statementsTheory
 val is_exnval_lemma = prove(
-  ``is_exnval e /\ (mk_exn e c = mStmt s c') ==> (c' = c)``,
+  ``is_exnval e /\ (mk_exn e c = ST s c') ==> (c' = c)``,
   Cases_on `e` THEN SIMP_TAC (srw_ss()) [is_exnval_def] THEN
   Cases_on `C'` THEN SIMP_TAC (srw_ss()) [is_exnval_def] THEN
   Cases_on `o'` THEN SIMP_TAC (srw_ss()) [is_exnval_def] THEN
@@ -32,8 +32,8 @@ val stmt_preserve_continuations = store_thm(
   "stmt_preserve_continuations",
   ``!ee s0 see. meaning ee s0 see ==>
                 !c1 c2 st1 st2 s.
-                    (ee = mStmt st1 c1) /\
-                    (see = (s, mStmt st2 c2)) ==>
+                    (ee = ST st1 c1) /\
+                    (see = (s, ST st2 c2)) ==>
                     (c2 = c1)``,
   HO_MATCH_MP_TAC meaning_ind THEN SRW_TAC [][] THEN
   METIS_TAC [is_exnval_lemma]);

@@ -170,8 +170,8 @@ val declare_default_specials_def = Define`
 
 
 
-val _ = overload_on ("mExpr", ``statements$NormE``)
-val _ = overload_on ("mStmt", ``statements$EStmt``)
+val _ = overload_on ("EX", ``statements$EX``)
+val _ = overload_on ("ST", ``statements$ST``)
 
 val state_typemap_def = Define`
   state_typemap s = FUN_FMAP (\id. THE (lookup_type s id))
@@ -286,7 +286,7 @@ val initA_constructor_call_def = Define`
         (Class cnm)
         (ObjPlace addr)
         (DirectInit
-           (mExpr (FnApp (ConstructorFVal mdp subobjp addr cnm) args) base_se))
+           (EX (FnApp (ConstructorFVal mdp subobjp addr cnm) args) base_se))
 `;
 
 val initA_member_call_def = Define`
@@ -295,10 +295,10 @@ val initA_member_call_def = Define`
        Class cnm -> initA_constructor_call T T cnm addr args
     || Ref ty0 -> VDecInitA ty
                             (RefPlace (SOME parent_addr) nm)
-                            (CopyInit (mExpr (HD args) base_se))
+                            (CopyInit (EX (HD args) base_se))
     || _ -> VDecInitA ty
                       (ObjPlace addr)
-                      (CopyInit (mExpr (HD args) base_se))
+                      (CopyInit (EX (HD args) base_se))
 `;
 
 
@@ -310,7 +310,7 @@ val (zero_init_rules, zero_init_ind, zero_init_cases) = Hol_reln`
    ==>
      zero_init s mdp ty a [VDecInitA ty
                                      (ObjPlace a)
-                                     (DirectInit (mExpr (Cnum 0) base_se))])
+                                     (DirectInit (EX (Cnum 0) base_se))])
 
    /\
 
@@ -475,7 +475,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                       (strip_array ty)
                       (ObjPlace (a + n * sz))
                       (DirectInit
-                         (mExpr (FnApp (ConstructorFVal T F (a + n * sz) cnm)
+                         (EX (FnApp (ConstructorFVal T F (a + n * sz) cnm)
                                        [])
                                 base_se)))
                (array_size ty))
@@ -509,7 +509,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
              ([VDecInitA ty
                          (ObjPlace a)
                          (DirectInit
-                            (mExpr
+                            (EX
                                (FnApp (ConstructorFVal T F a cnm) args)
                                base_se))],
               s1))
@@ -534,11 +534,11 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
        (* arg is equal to or a derived class *)
    ==>
      declmng mng
-             (VDecInitA ty (ObjPlace a) (CopyInit (mExpr arg se)), s0)
+             (VDecInitA ty (ObjPlace a) (CopyInit (EX arg se)), s0)
              ([VDecInitA ty
                          (ObjPlace a)
                          (DirectInit
-                          (mExpr
+                          (EX
                              (FnApp (ConstructorFVal T F a cnm) [arg])
                              se))],
               s0))
@@ -556,7 +556,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
              (VDecInit ty name (DirectInit0 [arg]), s0)
-             ([VDecInitA ty loc (CopyInit (mExpr arg base_se))], s))
+             ([VDecInitA ty loc (CopyInit (EX arg base_se))], s))
 
    /\
 
@@ -588,8 +588,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
-     declmng mng (VDecInitA ty loc (f (NormE e0 se0)), s0)
-                 ([VDecInitA ty loc (f (NormE e se))], s))
+     declmng mng (VDecInitA ty loc (f (EX e0 se0)), s0)
+                 ([VDecInitA ty loc (f (EX e se))], s))
 
    /\
 
@@ -605,7 +605,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng (VDecInitA dty
                             (ObjPlace a)
-                            (f (NormE (ECompVal v ty) se)), s0)
+                            (f (EX (ECompVal v ty) se)), s0)
                  ([], s))
 
    /\
@@ -623,7 +623,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      declmng mng
              (VDecInitA (Ref ty1)
                         (RefPlace aopt refnm)
-                        (f (NormE (LVal a ty2 p) se)), s0)
+                        (f (EX (LVal a ty2 p) se)), s0)
              ([], s))
 
    /\
@@ -645,7 +645,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      declmng mng
        (VDecInitA (Class cnm)
                   (ObjPlace a)
-                  (DirectInit (NormE (ConstructedVal subp a cnm) se0)), s0)
+                  (DirectInit (EX (ConstructedVal subp a cnm) se0)), s0)
                   ([], s))
 
 (* TODO: add a rule for performing class based CopyInit updates *)

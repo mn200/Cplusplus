@@ -77,8 +77,8 @@ val _ = Hol_datatype`
 
   ;
 
-  ExtE     = NormE of CExpr => se_info
-           | EStmt of CStmt => conttype
+  ExtE     = EX of CExpr => se_info
+           | ST of CStmt => conttype
 
   ;
 
@@ -182,11 +182,11 @@ val _ = Hol_datatype`
 val _ = export_rewrites ["CStmt_size_def"]
 
 val final_value_def = Define`
-  (final_value (NormE e se) =
+  (final_value (EX e se) =
       is_null_se se /\
       ((?v t. (e = ECompVal v t)) \/
        (?a t p. (e = LVal a t p) /\ class_type (strip_const t)))) /\
-  (final_value (EStmt s c) = F)
+  (final_value (ST s c) = F)
 `;
 
 val final_stmt_def = Define`
@@ -195,38 +195,38 @@ val final_stmt_def = Define`
   (final_stmt Cont c = T) /\
   (final_stmt (Ret e) c =
      case c of
-        LVC f se0 -> (?a t p se. (e = NormE (LVal a t p) se) /\ is_null_se se)
+        LVC f se0 -> (?a t p se. (e = EX (LVal a t p) se) /\ is_null_se se)
      || RVC f se0 -> final_value e) /\
   (final_stmt (Throw exn) c = ?e. (exn = SOME e) /\ final_value e) /\
   (final_stmt _ c = F)
 `;
 
 val is_exnval_def = Define`
-  (is_exnval (EStmt (Throw (SOME e)) c) = final_value e) /\
+  (is_exnval (ST (Throw (SOME e)) c) = final_value e) /\
   (is_exnval _ = F)
 `
 
 val mk_exn_def = Define`
-  (mk_exn (EStmt (Throw (SOME e)) c0) c = EStmt (Throw (SOME e)) c)
+  (mk_exn (ST (Throw (SOME e)) c0) c = ST (Throw (SOME e)) c)
 `;
 
 (* derived loop forms *)
 val forloop_def = Define`
   forloop e1 e2 e3 bdy =
        Block F []
-             [Standalone (NormE e1 base_se);
+             [Standalone (EX e1 base_se);
               Trap BreakTrap
                    (CLoop e2 (Block F [] [Trap ContTrap bdy;
-                                          Standalone (NormE e3 base_se)]))]
+                                          Standalone (EX e3 base_se)]))]
 `
 val whileloop_def = Define`
-  whileloop g s = Trap BreakTrap (CLoop (NormE g base_se) (Trap ContTrap s))
+  whileloop g s = Trap BreakTrap (CLoop (EX g base_se) (Trap ContTrap s))
 `;
 val doloop_def = Define`
   doloop bdy g =
        Trap BreakTrap
             (Block F [] [Trap ContTrap bdy;
-                         CLoop (NormE g base_se) (Trap ContTrap bdy)])
+                         CLoop (EX g base_se) (Trap ContTrap bdy)])
 `
 
 (* recursively check a predicate over a statement *)
@@ -271,8 +271,8 @@ val erec_stmt_def = Define`
   (erec_stmtl P [] = T) /\
   (erec_stmtl P (s::ss) = erec_stmt P s /\ erec_stmtl P ss) /\
 
-  (erec_exte P (NormE e se) = P e) /\
-  (erec_exte P (EStmt s c) = erec_stmt P s) /\
+  (erec_exte P (EX e se) = P e) /\
+  (erec_exte P (ST s c) = erec_stmt P s) /\
 
   (erec_vdecs P [] = T) /\
   (erec_vdecs P (vd::vds) = erec_vdec P vd /\ erec_vdecs P vds) /\

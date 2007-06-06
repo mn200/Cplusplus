@@ -166,8 +166,8 @@ val stmt_ttypes_defn = Defn.Hol_defn "stmt_ttypes" `
            {} handlers) /\
   (stmt_ttypes _ = {}) /\
 
-  (eexpr_ttypes (NormE e se) = expr_ttypes e) /\
-  (eexpr_ttypes (EStmt s c) = stmt_ttypes s) /\
+  (eexpr_ttypes (EX e se) = expr_ttypes e) /\
+  (eexpr_ttypes (ST s c) = stmt_ttypes s) /\
 
   (* a forward declaration of a template function will cause its
      instantiation, so look for template calls in the name as well as the
@@ -316,19 +316,19 @@ val (expr_constructors_def, expr_constructors_ind) = Defn.tprove(
   Induct_on `x` THEN SRW_TAC [ARITH_ss][#2 (TypeBase.size_of ``:'a list``)]);
 
 val stmt_constructors_defn = Hol_defn "stmt_constructors" `
-  (stmt_constructors (CLoop (mExpr e se) bod) =
+  (stmt_constructors (CLoop (EX e se) bod) =
      expr_constructors s e UNION stmt_constructors bod) /\
-  (stmt_constructors (CIf (mExpr e se) s1 s2) =
+  (stmt_constructors (CIf (EX e se) s1 s2) =
      expr_constructors s e UNION stmt_constructors s2 UNION
      stmt_constructors s2) /\
-  (stmt_constructors (Standalone (mExpr e se)) = expr_constructors s e) /\
+  (stmt_constructors (Standalone (EX e se)) = expr_constructors s e) /\
   (stmt_constructors (Block b vds sts) =
      FOLDL (\a vd. a UNION vd_constructors vd)
            (FOLDL (\a st. a UNION stmt_constructors st) {} sts)
            vds) /\
-  (stmt_constructors (Ret (mExpr e se)) = expr_constructors s e) /\
+  (stmt_constructors (Ret (EX e se)) = expr_constructors s e) /\
   (stmt_constructors (Trap tt st) = stmt_constructors st) /\
-  (stmt_constructors (Throw (SOME (mExpr e se))) = expr_constructors s e) /\
+  (stmt_constructors (Throw (SOME (EX e se))) = expr_constructors s e) /\
   (stmt_constructors (Catch st handlers) =
      FOLDL (\a (e,st). a UNION stmt_constructors st )
            (stmt_constructors st)
@@ -344,7 +344,7 @@ val stmt_constructors_defn = Hol_defn "stmt_constructors" `
        in
          {(dest_class ty, tyl)}
      else {}) /\
-  (vd_constructors (VDecInit ty nm (CopyInit (mExpr e se))) =
+  (vd_constructors (VDecInit ty nm (CopyInit (EX e se))) =
      expr_constructors s e UNION
      (if class_type ty then
        let cnm = dest_class ty in

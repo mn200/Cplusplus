@@ -1338,10 +1338,10 @@ val stmt_inst_defn = Hol_defn "stmt_inst" `
 
      /\
 
-  (eexpr_inst sigma (NormE e se) =
-     OPTION_MAP (\e. NormE e se) (expr_inst sigma e)) /\
-  (eexpr_inst sigma (EStmt st c) =
-     OPTION_MAP (\s. EStmt s c) (stmt_inst sigma st))
+  (eexpr_inst sigma (EX e se) =
+     OPTION_MAP (\e. EX e se) (expr_inst sigma e)) /\
+  (eexpr_inst sigma (ST st c) =
+     OPTION_MAP (\s. ST s c) (stmt_inst sigma st))
 
      /\
 

@@ -222,7 +222,7 @@ val sizeof_c = store_thm(
    }
 
 *)
-val CI_def = Define`CI e = CopyInit (mExpr e base_se)`
+val CI_def = Define`CI e = CopyInit (EX e base_se)`
 val _ = export_rewrites ["CI_def"]
 
 val t2_program_def = Define`
@@ -464,7 +464,7 @@ val t3_program_def = Define`
                 FnDefn (Signed Int)
                        (Base "f")
                        [("n", Signed Int)]
-                       (Ret (mExpr (CApBinary CPlus
+                       (Ret (EX (CApBinary CPlus
                                               (Var (Base "n"))
                                               (Var (Base "x")))
                                    base_se))]
@@ -478,7 +478,7 @@ local
   val assertion = can prove(``LAST ^s_t.accdecls =
                           FnDefn (Signed Int) (IDConstant T [] (IDName "f"))
                                  [("n", Signed Int)]
-                                 (Ret (mExpr
+                                 (Ret (EX
                                        (CApBinary
                                           CPlus
                                           (Var (IDConstant F [] (IDName "n")))
@@ -503,7 +503,7 @@ val t4_program_def = Define`
                 FnDefn (Signed Int)
                        (Base "f")
                        [("x", Signed Int)]
-                       (Ret (mExpr (CApBinary CPlus
+                       (Ret (EX (CApBinary CPlus
                                               (Var (Base "x"))
                                               (Var (Base "x")))
                                    base_se))]
@@ -517,7 +517,7 @@ local
   val assertion = can prove(``LAST ^s_t.accdecls =
                           FnDefn (Signed Int) (IDConstant T [] (IDName "f"))
                                  [("x", Signed Int)]
-                                 (Ret (mExpr
+                                 (Ret (EX
                                        (CApBinary
                                           CPlus
                                           (Var (IDConstant F [] (IDName "x")))
@@ -557,7 +557,7 @@ val t5_program_def = Define`
                                 (CI (CApBinary CPlus
                                                (Var (Base "i"))
                                                (Var (Base "x"))))]
-                      [CIf (mExpr (CApBinary CGreat
+                      [CIf (EX (CApBinary CGreat
                                              (Var (Base "j"))
                                              (Cnum 0))
                                   base_se)
@@ -565,7 +565,7 @@ val t5_program_def = Define`
                                               (Base "x")
                                               (CI (Cnum 3))]
                             [Standalone
-                               (mExpr
+                               (EX
                                   (Assign
                                      NONE
                                      (Var (Base "j"))
@@ -578,7 +578,7 @@ val t5_program_def = Define`
                                                         T [] (IDName "x")))))
                                   base_se)])
                            EmptyStmt;
-                       Ret (mExpr (Var (Base "j")) base_se)])]
+                       Ret (EX (Var (Base "j")) base_se)])]
 `;
 
 val _ = fourmore "t5" t5_program_def 2
@@ -610,19 +610,19 @@ val t6_program_def = Define`
              (SOME
                <| ancestors := [];
                   fields := [(CFnDefn F (Signed Int) (IDName "g") []
-                                (SOME (SOME (Ret (mExpr (Var (Base "x"))
+                                (SOME (SOME (Ret (EX (Var (Base "x"))
                                                         base_se)))),
                                 F, Public);
                              (FldDecl (IDName "x") (Signed Int), F, Public)]
                |>);
            VDec (Class (Base "s")) (Base "val")]
           [Standalone
-             (mExpr
+             (EX
               (Assign NONE
                       (SVar (Var (Base "val")) (Base "x"))
                       (Var (Base "x")))
               base_se);
-           Ret (mExpr (FnApp (SVar (Var (Base "val")) (Base "g")) [])
+           Ret (EX (FnApp (SVar (Var (Base "val")) (Base "g")) [])
                       base_se)])]
 `;
 
