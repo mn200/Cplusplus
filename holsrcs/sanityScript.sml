@@ -30,11 +30,11 @@ val is_exnval_lemma = prove(
 
 val stmt_preserve_continuations = store_thm(
   "stmt_preserve_continuations",
-  ``!ee s0 see. meaning ee s0 see ==>
-                !c1 c2 st1 st2 s.
-                    (ee = ST st1 c1) /\
-                    (see = (s, ST st2 c2)) ==>
-                    (c2 = c1)``,
+  ``!see0 see. meaning see0 see ==>
+               !c1 c2 st1 st2 s s0.
+                   (see0 = (s0, ST st1 c1)) /\
+                   (see = (s, ST st2 c2)) ==>
+                   (c2 = c1)``,
   HO_MATCH_MP_TAC mng_ind THEN SRW_TAC [][] THEN
   METIS_TAC [is_exnval_lemma]);
 

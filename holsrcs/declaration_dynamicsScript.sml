@@ -575,7 +575,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 (* RULE-ID: decl-vdecinit-evaluation *)
 (!s0 ty loc exte exte' s f.
-     mng exte s0 (s, exte') /\
+     mng (s0, exte) (s, exte') /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
      declmng mng (VDecInitA ty loc (f exte), s0)
@@ -585,7 +585,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 (* RULE-ID: decl-vdecinit-lval2rval *)
 (!ty loc e0 se0 s0 s e se f.
-     lval2rval (s0,e0,se0) (s,e,se) /\ ~ref_type ty /\
+     lval2rval (s0,e0,se0) (s,e,se) /\ 
+     ~ref_type ty /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
      declmng mng (VDecInitA ty loc (f (EX e0 se0)), s0)
@@ -653,7 +654,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 val declmng_MONO = store_thm(
   "declmng_MONO",
-  ``(!x y z. P x y z ==> Q x y z) ==>
+  ``(!x y. P x y ==> Q x y) ==>
     (declmng P s1 s2 ==> declmng Q s1 s2)``,
   STRIP_TAC THEN MAP_EVERY Q.ID_SPEC_TAC [`s2`, `s1`] THEN
   HO_MATCH_MP_TAC declmng_ind THEN SIMP_TAC (srw_ss()) [declmng_rules] THEN
