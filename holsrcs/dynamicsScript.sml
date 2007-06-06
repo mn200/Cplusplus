@@ -395,21 +395,20 @@ val exception_parameter_match_def = Define`
 val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: number-literal *)
-(!n se s.
-     T
+(!n bl se s.
+     (REP_INT (Signed Int) n = SOME bl)
    ==>
      mng (s, EX (Cnum n) se) 
-         (s, EX (ECompVal (signed_int n) (Signed Int)) se)
+         (s, EX (ECompVal bl (Signed Int)) se)
 )
 
    /\
 
 (* RULE-ID: char-literal *)
-(!n se s.
-     T
+(!n bl se s.
+     (REP_INT BChar n = SOME bl)
    ==>
-     mng (s, EX (Cchar n) se) 
-         (s, EX (ECompVal (signed_int n) BChar) se)
+     mng (s, EX (Cchar n) se) (s, EX (ECompVal bl BChar) se)
 )
 
    /\
