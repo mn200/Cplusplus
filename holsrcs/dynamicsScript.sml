@@ -364,15 +364,6 @@ val RVR_def = Define`
   (RVR (ST s c) = ST s c)
 `
 
-val encode_offset_def = new_specification(
-  "encode_offset_def",
-  ["encode_offset"], 
-  prove(``?f. (!cnm1 sf1 cnm2 sf2 bl. 
-                  (f cnm1 sf1 = SOME bl) /\ (f cnm2 sf2 = SOME bl) ==> 
-                  (cnm1 = cnm2) /\ (sf1 = sf2)) /\
-              (!cnm sf bl. (f cnm sf = SOME bl) ==> 
-                           (LENGTH bl = ptr_size Void))``,
-        Q.EXISTS_TAC `\x y. NONE` THEN SRW_TAC [][]))
 
 val _ = print "About to define meaning relation\n"
 
@@ -552,7 +543,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: dyncast-poly-base-to-other-ptr *)
+(* RULE-ID: dyncast-poly-base-to-other-ref *)
 (!s se dcnm dty scnm p p' a result src_dynty.
      (strip_const dty = Class dcnm) /\
      (src_dynty = Class scnm) /\
@@ -897,6 +888,19 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                 se)
          (s, EX (SVar (LVal a (Class cnm1) p) fld) 
                 se)
+)
+
+   /\
+
+(* RULE-ID: offset-deref-fails *)
+(!s se cnm1 cnm2 a p fldty.
+     T
+   ==>
+     mng (s, EX (OffsetDeref
+                   (LVal a (Class cnm1) p)
+                   (ECompVal null_member_ptr (MPtr cnm2 fldty)))
+                se)
+         (s, EX UndefinedExpr se)
 )
 
    /\

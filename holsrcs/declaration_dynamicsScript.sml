@@ -105,6 +105,25 @@ val malloc_def = Define`
 `
 
 (* ----------------------------------------------------------------------
+    pointers to member, including the null member pointer 
+   ---------------------------------------------------------------------- *)
+
+val encode_offset_def = new_specification(
+  "encode_offset_def",
+  ["encode_offset", "null_member_ptr"], 
+  prove(``?(f:CPP_ID -> IDComp -> byte list option) null. 
+              (!cnm1 sf1 cnm2 sf2 bl. 
+                  (f cnm1 sf1 = SOME bl) /\ (f cnm2 sf2 = SOME bl) ==> 
+                  (cnm1 = cnm2) /\ (sf1 = sf2)) /\
+              (!cnm sf bl. (f cnm sf = SOME bl) ==> 
+                           (LENGTH bl = ptr_size Void) /\
+                           ~(bl = null)) /\
+              (LENGTH null = ptr_size Void)``,
+        Q.EXISTS_TAC `\x y. NONE` THEN SRW_TAC [][] THEN 
+        Q.EXISTS_TAC `GENLIST (\n. ARB) (ptr_size Void)` THEN 
+        SRW_TAC [][rich_listTheory.LENGTH_GENLIST]));
+
+(* ----------------------------------------------------------------------
     clause 4's conversions
       referenced in 8.5 para 14 and elsewhere
    ---------------------------------------------------------------------- *)
@@ -126,7 +145,7 @@ val nonclass_conversion_def = Define`
       (integral_type ty1 /\ integral_type ty2 \/
        ?ty0. (ty1 = Ptr ty0) /\ (ty2 = Ptr Void)) /\
       (?i. (INT_VAL ty1 v1 = SOME i) /\
-           (SOME v2 = REP_INT ty2 i))
+           (SOME v2 = REP_INT ty2 i)) (* includes null pointer conversion *)
          \/
       (strip_ptr_const ty1 = strip_ptr_const ty2) /\ (v1 = v2)
          \/
@@ -135,6 +154,18 @@ val nonclass_conversion_def = Define`
           (SOME v1 = ptr_encode s addr (Class c1) pth1) /\
           (s,{}) |- c2 casts pth1 into pth2 /\
           (SOME v2 = ptr_encode s addr (Class c1) pth2))
+         \/
+      (?ty0 base derived p fld. 
+          (ty1 = MPtr base ty0) /\ (ty2 = MPtr derived ty0) /\
+          (s,{}) |- path derived to base unique /\
+          (derived, p) IN rsubobjs (s,{}) /\ (* ensures no virtual base *)
+          (LAST p = base) /\
+          (v2 = v1) /\
+          ((SOME v1 = encode_offset base fld) \/ (v1 = null_member_ptr)))
+         \/
+      (?ty0 c. (* null pointer conversion for pointers to member *)
+          (ty1 = Signed Int) /\ (SOME v1 = REP_INT (Signed Int) 0) /\
+          (ty2 = MPtr c ty0) /\ (v2 = null_member_ptr))
 `;
 
 
