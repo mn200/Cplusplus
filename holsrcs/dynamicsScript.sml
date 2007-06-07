@@ -560,11 +560,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (s,{}) |- path scnm to dcnm via p' /\
      (result = 
       if (s,{}) |- path scnm to dcnm unique then 
-	(* should also check accessible, though I think this could
+        (* should also check accessible, though I think this could
            be done statically *)
         LVal a src_dynty p'
       else
-	EThrow (SOME (New (Class bad_cast_name) NONE)))
+        EThrow (SOME (New (Class bad_cast_name) NONE)))
    ==>
      mng (s, EX (DynCast (Ref dty) (LVal a src_dynty p)) se)
          (s, EX result se)
@@ -790,7 +790,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: deref-objptr *)
 (* 5.3.1 p1 - pointer to an object type *)
 (!mval t t' se s addr pth.
-     object_type t /\ (SOME mval = ptr_encode s addr t' pth) /\
+     object_type t /\ 
+     (SOME mval = ptr_encode s addr t' pth) /\
      (static_type (t',pth) = t)
    ==>
      mng (s, EX (Deref (ECompVal mval (Ptr t))) se) 
@@ -824,8 +825,6 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: addr-lvalue *)
 (* See 5.3.1 p2-5 - taking the address of an lvalue *)
-(*   TODO: taking the address of a qualified-id, thereby generating
-                a pointer to member *)
 (!a t pth se s result.
      (SOME result = ptr_encode s a t pth)
    ==>
@@ -858,8 +857,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      mng (s, EX (MemAddr cnm fldname) se)
          (s, EX (FVal (mk_member cnm fldname) 
-		      (Function rt (MAP SND args))
-		      NONE) se)
+                      (Function rt (MAP SND args))
+                      NONE) se)
 )
 
    /\
@@ -870,7 +869,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ((?prot. MEM (FldDecl fldname ty, F, prot) (cinfo s cnm).fields) \/
       (?prot v rt args bod. 
           MEM (CFnDefn v rt fldname args bod, F, prot) 
-	      (cinfo s cnm).fields /\
+              (cinfo s cnm).fields /\
           (ty = Function rt (MAP SND args))))
    ==>
      mng (s, EX (MemAddr cnm fldname) se)
@@ -886,18 +885,18 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
               let (r,a) = dest_function_type fldty
               in
                 if is_virtual s cnm2 fldname r a then 
-		  IDConstant F [] fldname
-		else
+                  IDConstant F [] fldname
+                else
                   mk_member cnm2 fldname
             else
               mk_member cnm2 fldname)
    ==>
      mng (s, EX (OffsetDeref 
-		     (LVal a (Class cnm1) p) 
-		     (ECompVal bl (MPtr cnm2 fldty))) 
-		se)
+                     (LVal a (Class cnm1) p) 
+                     (ECompVal bl (MPtr cnm2 fldty))) 
+                se)
          (s, EX (SVar (LVal a (Class cnm1) p) fld) 
-		se)
+                se)
 )
 
    /\
