@@ -265,6 +265,8 @@ for naming and referring to class types.
 
 Therefore, we must add the following to the above definition of \cpp{}
 types:
+\index{IDComp@\texttt{IDComp}}
+\index{IDConstant@\texttt{IDConstant}}
 \begin{verbatim}
    CPP_ID = IDConstant of bool => IDComp list =>
                           IDComp
@@ -1196,7 +1198,7 @@ Variables can also denote functions:
 \paragraph{Contextual Evaluation}
 \index{valid_econtext@\texttt{valid_econtext}}
 Just as in the C semantics, most nested evaluation of expressions is
-mediated through one rule:
+mediated through one rule: \label{rule:econtext-expr}
 \begin{alltt}
 (* RULE-ID: econtext-expr *)
      mng (s0, EX e0 se0) (s, EX e se) \(\land\)
@@ -1446,8 +1448,9 @@ the expression rule for a function call would be a statement rule that
 required the complete evaluation of the function body.)
 
 \index{FnApp@\texttt{FnApp}}
-However, there are four important rules that mix the types of extended
-expression.  The following rule governs (normal) function calls: 
+At the base level, a function call turns an \texttt{EX} piece of
+syntax into an extended expression tagged with \texttt{ST}.  
+The following rule governs (normal) function calls: 
 \begin{alltt}
 (* RULE-ID: global-function-call *)
      find_best_fnmatch s0 fnid (MAP valuetype args) 
@@ -1457,80 +1460,62 @@ expression.  The following rule governs (normal) function calls:
                                    (CopyInit (EX a base_se)))
                    (ZIP (params, args)))
    \(\Rightarrow\)
-     mng (EX (FnApp_sqpt (FVal fnid ftype NONE) args) se) s0
+     mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se) 
          (s0, ST (Block F pdecls [body]) 
                  (return_cont se rtype))
 \end{alltt}
-and where $\sigma$ is the same as $\sigma_0$ but with bindings
-established between the values in $\mathit{args}$ and the formal
-parameters in the function $f$.  The continuation accompanying the
-expression at this point is simply the identity.  When the body
-returns a value, that value will simply be substituted for what was
-the function call, and expression evaluation can continue.  (The
-\textsf{Ex} tag indicates that we are looking at an expression, while
-\textsf{St} indicates that the value is a statement with its continuation.)
-
-The next rule extends a continuation.  In the thesis semantics, we
-have the rule
+At this point, the standard rule for evaluating an expression within a
+context (\ruleid{expr-econtext}, p\pageref{rule:econtext-expr}) can
+not fire, because its hypothesis is of the form 
 \[
-\infer{\langle {\cal E}[e_0], \sigma_0\rangle \rightarrow_e
-  \langle {\cal E}[e],\sigma\rangle}{
-  \langle e_0,\sigma_0\rangle \rightarrow_e \langle e,\sigma\rangle}
+\texttt{mng (s0, EX e0 se0) (s, EX e se)}
 \]
-with $\cal E$ a context (a function from expressions to expressions).
-In the new semantics we have
-\[
-\infer{\langle \textsf{Ex}({\cal E}[e_0], \mathit{se}_0), \sigma_0\rangle \rightarrow
-  \langle \textsf{Ex}({\cal E}[e],\mathit{se}),\sigma\rangle}{
-  \langle \textsf{Ex}(e_0,\mathit{se}_0),\sigma_0\rangle \rightarrow_e
-  \langle \textsf{Ex}(e,\mathit{se}),\sigma\rangle}
-\]
-which is directly analogous.  But in addition, we also have
-\[
-\infer{\langle \textsf{Ex}({\cal E}[e_0],\mathit{se}_0),
-  \sigma_0\rangle \rightarrow
-  \langle \textsf{St}(s, {\cal E} \circ c), \sigma\rangle}{
-  \langle \textsf{Ex}(e_0, \mathit{se}_0),\sigma_0\rangle
-  \rightarrow
-  \langle \textsf{St}(s, c), \sigma\rangle}
-\]
-which can be read as saying that if a nested expression evaluates to a
-statement (i.e., a function call has begun), then the same function
-call must be held to have begun at the outer level, but that the
-continuation must insert the return value somewhat deeper into the
-expression's syntax tree.  This is reflected by the (function)
-composition of $\cal E$ with the continuation $c$ from the rule's
-hypothesis.
+Instead, the new rule 
+\label{rule:econtext-stmt}
+\begin{alltt}
+(* RULE-ID: econtext-stmt *)
+     mng (s0, EX e se0) (s, ST stmt c) \(\land\)
+     valid_econtext f
+   \(\Rightarrow\)
+     mng (s0, EX (f e) se0) (s, ST stmt (cont_comp f c))
+\end{alltt}
+can fire, turning the enclosing expression into a statement form, with
+an ever more elaborate continuation.   The r\^ole of the continuation
+is to do no more than record where the function-call was, so that when
+the statement form finishes execution, its result can be slotted back
+into the appropriate expression.
 
 These rules have specified what happens when an expression evaluation
 switches to a statement evaluation.  In the opposite direction, when a
 function call is about to return, the rule is
-\[
-\infer{%
-  \langle\textsf{St}(\texttt{return}
-  (\textsf{Ex}(\underline{(v,\tau)}, \mathit{se})), c), \sigma_0\rangle
-  \rightarrow
-  \langle \textsf{Ex}(c\underline{(v,\tau)}, \mathit{empty\_se}),
-  \sigma\rangle}{
-  \mbox{$\mathit{se}$ is empty of side effects}}
-\]
-where $\sigma$ is identical to $\sigma_0$ except that the various maps
-for local variables, types and \texttt{struct}s have been reverted to
-the state they held before the function was entered.
+\begin{alltt}
+(* RULE-ID: return-rvalue *)
+     is_null_se se0
+   \(\Rightarrow\)
+     mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se)) 
+         (s, EX (c (ECompVal v t)) se)
+\end{alltt}
+In this situation, the \texttt{return} statement has completely
+evaluated its argument into a value, and there are no remaining side
+effects to be evaluated.  This means that the value can be put back
+into the containing expression tree, and expression evaluation can
+continue.  This is reflected by the switch from \texttt{ST} to
+\texttt{EX}, and the application of the continuation \texttt{c} to the
+value.  
 
 Note how the argument to the return statement is itself an extended
 expression.  This means that the argument will be tagged with
-\textsf{Ex} initially, but may later evolve to be a statement and
-continuation (tagged with \textsf{St}) if the return-expression
+\texttt{EX} initially, but may later evolve to be a statement and
+continuation (tagged with \texttt{ST}) if the return-expression
 includes a function call.  This means that the rule for evaluation of
 the argument of return is
-\[
-\infer{\langle \textsf{St}(\texttt{return}(e_0),c), \sigma_0\rangle
-  \rightarrow
-  \langle \textsf{St}(\texttt{return}(e),c),\sigma\rangle}{
-  \langle e_0, \sigma_0\rangle \rightarrow \langle e,\sigma\rangle}
-\]
-where $e_0$ and $e$ may be statements or expressions.
+\begin{alltt}
+(* RULE-ID: return-eval-under *)
+     mng (s1, exte0) (s2, exte)
+   \(\Rightarrow\)
+     mng (s1, ST (Ret exte0) c) (s2, ST (Ret exte) c)
+\end{alltt}
+where \texttt{exte0} and \texttt{exte} may be statements or expressions.
 
 \subsection{Basic Object-Orientation}
 \label{sec:basic-oo}
@@ -1573,7 +1558,7 @@ entered into the state's function map.  The same function map is used
 for normal (non-class) functions, but the structured nature of \cpp{}
 identifiers allows the model to distinguish both sorts of function. 
 
-\subsubsection{Class Values and Dynamic Dispatch}
+\subsubsection{Class Values and Member Functions}
 \label{sec:class-values}
 Classes can not be converted into r-values like other values.  This is
 because of the problems that arise with multiple inheritance.  In
@@ -1607,6 +1592,7 @@ constructor takes three arguments, an address, a type and a list of
 identifiers), will have as the type, the \emph{dynamic} type
 of the l-value.
 
+\index{member functions!virtual}
 Consider, for example, the code in Figure~\ref{fig:oo-example}.  The
 body of function \texttt{g} constructs the l-value \texttt{*b} when it
 calls \texttt{f}.  As in the C model, this l-value will be associated
@@ -1646,28 +1632,30 @@ of the value.  In the example, when field selection occurs, the
 \label{fig:oo-example}
 \end{figure}
 
-The rule encoding all this is \ruleid{function-member-select}:
-\[
-\infer{
-  \begin{array}{l}
-    \statebrack{\textsf{Ex}((\clvalue(a,\texttt{Class}\;C,p))\;\mathbf{.}\;
-      \mathit{fld},\mathit{se}),\sigma} \rightarrow \\
-    \qquad\left\langle\textsf{Ex}\left(\cfvalue\left(
-        \begin{array}{l}
-          \texttt{MFn}\;(\last(p'))\;\mathit{fld},\\
-          (\funtype{\mathit{argtys}}{\mathit{ret}}),\\
-          \SOME{(\clvalue\;a\;(\texttt{Class}\;(\last(p')))\;p')}
-        \end{array}\right),
-      \mathit{se}\right),\sigma\right\rangle
-  \end{array}}{
-  \sigma \vdash \hd(p) \textrm{ has least } \mathit{fld} :
-  \funtype{\mathit{argtys}}{\mathit{ret}} \textrm{ via } p'}
-\]
+The rule encoding all this is 
+\begin{alltt}
+(* RULE-ID: virtual-function-member-select *)
+     (s,\lbr\rbr) |- LAST Cs has least method
+                 (IDName fld) -: 
+                 (static_retty,F,args0,body0) via 
+                 Ds \(\land\)
+     (s,\lbr\rbr) |- (C,Cs ^ Ds) selects 
+                 (IDName fld) -: 
+                 (dyn_retty,F,args,body) via 
+                 Cs'
+   \(\Rightarrow\)
+     mng (s, EX (SVar (LVal a (Class C) Cs)
+                      (IDConstant F [] (IDName fld))) se) 
+         (s, EX (FVal (mk_member (LAST Cs') (IDName fld))
+                      (Function dyn_retty (MAP SND args))
+                      (SOME (LVal a (Class C) Cs'))) se)
+
+\end{alltt}
 
 In the figure, the expression of interest is \texttt{b->f()}, which is
 syntactic sugar for \texttt{((*b).f)()}.  (Note how the member
 selection is syntactically subordinate to the function application.)
-The \ruleid{function-member-select} rule governs the evaluation of
+The \ruleid{virtual-function-member-select} rule governs the evaluation of
 \texttt{(*b).f} once the left-hand-side (\texttt{*b}) has evaluated to
 an l-value.\footnote{Even when the model allows for class r-values,
   they will be given a memory location (and thus, a life-time).  This
@@ -1677,43 +1665,113 @@ an l-value.\footnote{Even when the model allows for class r-values,
   a memory location, simply by writing them down.}
 
 In our model, the l-value's address will be the same as the address of
-its most-derived class.  In other words, the $a$ of the rule will be
-the same as the address of the object \texttt{d}.  This is not what
-happens in typical compilers, which will actually make the pointer to
-the \texttt{B} sub-class point at the address of that sub-object's
-fields in the wider object's memory layout.  Then, the fact that the
-most-derived class is a \texttt{D2} is implicitly recorded in the
-\texttt{vtable}, which will contain a pointer to \texttt{D1::f}.
+its most-derived class.  In other words, the \texttt{a} of the rule
+will be the same as the address of the object \texttt{d}.  This is not
+what happens in typical compilers, which will actually make the
+pointer to the \texttt{B} sub-class point at the address of that
+sub-object's fields in the wider object's memory layout.  Then, the
+fact that the most-derived class is a \texttt{D2} is implicitly
+recorded in the \texttt{vtable}, which will contain a pointer to
+\texttt{D1::f}.
 
-In the rule above, the variable $C$ containing the name of the static
-class will be \texttt{B}, and $p$, the path variable, will be
-\texttt{[D2,D1,B]}.  The $\mathit{fld}$ variable will be \texttt{f}.
-Then, the hypothesis will check the class hierarchy to determine where
-an \texttt{f} can be found, starting at the head of the path, i.e., at
-\texttt{D2}.  This will reveal that there is an \texttt{f} at path
-\texttt{[D2,D1]}.  This will be the value for $p'$.
+In the rule above, the variable \texttt{C} containing the name of the
+static class will be \texttt{D2}, and \texttt{Cs}, the path variable,
+will be \texttt{[D2,D1,B]}.  The \texttt{fld} variable will be
+\texttt{f}.  Then, the first hypothesis will check the class hierarchy
+to determine where an \texttt{f} can be found, starting at the static
+type, i.e., at \texttt{B}.  This will reveal that, with respect to
+\texttt{B} there is an \texttt{f} at path \texttt{[B]}.  This will be
+the value for \texttt{Ds}.  The same check determines four pieces of
+information about the function: its static return type (in the
+variable \texttt{static_retty}, that it is not static (virtual
+functions can not be static), and what its arguments and body are
+(\texttt{args0}, and \texttt{Body0}).
 
-The RHS of the reduction arrow $\exprarrow$ features a new sort of
-expression constructor, \cfvalue{}.  This is a ``function l-value'', a
-designation of a particular function within the program.  The first
-argument is the function identifier, as described earlier in
-Section~\ref{sec:class-declaration}.  In this case, the function
-identifier points at a class's member function given by two strings:
-the name of the class where the function body is declared, and the
-field-name.  In our example, the function identifier will be
-\texttt{MFn~D1~f}, or simply \texttt{D1::f} in more traditional \cpp{}
-notation.  The second argument of the \cfvalue{} constructor is the
-type of the function.  The third argument is an optional expression
-containing the l-value for the object associated with a member
-function call.  (The use of $\SOME{\;}$ marks that this is an optional
-value.)  This third argument is not present if the function is a
-normal one (i.e., not a class-member).
+The second hypothesis calculates which function must be called given
+the class's dynamic type.  This is complicated because of the need to
+handle multiple inheritance (the definition of
+``\texttt{selects-via}'' is discussed below in
+Section~\ref{sec:multiple-inheritance}), but in this case, the path
+\texttt{Cs'} will be found to be \texttt{[D2,D1]}, and the information
+\texttt{(dyn_retty,F,args,body)} found will be that for the function
+\texttt{D1::f}.  
 
-There are two rules for performing function applications, but the only
-difference between them is that the member function version sets up
-the value of the \texttt{this} expression form.  Otherwise, both rules
-extract the body for the given function-identifier, and set up
-parameters in the same way.
+\index{mk_member@\texttt{mk_member}}
+The result of the rule in this circumstance is that the expression
+\texttt{b->f} turns into a reference to the function \texttt{D1::fld}
+(this is the call to \texttt{mk_member}), coupled with with the fact
+that the function call is being made on an object whose dynamic type
+is \texttt{D2}, and whose static type is \texttt{D1} (as is
+appropriate for the body of the function).
+
+Note that the function in this rule is known to be virtual by virtue
+of the fact that the fieldname is unqualified: it is of the form
+\[
+\texttt{IDConstant~F~[]~(IDName~fld)}
+\]
+Name resolution will ensure that non-virtual members all have
+qualified fields.
+
+\paragraph{Other Sorts of Member Function}
+
+There are two other sorts of member functions in \cpp{}: static
+members functions, and normal functions.  Each sort has its own rule
+in the semantics.    
+\index{member functions!static}
+First, the rule for static member functions: 
+\begin{alltt}
+(* RULE-ID: static-function-member-select *)
+     (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
+     (s,\lbr\rbr) |- LAST Ds has least method 
+                  (IDtl fldid) -: (retty,T,ps,body)
+                  via [LAST Ds] \(\land\)
+     (ftype = Function retty (MAP SND ps)) \(\land\)
+     is_qualified fldid
+   \(\Rightarrow\)
+     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se) 
+         (s, EX (FVal fldid ftype NONE) se)
+\end{alltt}
+\index{is_qualified@\texttt{is_qualified}}
+The third hypothesis (\texttt{is_qualified}) checks that the field
+name has multiple components to it.  This qualification will be
+introduced by name resolution if not already provided by the user.
+Name resolution will also ensure that the name given to the field is
+qualified with the name of the class where the field actually
+resides.  
+
+\index{class_part@\texttt{class_part}} The first hypothesis is
+strictly redundant given this pre-processing: we know that the field
+will occur in the class that is at the end of the path \texttt{Ds},
+and that this final element will be equal to the class-part of the
+identifier.  The second hypothesis reinforces this: the deduced path
+from \texttt{LAST~Ds} (which equals \texttt{class_part~fldid})to the
+host class for the given field is the singleton \texttt{[LAST~Ds]}. 
+Because the member is static (witness the \texttt{T} as argument 2 of
+the 4-tuple returned by \texttt{least-method}), the final function
+value does not include a class component.
+
+\index{member functions!non-static}
+The rule for normal, non-static  member functions is:
+\begin{alltt}
+(* RULE-ID: nonstatic-function-member-select *)
+     (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
+     (s,\lbr\rbr) |- LAST Ds has least method 
+                  (IDtl fldid) -: (retty,F,ps,body)
+                  via [LAST Ds] \(\land\)
+     (ftype = Function retty (MAP SND ps)) \(\land\)
+     is_qualified fldid
+   \(\Rightarrow\)
+     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se) 
+         (s, EX (FVal fldid ftype 
+                      (SOME (LVal a (Class cnm) (Cs ^ Ds)))) 
+                se)
+\end{alltt}
+This is very similar to the rule for static functions, but this time
+the identity of the class for which the function is being called is
+important, and recorded in the third argument to \texttt{FVal}.  The
+dynamic type of the object stays the same, but the static type is
+adjusted to reflect the class where the function being called is
+defined. 
 
 \paragraph{Field Selection}
 Field selection is also based on the notion of being able to find the
