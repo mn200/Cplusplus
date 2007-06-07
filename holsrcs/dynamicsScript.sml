@@ -35,6 +35,8 @@ val valid_econtext_def = Define`
       (?e2 e3. (f = \e1. CCond e1 e2 e3)) \/
       (?f'. f = CApUnary f') \/
       (f IN  {Addr; Deref; PostInc; RValreq}) \/
+      (?e1. f = OffsetDeref e1) \/
+      (?e2. f = \e1. OffsetDeref e1 e2) \/
       (?fld. f = \e. SVar e fld) \/
       (?args. f = \e. FnApp e args) \/
       (?f' pre post.
@@ -68,7 +70,9 @@ val valid_lvcontext_def = Define`
         (f IN  {Deref; RValreq}) \/
         (?e1 opt. (f = Assign opt e1)) \/
         (?args. f = \e. FnApp e args) \/
-        (?t. f = Cast t)
+        (?t. f = Cast t) \/
+        (?e1. f = OffsetDeref e1) \/ 
+        (?e2. f = \e1. OffsetDeref e1 e2) 
 `
 
 val addr_nonloopy = prove(
@@ -287,6 +291,10 @@ val construct_ctor_pfx_def = Define`
 val callterminate =
     ``FnApp (Var  (IDConstant T [IDName "std"] (IDName "terminate"))) []``
 
+val bad_cast_name_def = Define`
+  bad_cast_name = IDConstant T [IDName "std"] (IDName "bad_cast")
+`;
+
 val realise_destructor_calls_def = Define`
   (* parameters
       exp           : T iff we are leaving a block because of an exception
@@ -492,6 +500,75 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      mng (s, EX (Cast t' (ECompVal v t)) se) 
          (s, EX UndefinedExpr se))
+
+   /\
+
+(* RULE-ID: dyncast-derived-to-base-ref *)
+(* assume that base is accessible (checked by compiler) *)
+(!a dty dcnm scnm s se p p'.
+     (strip_const dty = Class dcnm) /\
+     (s,{}) |- path (LAST p) to dcnm unique /\ (* static check *)
+     (s,{}) |- path (LAST p) to dcnm via p' 
+   ==>
+     mng (s, EX (DynCast (Ref dty) (LVal a (Class scnm) p)) se)
+         (s, EX (LVal a (Class scnm) (p ^ p')) se)
+)
+
+   /\
+
+(* RULE-ID: dyncast-derived-to-base-ptr *)
+(* assume that base is accessible (checked by compiler) *)
+(!dty dcnm srcval srcty s se p p' a newval src_dynty.
+     (strip_const dty = Class dcnm) /\
+     (s,{}) |- path (LAST p) to dcnm unique /\ (* static check *)
+     (s,{}) |- path (LAST p) to dcnm via p' /\
+     (strip_const srcty = Class (LAST p)) /\
+     (ptr_encode s a src_dynty p = SOME srcval) /\
+     (ptr_encode s a src_dynty (p ^ p') = SOME newval)
+   ==>
+     mng (s, EX (DynCast (Ptr dty) (ECompVal srcval (Ptr srcty))) se)
+         (s, EX (ECompVal newval (Ptr dty)) se)
+)
+
+   /\
+
+(* RULE-ID: dyncast-poly-base-to-other-ptr *)
+(!s se dcnm dty destval srcval srcty a a' p p' src_dynty.
+     (strip_const dty = Class dcnm) /\
+     (ptr_encode s a src_dynty p = SOME srcval) /\
+     (strip_const srcty = Class (LAST p)) /\
+     polymorphic s (LAST p) /\ (* statically checked *)
+     (s,{}) |- path (dest_class src_dynty) to dcnm via p' /\
+     (SOME destval = ptr_encode s a' src_dynty p') /\
+     (a' = 
+      if (s,{}) |- path (dest_class src_dynty) to dcnm unique then a
+        (* should also check accessible, though I think this could be
+           done statically *)
+      else 0)
+   ==>
+     mng (s, EX (DynCast (Ptr dty) (ECompVal srcval (Ptr srcty))) se)
+         (s, EX (ECompVal destval (Ptr dty)) se)
+)
+
+   /\
+
+(* RULE-ID: dyncast-poly-base-to-other-ptr *)
+(!s se dcnm dty scnm p p' a result src_dynty.
+     (strip_const dty = Class dcnm) /\
+     (src_dynty = Class scnm) /\
+     polymorphic s (LAST p) /\
+     (s,{}) |- path scnm to dcnm via p' /\
+     (result = 
+      if (s,{}) |- path scnm to dcnm unique then 
+	(* should also check accessible, though I think this could
+           be done statically *)
+        LVal a src_dynty p'
+      else
+	EThrow (SOME (New (Class bad_cast_name) NONE)))
+   ==>
+     mng (s, EX (DynCast (Ref dty) (LVal a src_dynty p)) se)
+         (s, EX result se)
+)
 
    /\
 

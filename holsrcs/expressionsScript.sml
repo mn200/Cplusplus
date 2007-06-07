@@ -50,6 +50,7 @@ val _ = Hol_datatype
          | FnApp of CExpr => CExpr list
          | CommaSep of CExpr => CExpr
          | Cast of CPP_Type => CExpr
+	 | DynCast of CPP_Type => CExpr
          | PostInc of CExpr
          | New of CPP_Type => CExpr list option
 
@@ -138,6 +139,7 @@ val rec_expr_P_def = Define`
     (rec_expr_P (CommaSep e1 e2) P =
       P (CommaSep e1 e2) /\ rec_expr_P e1 P /\ rec_expr_P e2 P) /\
     (rec_expr_P (Cast t e) P = P (Cast t e) /\ rec_expr_P e P) /\
+    (rec_expr_P (DynCast t e) P = P (DynCast t e) /\ rec_expr_P e P) /\
     (rec_expr_P (PostInc e) P = P (PostInc e) /\ rec_expr_P e P) /\
     (rec_expr_P (FnApp_sqpt e args) P =
       P (FnApp_sqpt e args) /\ rec_expr_P e P /\ rec_exprl_P args P) /\
