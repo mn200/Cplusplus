@@ -39,7 +39,7 @@ in detail, and to describe the less important parts at a high level.
 
 The HOL mechanisation itself is necessarily the only \emph{formal}
 part of the deliverable.  This document quotes from the sources
-liberally, but aims to make these relatively easily understood by
+liberally, and aims to make these relatively easily understood by
 accompanying HOL extracts with English prose.  Where prose and rule
 appear to conflict, this will almost certainly reflect a problem with
 the prose and not the rule.  The rule has been type-checked, and in
@@ -271,8 +271,7 @@ types:
 \index{IDComp@\texttt{IDComp}}
 \index{IDConstant@\texttt{IDConstant}}
 \begin{verbatim}
-   CPP_ID = IDConstant of bool => IDComp list =>
-                          IDComp
+   CPP_ID = IDConstant of bool => IDComp list => IDComp
 
    ;
 
@@ -1580,6 +1579,27 @@ must be to a completely qualified identifier.\footnote{Note the
   contrast with C: in \cpp, one can write \texttt{c.::B::fld}, which
   is unambiguous, if ugly, about which \texttt{fld} member is meant.}
 
+It is possible to have null member pointers
+(see~\cite[\S4.11]{cpp-standard-iso14882}).  We specify
+\texttt{encode_offset} in such a way that the null member pointer
+constant is not in its range, and add the rule
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+(* RULE-ID: offset-deref-fails *)
+     T
+   \(\Rightarrow\)
+     mng (s, EX (OffsetDeref
+                   (LVal a (Class cnm1) p)
+                   (ECompVal null_member_ptr (MPtr cnm2 fldty)))
+                se)
+         (s, EX UndefinedExpr se)
+\end{alltt}
+\end{minipage}
+\end{center}
+It is undefined behaviour to apply the null member pointer to any
+class. 
+
 \paragraph{Assignment}
 The rules for assignment do not need to change from their presentation
 in C.  Nonetheless, this semantics adopts Clive Feather's
@@ -1600,16 +1620,57 @@ assignment considerably simpler, at the cost of requiring an analysis
 of all possible execution paths to see if any of them result in an
 update before a reference.
 
+\index{Assign@\texttt{Assign}}
 The rule for a completed assignment expression is:
+\begin{center}
+\label{rule:assign-completes}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+(* RULE-ID: assign-completes *)
+    \(\neg\)class_type lhs_t \(\land\)
+    (nonclass_conversion s (v0,t0) (v,lhs_t) \(\land\) (* 5.17 p3 *)
+     (se = add_se (a, v) se0) \(\land\) (resv = ECompVal v lhs_t)
+                          \(\lor\)
+     (\(\forall\)v. \(\neg\)nonclass_conversion s (v0, t0) (v, lhs_t)) \(\land\)
+     (resv = UndefinedExpr) \(\land\) 
+     (se = se0))
+   \(\Rightarrow\)
+     mng (s, EX (Assign NONE (LVal a lhs_t []) 
+                             (ECompVal v0 t0)) se0)
+         (s, EX resv se)
+\end{alltt}
+\end{minipage}
+\end{center}
+The \texttt{NONE} value that is the first argument ot \texttt{Assign}
+is where a binary operator can be installed, implementing the
+\texttt{op=} syntax (\texttt{+=}, \texttt{>>=} etc.).  The rule that
+deals with this is
+\index{CApBinary@\texttt{CApBinary}}
+\begin{alltt}
+(* RULE-ID: assign-op-assign *)
+     T
+   \(\Rightarrow\)
+     mng (s0, EX (Assign (SOME f) (LVal n t p) e) se0) 
+         (s0, EX (Assign NONE
+                         (LVal n t p)
+                         (CApBinary f (LVal n t p) e)) se0)
+
+\end{alltt}
+(Note that the hypothesis true (\texttt{T}) means there are no
+preconditions on this transition occurring.)
+
+
 
 \subsection{Statements in a Small-step Style}
 \label{sec:small-step-stmts}
 
 One might imagine that stating the statement part of a dynamic
-semantics in a small-step style should be easy.  The literature
-contains many examples of how to express constructs such as
-\texttt{while} and \texttt{if} in this style.  However, this it is not
-as straightforward as one might think because of the need to prevent
+semantics in a small-step style should be easy.  (My
+thesis~\cite[\S7.1]{Norrish98} explains why the way I formulated
+statements in a big-step style was a mistake.) The literature contains
+many examples of how to express constructs such as \texttt{while} and
+\texttt{if} in a small-step style.  However, this is not as
+straightforward as one might think because of the need to prevent
 function bodies from interleaving.
 
 Imagine a program such as that in Figure~\ref{fig:two-functions}, and
@@ -1773,7 +1834,7 @@ assign classes, pass them as parameters, or return them from
 functions.  However, because references are supported (see below),
 much idiomatic \cpp{} is still covered by the model.
 
-\index{LVal constructor, support for dynamic types@\texttt{LVal} constructor, support for dynamic types}
+\index{LVal@\texttt{LVal}!and dynamic types}
 %
 The presence of classes means that the model's presentation of
 l-values changes from the way it was in the original C model.  In
@@ -1802,6 +1863,19 @@ The last element of the paths in l-values is always the static class
 of the value.  In the example, when field selection occurs, the
 \texttt{f} chosen will be \texttt{D1}'s.
 
+In Figure~\ref{fig:oo-example}, the expression of interest is
+\texttt{b->f()}, which is syntactic sugar for \texttt{((*b).f)()}.
+(Note how the member selection is syntactically subordinate to the
+function application.)  The \ruleid{virtual-function-member-select}
+rule (see Figure~\ref{fig:virtual-function-member-select}) governs the
+evaluation of \texttt{(*b).f} once the left-hand-side (\texttt{*b})
+has evaluated to an l-value.\footnote{Even when the model allows for
+  class r-values, they will be given a memory location (and thus, a
+  life-time).  This will enable them to also be l-values.  In essence,
+  it is not possible to create an object of any sort without giving it
+  a location.  Contrast numbers, which can be ``created'', and not
+  given a memory location, simply by writing them down.}
+
 \begin{figure}[hbtp]
 \begin{verbatim}
    class B {
@@ -1829,7 +1903,9 @@ of the value.  In the example, when field selection occurs, the
 \label{fig:oo-example}
 \end{figure}
 
-The rule encoding all this is 
+\begin{figure}[hbtp]
+\begin{center}
+\begin{minipage}{\textwidth}
 \begin{alltt}
 (* RULE-ID: virtual-function-member-select *)
      (s,\lbr\rbr) |- LAST Cs has least method
@@ -1848,18 +1924,11 @@ The rule encoding all this is
                       (SOME (LVal a (Class C) Cs'))) se)
 
 \end{alltt}
-
-In the figure, the expression of interest is \texttt{b->f()}, which is
-syntactic sugar for \texttt{((*b).f)()}.  (Note how the member
-selection is syntactically subordinate to the function application.)
-The \ruleid{virtual-function-member-select} rule governs the evaluation of
-\texttt{(*b).f} once the left-hand-side (\texttt{*b}) has evaluated to
-an l-value.\footnote{Even when the model allows for class r-values,
-  they will be given a memory location (and thus, a life-time).  This
-  will enable them to also be l-values.  In essence, it is not
-  possible to create an object of any sort without giving it a
-  location.  Contrast numbers, which can be ``created'', and not given
-  a memory location, simply by writing them down.}
+\end{minipage}
+\end{center}
+\caption{The rule for virtual member function dispatch}
+\label{fig:virtual-function-member-select}
+\end{figure}
 
 In our model, the l-value's address will be the same as the address of
 its most-derived class.  In other words, the \texttt{a} of the rule
@@ -1871,18 +1940,18 @@ fact that the most-derived class is a \texttt{D2} is implicitly
 recorded in the \texttt{vtable}, which will contain a pointer to
 \texttt{D1::f}.
 
-In the rule above, the variable \texttt{C} containing the name of the
-static class will be \texttt{D2}, and \texttt{Cs}, the path variable,
-will be \texttt{[D2,D1,B]}.  The \texttt{fld} variable will be
-\texttt{f}.  Then, the first hypothesis will check the class hierarchy
-to determine where an \texttt{f} can be found, starting at the static
-type, i.e., at \texttt{B}.  This will reveal that, with respect to
-\texttt{B} there is an \texttt{f} at path \texttt{[B]}.  This will be
-the value for \texttt{Ds}.  The same check determines four pieces of
-information about the function: its static return type (in the
-variable \texttt{static_retty}, that it is not static (virtual
-functions can not be static), and what its arguments and body are
-(\texttt{args0}, and \texttt{Body0}).
+In the rule, the variable \texttt{C} containing the name of the static
+class will be \texttt{D2}, and \texttt{Cs}, the path variable, will be
+\texttt{[D2,D1,B]}.  The \texttt{fld} variable will be \texttt{f}.
+Then, the first hypothesis will check the class hierarchy to determine
+where an \texttt{f} can be found, starting at the static type, i.e.,
+at \texttt{B}.  This will reveal that, with respect to \texttt{B}
+there is an \texttt{f} at path \texttt{[B]}.  This will be the value
+for \texttt{Ds}.  The same check determines four pieces of information
+about the function: its static return type (in the variable
+\texttt{static_retty}, that it is not static (virtual functions can
+not be static), and what its arguments and body are (\texttt{args0},
+and \texttt{Body0}).
 
 The second hypothesis calculates which function must be called given
 the class's dynamic type.  This is complicated because of the need to
@@ -2001,16 +2070,118 @@ particular, vtables will be catered for just as in the standard, by
 maintaining that it is only in POD (``plain old data'') types where
 one can rely on the address of the first field being the same as the
 address of the containing \texttt{struct}.  The calculation of sizes
-will also be under-specified to allow for the presence of extra,
-user-invisible data at the start of a class.  (This latter hasn't been
-done yet.)
+must also be under-specified to allow for the presence of extra,
+user-invisible data at the start of a class.  
 
-\paragraph{An Axiom}
-The mechanisation includes an axiomatisation stating that two
-otherwise unspecified constants, \texttt{ptr\_encode} and
-\texttt{ptr\_decode} are mutual inverses.  These partial functions map
-between the dynamic arguments that constitute l-values (address and
-path), and the lists of bytes that make up pointers.
+\subsubsection{Casting and Other Type Conversions} 
+We have already seen one use of implicit conversion from one type of
+value to another, in the rule \ruleid{assign-completes}
+(p\pageref{rule:assign-completes}), where the relation
+\texttt{nonclass_conversion} is used to this end.  This relation
+governs the way in which various values are allowed to be silently
+converted from one type to another.  Its definition is from the file
+\HOLfile{declaration_dynamics}, and is repeated in
+Figure~\ref{fig:nonclass-conversion}.
+\begin{figure}
+\index{nonclass_conversion@\texttt{nonclass_conversion}} 
+\begin{alltt}
+  nonclass_conversion s (v1,ty1) (v2,ty2) =
+    let ty1 = strip_const ty1
+    and ty2 = strip_const ty2
+    in
+      (integral_type ty1 \(\land\) integral_type ty2 \(\lor\)
+       \(\exists\)ty0. (ty1 = Ptr ty0) \(\land\) (ty2 = Ptr Void)) \(\land\)
+      (\(\exists\)i. (INT_VAL ty1 v1 = SOME i) \(\land\)
+           (SOME v2 = REP_INT ty2 i)) 
+              (* includes null pointer conversion *)
+         \(\lor\)
+      (strip_ptr_const ty1 = strip_ptr_const ty2) \(\land\) (v1 = v2)
+         \(\lor\)
+      (\(\exists\)c1 c2 addr pth1 pth2.  (* this is an upcast *)
+          (ty1 = Ptr (Class (LAST pth1))) \(\land\) (ty2 = Ptr (Class c2)) \(\land\)
+          (SOME v1 = ptr_encode s addr (Class c1) pth1) \(\land\)
+          (s,\lbr\rbr) |- c2 casts pth1 into pth2 \(\land\)
+          (SOME v2 = ptr_encode s addr (Class c1) pth2))
+         \(\lor\)
+      (\(\exists\)ty0 base derived p fld. 
+          (ty1 = MPtr base ty0) \(\land\) (ty2 = MPtr derived ty0) \(\land\)
+          (s,\lbr\rbr) |- path derived to base unique \(\land\)
+          (derived, p) IN rsubobjs (s,\lbr\rbr) \(\land\) 
+             (* rsubobjs ensures base is not virtual *)
+          (LAST p = base) \(\land\)
+          (v2 = v1) \(\land\)
+          ((SOME v1 = encode_offset base fld) \(\lor\) 
+           (v1 = null_member_ptr)))
+         \(\lor\)
+      (\(\exists\)ty0 c. (* null pointer conversion for pointers to member *)
+          (ty1 = Signed Int) \(\land\) (SOME v1 = REP_INT (Signed Int) 0) \(\land\)
+          (ty2 = MPtr c ty0) \(\land\) (v2 = null_member_ptr))
+\end{alltt}
+\caption{The \texttt{nonclass_conversion} relation for implicit type
+  conversions.  Based on the standard's \S4.}
+\label{fig:nonclass-conversion}
+\end{figure}
+
+\index{dynamic_cast@\texttt{dynamic_cast}}
+The most important of \cpp{}'s explicit casts is the
+\texttt{dynamic_cast} operation which allows for run-time checked
+manoeuvering around a class hierarchy.  First up-casts to unambiguous bases
+are permitted (this is the rule for references; there are parallel
+rules for the dynamic casting of pointers):
+\begin{alltt}
+(* RULE-ID: dyncast-derived-to-base-ref *)
+(* assume that base is accessible (checked by compiler) *)
+     (strip_const dty = Class dcnm) \(\land\)
+     (s,\lbr\rbr) |- path (LAST p) to dcnm unique \(\land\) (* static check *)
+     (s,\lbr\rbr) |- path (LAST p) to dcnm via p' 
+   \(\Rightarrow\)
+     mng (s, EX (DynCast (Ref dty) (LVal a (Class scnm) p)) se)
+         (s, EX (LVal a (Class scnm) (p ^ p')) se)
+\end{alltt}
+The second hypothesis is strictly redundant in the dynamics; along
+with the base's accessibility, this will be checked before the
+dynamics gets a chance to execute.  The third hypothesis is where the
+extended path from the dynamic type up to the new base is
+constructed.
+
+In the other direction (back down a class hierarchy), dynamic casts
+can fail, and require the source type to be polymorphic (\ie, the
+source class should have at least one virtual function).
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+(* RULE-ID: dyncast-poly-base-to-other-ref *)
+     (strip_const dty = Class dcnm) \(\land\)
+     (src_dynty = Class scnm) \(\land\)
+     polymorphic s (LAST p) \(\land\)
+     (s,\lbr\rbr) |- path scnm to dcnm via p' \(\land\)
+     (result = 
+      if (s,\lbr\rbr) |- path scnm to dcnm unique then 
+        (* should also check accessible, though I think this 
+           could be done statically *)
+        LVal a src_dynty p'
+      else
+        EThrow (SOME (New (Class bad_cast_name) NONE)))
+   \(\Rightarrow\)
+     mng (s, EX (DynCast (Ref dty) (LVal a src_dynty p)) se)
+         (s, EX result se)
+\end{alltt}
+\end{minipage}
+\end{center}
+Note how the dynamic type of the l-value does not change: it remains
+as \texttt{src_dynty}.  Instead the accompanying path value adjusts:
+shifting from a path that leads up as far as \texttt{LAST~p} (the
+original static type), to one that leads to the class \texttt{dcnm}.
+In this way, a \texttt{dynamic_cast} can move the static type from one
+branch of the ancestry tree to another; in one step, one can do more 
+than just make a down-cast.  
+
+\index{bad_cast exception@\texttt{bad_cast} exception}
+When there isn't a class of the desired type available, a reference
+cast causes a \texttt{bad_cast} exception to be thrown.  The
+accompanying rule for dynamic-casting of pointer values has the
+pointer converted to a null pointer if the destination type is unreachable.
+
 
 \subsection{Reference Types}
 \label{sec:reftypes}
