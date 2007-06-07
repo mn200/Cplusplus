@@ -356,6 +356,16 @@ val RVR_def = Define`
   (RVR (ST s c) = ST s c)
 `
 
+val encode_offset_def = new_specification(
+  "encode_offset_def",
+  ["encode_offset"], 
+  prove(``?f. (!cnm1 sf1 cnm2 sf2 bl. 
+                  (f cnm1 sf1 = SOME bl) /\ (f cnm2 sf2 = SOME bl) ==> 
+                  (cnm1 = cnm2) /\ (sf1 = sf2)) /\
+              (!cnm sf bl. (f cnm sf = SOME bl) ==> 
+                           (LENGTH bl = ptr_size Void))``,
+        Q.EXISTS_TAC `\x y. NONE` THEN SRW_TAC [][]))
+
 val _ = print "About to define meaning relation\n"
 
 val valuetype_def = Define`
@@ -753,17 +763,64 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    static member, then a normal address is generated.
    As it's an object type, it must be an IDName.
 *)
-(!cname cenv fldname se s addr ty cinfo prot pth ptrval userdefs.
-     cname IN defined_classes s /\
+(!cname fldname se s addr ty prot pth ptrval.
      object_type ty /\
-     (lookup_class s cname = SOME cenv) /\
-     ((item cenv).info = SOME (cinfo, userdefs)) /\
-     MEM (FldDecl fldname ty, T, prot) cinfo.fields /\
+     MEM (FldDecl fldname ty, T, prot) (cinfo s cname).fields /\
      (lookup_addr s (mk_member cname fldname) = SOME (addr, pth)) /\
      (SOME ptrval = ptr_encode s addr ty (SND pth))
    ==>
      mng (s, EX (MemAddr cname fldname) se) 
          (s, EX (ECompVal ptrval (Ptr ty)) se)
+)
+
+   /\
+
+(* RULE-ID: mem-addr-static-function *)
+(!s se cnm fldname rt args bod prot.
+     MEM (CFnDefn F rt fldname args bod, T, prot) (cinfo s cnm).fields 
+   ==>
+     mng (s, EX (MemAddr cnm fldname) se)
+         (s, EX (FVal (mk_member cnm fldname) 
+		      (Function rt (MAP SND args))
+		      NONE) se)
+)
+
+   /\
+
+(* RULE-ID: mem-addr-nonstatic *)
+(!cnm fldname bl ty s se.
+     (encode_offset cnm fldname = SOME bl) /\
+     ((?prot. MEM (FldDecl fldname ty, F, prot) (cinfo s cnm).fields) \/
+      (?prot v rt args bod. 
+          MEM (CFnDefn v rt fldname args bod, F, prot) 
+	      (cinfo s cnm).fields /\
+          (ty = Function rt (MAP SND args))))
+   ==>
+     mng (s, EX (MemAddr cnm fldname) se)
+         (s, EX (ECompVal bl (MPtr cnm ty)) se)
+)
+
+   /\
+
+(* RULE-ID: offset-deref *)
+(!cnm1 cnm2 fldname s se a p bl fld fldty.
+     (encode_offset cnm2 fldname = SOME bl) /\
+     (fld = if function_type fldty then 
+              let (r,a) = dest_function_type fldty
+              in
+                if is_virtual s cnm2 fldname r a then 
+		  IDConstant F [] fldname
+		else
+                  mk_member cnm2 fldname
+            else
+              mk_member cnm2 fldname)
+   ==>
+     mng (s, EX (OffsetDeref 
+		     (LVal a (Class cnm1) p) 
+		     (ECompVal bl (MPtr cnm2 fldty))) 
+		se)
+         (s, EX (SVar (LVal a (Class cnm1) p) fld) 
+		se)
 )
 
    /\
