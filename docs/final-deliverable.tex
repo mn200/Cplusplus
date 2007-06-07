@@ -181,8 +181,10 @@ signature in the file
 
 \paragraph{Pairs} The type of pairs of $\sigma$s and $\tau$s is
 written \texttt{$\sigma$~\#~$\tau$}.  Pair values are written inside
-parentheses, with components separated by commas, \eg,
-\texttt{(1,4)}. 
+parentheses, with components separated by commas, \eg, \texttt{(1,4)}.
+\index{FST@\texttt{FST}} The function \texttt{FST} returns the first
+component of a tuple, and \index{SND@\texttt{SND}}\texttt{SND} returns
+the second.
 
 \paragraph{Lists} Lists can either be empty (\texttt{[]}) or the
 result of ``cons''-ing an element onto the front of an
@@ -190,8 +192,9 @@ existing list.  The list consisting of element \texttt{h} followed by
 list \texttt{t} is written \texttt{h::t}. The type of lists comes
 equipped with various standard functional language operations such as 
 \begin{alltt}
-   MAP   : ('a -> 'b) -> 'a list -> 'b list
    FOLDL : ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+   MAP   : ('a -> 'b) -> 'a list -> 'b list
+   MEM   : 'a -> 'a list -> bool
    ZIP   : 'a list -> 'b list -> ('a # 'b) list
 \end{alltt}
 
@@ -1403,7 +1406,201 @@ The two significant pointer operations are dereferencing and
 address-taking (the \texttt{*} and \texttt{\&} operators
 respectively).  \cpp{} adds two class-related variants of these
 operations to the existing pair, which come across from C unchanged. 
+Thus the rule for taking an address:
+\index{Addr@\texttt{Addr}}
+\begin{alltt}
+(* RULE-ID: addr-lvalue *)
+(* See 5.3.1 p2-5 - taking the address of an lvalue *)
+     (SOME result = ptr_encode s a t pth)
+   \(\Rightarrow\)
+     mng (s, EX (Addr (LVal a t pth)) se) 
+         (s, EX (ECompVal result 
+                          (Ptr (static_type (t,pth)))) se)
 
+\end{alltt}
+\index{LVal@\texttt{LVal}}
+The function \texttt{static_type} computes the static type for a
+l-value given access to the type and path of identifiers.  (For
+non-class values, the static type is simply the second argument to
+\texttt{LVal}.)
+
+There must be two rules for dereferencing a normal pointer; it may or
+may not point to a valid object.  In fact, there must also be a third
+rule because of the possibility that the pointer value being
+dereferenced is actually a pointer to a function. These rules are presented in
+Figure~\ref{fig:deref-rules}. 
+\begin{figure}[htbp]
+\begin{alltt}
+(* RULE-ID: deref-objptr *)
+(* 5.3.1 p1 - pointer to an object type *)
+     object_type t \(\land\)
+     (SOME mval = ptr_encode s addr t' pth) \(\land\)
+     (static_type (t',pth) = t)
+   \(\Rightarrow\)
+     mng (s, EX (Deref (ECompVal mval (Ptr t))) se) 
+         (s, EX (LVal addr t' pth) se)
+
+
+(* RULE-ID: deref-objptr-fails *)
+     object_type t \(\land\)
+     ((\(\forall\)addr t' p. \(\neg\)(SOME mval = ptr_encode s addr t' p)) \(\lor\)
+      (\(\exists\)t' p. SOME mval = ptr_encode s 0 t' p))
+   \(\Rightarrow\)
+     mng (s, EX (Deref (ECompVal mval (Ptr t))) se) 
+         (s, EX UndefinedExpr se)
+
+
+(* RULE-ID: deref-fnptr *)
+(* 5.3.1 p1 - pointer to a function type *)
+     v IN FDOM s.fndecode
+   \(\Rightarrow\)
+     mng (s, EX (Deref 
+                  (ECompVal v 
+                            (Ptr (Function retty argtys)))) 
+                se) 
+         (s, EX (FVal (s.fndecode ' v) 
+                      (Function retty argtys) 
+                      NONE) se)
+\end{alltt}
+\index{Deref@\texttt{Deref}}
+\caption{Rules for ``C-style'' dereferencing of pointers}
+\label{fig:deref-rules}
+\end{figure}
+
+\medskip
+\noindent More interesting from a \cpp{} perspective are the rules for
+taking the address of class-members (and then using those pointers to
+members to access members).  The concrete syntax for this is
+rather ugly:
+\begin{verbatim}
+   struct C { int x; int y; };
+   int C::* cintptr = &C::x; // or &C::y
+\end{verbatim}
+\index{MemAddr@\texttt{MemAddr}}
+In the abstract syntax, the address taking operation is written
+\texttt{MemAddr}, of type
+\begin{verbatim}
+   : CPP_ID -> IDComp -> CExpr
+\end{verbatim}
+where the first argument is the name of the class, and the second is
+the name of the field.  
+
+If the member whose address is being taken is actually a static
+member, then a normal pointer is generated, as can be seen from the
+type attached to the \texttt{ECompVal} in the conclusion of the rule.
+(There is a similar rule for taking the address of a static member
+function.)
+\begin{alltt}
+(* RULE-ID: mem-addr-static-nonfn *)
+(* 5.3.1 p2 *) 
+     object_type ty \(\land\)
+     MEM (FldDecl fldname ty, T, prot) 
+         (cinfo s cname).fields \(\land\)
+     (lookup_addr s (mk_member cname fldname) = 
+        SOME (addr, pth)) \(\land\)
+     (SOME ptrval = ptr_encode s addr ty (SND pth))
+   \(\Rightarrow\)
+     mng (s, EX (MemAddr cname fldname) se) 
+         (s, EX (ECompVal ptrval (Ptr ty)) se)
+\end{alltt}
+\index{cinfo@\texttt{cinfo}}
+The function \texttt{cinfo} takes a state and a class-name and returns
+the information about that class in the form of a record, one of whose
+fields is called \texttt{fields}, being a list of all the declarations
+occurring within the class. 
+
+\bigskip\noindent
+The more interesting case occurs when the member is not static. 
+\begin{alltt}
+(* RULE-ID: mem-addr-nonstatic *)
+     (encode_offset cnm fldname = SOME bl) \(\land\)
+     ((\(\exists\)prot. MEM (FldDecl fldname ty, F, prot) 
+                  (cinfo s cnm).fields) \(\lor\)
+      (\(\exists\)prot v rt args bod. 
+          MEM (CFnDefn v rt fldname args bod, F, prot) 
+              (cinfo s cnm).fields \(\land\)
+          (ty = Function rt (MAP SND args))))
+   \(\Rightarrow\)
+     mng (s, EX (MemAddr cnm fldname) se)
+         (s, EX (ECompVal bl (MPtr cnm ty)) se)
+\end{alltt}
+Functions and data members are not declared in quite the same way
+within a class (because the functions may be accompanied by their
+implementations), which explains the disjunctive hypothesis above.
+The function \texttt{encode_offset} takes a class and field-name and
+returns the encoding of this offset as a list of bytes.  It is that is
+will be written into memory if the offset is stored in a variable.
+
+\bigskip\noindent
+Once one has a pointer-to-member value, one can dereference it, as
+long as one also had a class object to hand.  Unlike normal C-style
+dereferencing, dereferencing a pointer-to-member is a binary
+operator.  The concrete C++ syntax looks like:
+\begin{verbatim}
+   int f(int C::* cintptr, C c) 
+   {
+     return c.*cintptr;
+   }
+\end{verbatim}
+There is also a \texttt{->*} operator for when one has a pointer to a
+class (by analogy with the \texttt{->} operator for field
+dereferencing).  In the abstract syntax, the one operator is called
+\texttt{OffsetDeref}.\index{OffsetDeref@\texttt{OffsetDeref}}
+
+The rule is complicated by the fact that if the pointer to a member is
+to a virtual function, then the result must be a reference to a
+virtual function in the class on which the dereference is
+performed. 
+\begin{alltt}
+(* RULE-ID: offset-deref *)
+     (encode_offset cnm2 fldname = SOME bl) \(\land\)
+     (fld = if function_type fldty then 
+              let (r,a) = dest_function_type fldty
+              in
+                if is_virtual s cnm2 fldname r a then 
+                  IDConstant F [] fldname
+                else
+                  mk_member cnm2 fldname
+            else
+              mk_member cnm2 fldname)
+   \(\Rightarrow\)
+     mng (s, EX (OffsetDeref 
+                     (LVal a (Class cnm1) p) 
+                     (ECompVal bl (MPtr cnm2 fldty))) 
+                se)
+         (s, EX (SVar (LVal a (Class cnm1) p) fld) 
+                se)
+\end{alltt}
+The invariant in the model is that if a reference is made to a virtual
+function, then it must occur as the right-hand argument of a
+field-selection as a bare name (hence the
+\texttt{IDConstant~F~[]}\dots above), and conversely that if a
+reference is not to a virtual function, then the field dereference
+must be to a completely qualified identifier.\footnote{Note the
+  contrast with C: in \cpp, one can write \texttt{c.::B::fld}, which
+  is unambiguous, if ugly, about which \texttt{fld} member is meant.}
+
+\paragraph{Assignment}
+The rules for assignment do not need to change from their presentation
+in C.  Nonetheless, this semantics adopts Clive Feather's
+proposal~\cite{Feather2000} for handling the infamous language in the
+standard: 
+\begin{quotation}
+\itshape
+    Between the previous and next sequence point an  object
+    shall  have  its  stored  value modified at most once by the
+    evaluation of an expression.  Furthermore, the  prior  value
+    shall  be  accessed  only  to  determine  the  value  to  be
+    stored.
+\end{quotation}
+Rather than count references made on the RHS of an assignment, as in
+my thesis~\cite{Norrish98}, the model now is that references can occur
+before updates, but not the other way round.  This makes the rules for
+assignment considerably simpler, at the cost of requiring an analysis
+of all possible execution paths to see if any of them result in an
+update before a reference.
+
+The rule for a completed assignment expression is:
 
 \subsection{Statements in a Small-step Style}
 \label{sec:small-step-stmts}
