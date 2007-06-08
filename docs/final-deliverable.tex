@@ -46,6 +46,7 @@ the prose and not the rule.  The rule has been type-checked, and in
 some cases, will have also been validated to some extent.  (See
 Section~\ref{sec:validation} for more on validation.)
 
+This document supercedes all previous deliverables.
 
 \subsection{Phases of Understanding}
 
@@ -167,7 +168,7 @@ arguments are often just separated by whitespace, as above.
 
 Where quotations are made from underlying HOL sources, the origin of
 the quotation will be identified using the form \HOLfile{thyname}.
-The source code for theory \texttt{thyname} is available in the file 
+The source code for theory \texttt{thyname} is available in the file
 \begin{alltt}
    holsrcs/thynameScript.sml
 \end{alltt}
@@ -190,13 +191,24 @@ the second.
 result of ``cons''-ing an element onto the front of an
 existing list.  The list consisting of element \texttt{h} followed by
 list \texttt{t} is written \texttt{h::t}. The type of lists comes
-equipped with various standard functional language operations such as 
+equipped with various standard functional language operations such as
+\index{EL (list operation)@\texttt{EL} (list operation)}%
+\index{CONS (list operation)@\texttt{CONS} (list operation)}%
+\index{FOLDL (list operation)@\texttt{FOLDL} (list operation)}%
+\index{++ (list operation)@\texttt{++} (list operation)}%
+\index{ZIP (list operation)@\texttt{ZIP} (list operation)}%
+\index{MAP (list operation)@\texttt{MAP} (list operation)}%
+\index{MEM (list operation)@\texttt{MEM} (list operation)}%
 \begin{alltt}
+   ++    : 'a list -> 'a list -> 'a list
+   CONS  : 'a -> 'a list -> 'a list
+   EL    : num -> 'a list -> 'a
    FOLDL : ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
    MAP   : ('a -> 'b) -> 'a list -> 'b list
    MEM   : 'a -> 'a list -> bool
    ZIP   : 'a list -> 'b list -> ('a # 'b) list
 \end{alltt}
+The list append operation (\texttt{++}) is written as an infix.
 
 \paragraph{Finite Maps} The finite map is a form of function where the
 domain is guaranteed to be finite.  The type of finite maps from
@@ -210,6 +222,30 @@ The empty finite map (one with no domain) is \texttt{FEMPTY}, and
 updating a map \texttt{fm} so that its value at \texttt{k} is
 \texttt{v} (ignoring whether or not \texttt{fm} may have already had a
 value for \texttt{k}), is written \texttt{fm |+ (k,v)}.
+
+\paragraph{Records}\index{records (in HOL)}
+Record literals are written as a sequence of assignment to field-names
+in between ASCII angle brackets, thus:
+\begin{verbatim}
+   <| fld1 := 3; fld2 := 5; fld3 := (F,[]) |>
+\end{verbatim}
+New record values can be constructed from old ones with the
+\texttt{with} keyword.  For example
+\begin{verbatim}
+   rec with <| fld2 := 10; fld6 := T |>
+\end{verbatim}
+is a record value that is everywhere identical to \texttt{rec} except
+that its fields \texttt{fld2} and \texttt{fld6} have different
+values.
+
+When updating records, in addition to the assignment
+syntax~(\texttt{:=}), one can also use \texttt{updated_by}, which
+allows a function to be applied to the old value of the field.  So,
+\begin{verbatim}
+   rec with <| fld2 updated_by SUC; fld6 := T |>
+\end{verbatim}
+is a record value everywhere the same as \texttt{rec}, except that its
+\texttt{fld6} is true, and its \texttt{fld2} is one bigger.
 
 \section{Basic Types}
 \label{sec:basic-types}
@@ -466,8 +502,8 @@ The information attached to each node of a \texttt{class_env} is the
 following record type:
 \begin{verbatim}
    class_envinfo = <|
-      (* ironically, the location of the static variables is 
-         only available dynamically, as classes are 
+      (* ironically, the location of the static variables is
+         only available dynamically, as classes are
          initialised *)
       statvars : string |-> addr # CPP_ID # CPP_ID list ;
       info     : state_class_info ;
@@ -480,7 +516,7 @@ variables.  The \texttt{refs} field records per-class information
 about reference members.  Both of these fields are only used
 dynamically (as static variables are declared, and as new classes are
 constructed respectively).  Finally, the \texttt{info} field records
-the static information associated with a class. 
+the static information associated with a class.
 
 
 
@@ -502,8 +538,8 @@ the global \texttt{x} with \texttt{ns1::x}, causing the evaluation of
 the body to proceed erroneously.
 \begin{figure}[htbp]
 \begin{verbatim}
-   int x = 3; 
-   namespace ns1 { 
+   int x = 3;
+   namespace ns1 {
      int f(int n) { return n + x; }
      int x = 2;
    }
@@ -518,7 +554,7 @@ resolution as it evaluated declarations, this semantics would still
 need to transform the body of \texttt{ns1::f} to include the correct
 reference to \texttt{::x}.  The rest of this section of the report
 will describe the relation that turns the program in
-Figure~\ref{fig:name-res-separate-phase} into 
+Figure~\ref{fig:name-res-separate-phase} into
 \begin{verbatim}
    int ::x = 3;
    int ::ns1::f(int n) { return n + ::x; }
@@ -537,24 +573,24 @@ program of Figure~\ref{fig:name-res-separate-phase}, the global
 \texttt{x} is visible when \texttt{::ns1::f} is defined, but there is
 no \texttt{x} in the namespace \texttt{::ns1}, at least at that stage.
 
-The HOL definition (see \HOLfile{name_resolution}): 
+The HOL definition (see \HOLfile{name_resolution}):
 \begin{verbatim}
    P1state = <|
      current_nspath : string list ;
-     dynclasses : string |-> bool # IDComp list # 
+     dynclasses : string |-> bool # IDComp list #
                              TemplateArg list ;
-     dynobjs : string |-> bool # IDComp list # 
+     dynobjs : string |-> bool # IDComp list #
                           TemplateArg list # dynobj_type ;
      dynns : string |-> string list ;
      global : state ;
-     accdecls : ext_decl list 
+     accdecls : ext_decl list
    |>
 \end{verbatim}
 The three \texttt{dyn} fields record what names are visible in three
 different categories: namespaces~(\texttt{dynns}),
 classes~(\texttt{dynclasses}) and objects~(\texttt{dynobjs}).  Each
 maps to information sufficient to provide an exact location for the
-name.  
+name.
 
 In the case of namespace names, it is enough to provide a path from
 the root, and such a path will just be of strings.  For objects and
@@ -565,26 +601,28 @@ or non-local.  The list of \texttt{TemplateArg} values records any
 template parameters that the name may be associated with if it is a
 template.  Finally, in the case of objects, it is also necessary to
 record what sort of object the name is.  The options are given in the
-type \texttt{dynobj_type}: 
+type \texttt{dynobj_type}:
 \begin{verbatim}
-   dynobj_type = 
+   dynobj_type =
       dStatMember | dMember | dVirtualMember | dNormalObj
 \end{verbatim}
 Note that in this context an ``object'' might actually be a function
 (and it is functions that provide the interest); elsewhere funtions
 are not considered objects because they don't occupy allocated
-memory. 
+memory.
 
 The \texttt{global} field of a \texttt{P1state} is a state from the
 dynamic semantics.  In Phase~1 the vast majority of the information
 stored in such a state is ignored; the state is part of the
 \texttt{P1state} only for its two environments, which are accessed as
 the fields \texttt{genv} (the global environment), and \texttt{env}
-(the local environment). 
+(the local environment).
+\index{genv (state field)@\texttt{genv} (\texttt{state} field)}%
+\index{env (state field)@\texttt{env} (\texttt{state} field)}%
 
 Finally, the \texttt{accdecls} field records the accumulating
 translated declarations.  It is this that provides the final output of
-Phase~1.  
+Phase~1.
 
 \subsection{Template Names}
 
@@ -700,7 +738,7 @@ function.
 \subsection{Instantiation and Matching}
 
 (This seection describes formalisation done in
-\HOLfile{instantiation}.) 
+\HOLfile{instantiation}.)
 
 \medskip
 \noindent Types and identifiers can be \emph{instantiated}: mappings
@@ -947,7 +985,7 @@ Much of the core semantics in this section is based on the C semantics
 presented in my PhD thesis~\cite{Norrish98}.  In particular, details
 of the way in which side effects are created and applied remain the
 same, as does the use of an evaluation context, and the way in
-unspecified order of evaluation is handled. 
+unspecified order of evaluation is handled.
 
 \subsection{Dynamic States}
 \label{sec:dynamic-states}
@@ -967,7 +1005,7 @@ causes undefined behaviour.)
 \begin{figure}[htbp]
 \footnotesize
 \begin{verbatim}
-   state = <| 
+   state = <|
      allocmap : addr -> bool ;  (* the set of stack-allocated addresses *)
      hallocmap: addr -> bool ;  (* the set of heap-allocated addresses *)
      constmap : addr -> bool ;  (* the set of read-only addresses *)
@@ -1005,8 +1043,8 @@ causes undefined behaviour.)
           full enclosing expression *)
      ;
 
-     current_exns : CExpr list  
-                    (* stack of exceptions that might be subjected 
+     current_exns : CExpr list
+                    (* stack of exceptions that might be subjected
                        to a bare throw *)
    |>
 \end{verbatim}
@@ -1032,7 +1070,7 @@ this one relation is used for both expression and statement forms.
 (One might otherwise imagine two mutually recursive relations: one for
 statements and the other for expressions.)
 
-Thus the type of \mng{} is 
+Thus the type of \mng{} is
 \begin{alltt}
    : (state # ExtE) -> (state # ExtE) -> bool
 \end{alltt}
@@ -1064,7 +1102,7 @@ statements:
 
 Most of the time reduction occurs between expressions and expressions,
 or between statements and statements, allowing one to imagine that one
-has the $\rightarrow_e$ and $\rightarrow_s$ from the C semantics. 
+has the $\rightarrow_e$ and $\rightarrow_s$ from the C semantics.
 For example, when evaluating expressions, rules in the dynamics have
 conclusions of the form
 \begin{alltt}
@@ -1076,7 +1114,7 @@ and \texttt{se0} and \texttt{se} are the initial and final ``side
 effect records''.
 
 Similarly, when evaluating statements, conclusions are typically of
-the form 
+the form
 \begin{alltt}
    mng (s0, ST st0 c) (s, ST st c)
 \end{alltt}
@@ -1092,18 +1130,18 @@ In the abstract syntax types representing both expressions and
 statements, I have added special forms that only arise as a result of
 evaluation and could never be seen in an input program.  The most
 important of these are the forms for representing values and l-values
-within the expression type.  
+within the expression type.
 
-\index{ECompVal@\texttt{ECompVal}}
-The \texttt{ECompVal} constructor has type 
+\index{ECompVal@\texttt{ECompVal}|textbf}
+The \texttt{ECompVal} constructor has type
 \begin{alltt}
    : byte list -> CPP_Type -> CExpr
 \end{alltt}
-and represents values as sequences of bytes, coupled with their type. 
+and represents values as sequences of bytes, coupled with their type.
 
-\index{LVal@\texttt{LVal}}
+\index{LVal@\texttt{LVal}|textbf}
 The \texttt{LVal} constructor is used to represent l-values, and has
-type 
+type
 \begin{alltt}
    : addr -> CPP_Type -> CPP_ID list
 \end{alltt}
@@ -1114,7 +1152,7 @@ Section~\ref{sec:basic-oo} below.
 
 In addition, there is an analogue to \texttt{LVal} for functions,
 called \texttt{FVal}.  This represents the identity of a function, and
-has type: 
+has type:
 \begin{alltt}
    : CPP_ID -> CPP_Type -> CExpr option -> CExpr
 \end{alltt}
@@ -1132,18 +1170,20 @@ represent the occurrence of undefined behaviour within an expression.
 \paragraph{Literals} We begin with two rules for literals.  We don't
 have any rules for other literal forms, such as floating point
 constants, though it is clear what they would look like.
-\index{Cnum@\texttt{Cnum}}
+\index{Cnum@\texttt{Cnum}}%
+\index{rule (dynamic)!number-literal@\texttt{number-literal}}%
 \begin{alltt}
 (* RULE-ID: number-literal *)
      (REP_INT (Signed Int) n = SOME bl)
    ==>
-     mng (s, EX (Cnum n) se) 
+     mng (s, EX (Cnum n) se)
          (s, EX (ECompVal bl (Signed Int)) se)
 \end{alltt}
 
 The only difference with character constants is that the underlying
 number is pushed into a different sized space:
-\index{Cchar@\texttt{Cchar}}
+\index{Cchar@\texttt{Cchar}}%
+\index{rule (dynamic)!char-literal@\texttt{char-literal}}
 \begin{alltt}
 (* RULE-ID: char-literal *)
      (REP_INT BChar n = SOME bl)
@@ -1151,9 +1191,10 @@ number is pushed into a different sized space:
      mng (s, EX (Cchar n) se) (s, EX (ECompVal bl BChar) se)
 \end{alltt}
 
-\index{Var@\texttt{Var}}
 \paragraph{Variables} Looking up object variables becomes a little
-complicated in the presence of references and object orientation. 
+complicated in the presence of references and object orientation.
+\index{Var@\texttt{Var}}%
+\index{rule (dynamic)!var-to-lvalue@\texttt{var-to-lvalue}}%
 \begin{alltt}
 (* RULE-ID: var-to-lvalue *)
      (lookup_type s vname = SOME ty0) \(\land\)
@@ -1163,19 +1204,19 @@ complicated in the presence of references and object orientation.
    \(\Rightarrow\)
      mng (s, EX (Var vname) se) (s, EX (LVal a ty p) se)
 \end{alltt}
-\index{lookup_type@\texttt{lookup_type}}
+\index{lookup_type@\texttt{lookup_type}}%
 The call to \texttt{lookup_type} determines the variable's static
 type, which will have been set in the appropriate part of the state
 when the variable was declared.  The second premise checks to see that
 the variable is of object type.  If so, the variable will have an
 address.  Accompanying the address is information (\texttt{cnm} and
 \texttt{p}) that gives dynamic type information if the object is of
-class type.  
+class type.
 
 It may not be clear how a variable may come to have a dynamic type
 that is separate from its static type.  In fact, this is only possible
 in the presence of references, which are treated as aliases for real
-variables.  Thus, in a function such as 
+variables.  Thus, in a function such as
 \begin{verbatim}
    int f(C &c) { return c.memfn(); }
 \end{verbatim}
@@ -1186,7 +1227,9 @@ fact have been a derived class of \texttt{C}, and so \texttt{c}'s
 dynamic type won't be the same as its static type.
 
 Variables can also denote functions:
-\index{FVal@\texttt{FVal}}
+\index{FVal@\texttt{FVal}}%
+\index{Var@\texttt{Var}}%
+\index{rule (dynamic)!var-to-fvalue@\texttt{var-to-fvalue}}
 \begin{alltt}
 (* RULE-ID: var-to-fvalue *)
      (lookup_type s vname = SOME ty) \(\land\)
@@ -1201,6 +1244,7 @@ Variables can also denote functions:
 \index{valid_econtext@\texttt{valid_econtext}}
 Just as in the C semantics, most nested evaluation of expressions is
 mediated through one rule: \label{rule:econtext-expr}
+\index{rule (dynamic)!econtext-expr@\texttt{econtext-expr}}
 \begin{alltt}
 (* RULE-ID: econtext-expr *)
      mng (s0, EX e0 se0) (s, EX e se) \(\land\)
@@ -1211,7 +1255,7 @@ mediated through one rule: \label{rule:econtext-expr}
 Here, \texttt{f} is a function of type \texttt{:CExpr->CExpr},
 but restricted by the predicate \texttt{valid_econtext}.  This
 predicate restricts where evaluation can occur.  For example, a
-function satisfying \texttt{valid_econtext} would be 
+function satisfying \texttt{valid_econtext} would be
 \[
 \lambda e.\;\;\texttt{CAnd}\;e\;e_2
 \]
@@ -1224,8 +1268,9 @@ right of the \texttt{CAnd} is not a valid context function.
 If an undefined behaviour occurs, this is reflected by having the
 expression that caused it become the special \texttt{UndefinedExpr}
 value.  This value can rise to the top of any expression:
+\index{rule (dynamic)!econtext-undefinedness@\texttt{econtext-undefinedness}}%
 \begin{alltt}
-(* RULE-ID: econtext-propagates-undefinedness *)
+(* RULE-ID: econtext-undefinedness *)
      valid_econtext f
    \(\Rightarrow\)
      mng (s, EX (f UndefinedExpr) se) (s, EX UndefinedExpr se)
@@ -1233,17 +1278,18 @@ value.  This value can rise to the top of any expression:
 
 The notion of where a function l-value decays into a pointer to a
 function is also controlled by a context:
-\index{valid_fvcontext@\texttt{valid_fvcontext}}
+\index{valid_fvcontext@\texttt{valid_fvcontext}}%
+\index{rule (dynamic)!fcontext@\texttt{fcontext}}
 \begin{alltt}
 (* RULE-ID: fcontext *)
      fnid IN FDOM s.fnencode \(\land\)
      (s.fnencode ' fnid = bytes) \(\land\)
      valid_fvcontext f
    \(\Rightarrow\)
-     mng (s, EX (f (FVal fnid ty NONE)) se) 
+     mng (s, EX (f (FVal fnid ty NONE)) se)
          (s, EX (f (ECompVal bytes (Ptr ty))) se)
 \end{alltt}
-The definition of \texttt{valid_fvcontext} is 
+The definition of \texttt{valid_fvcontext} is
 \begin{alltt}
    valid_fvcontext f =
       valid_econtext f \(\land\)
@@ -1252,10 +1298,11 @@ The definition of \texttt{valid_fvcontext} is
 stating that a function l-value can decay as in the rule above, as
 long as it is not at the head of a function application.
 
-\index{valid_lvcontext@\texttt{valid_lvcontext}}
-\index{lval2rval@\texttt{lval2rval}}
+\index{valid_lvcontext@\texttt{valid_lvcontext}}%
+\index{lval2rval@\texttt{lval2rval}}%
 Finally, there is the rule allowing normal l-values to decay into
 their r-value forms (the ``l-value to r-value conversion''):
+\index{rule (dynamic)!lvcontext@\texttt{lvcontext}}%
 \begin{alltt}
 (* RULE-ID: lvcontext *)
      valid_lvcontext f \(\land\)
@@ -1282,17 +1329,19 @@ nondeterminism and failure.
 Were the model to cope with operator overloading correctly, these
 rules would remain unchanged.  Operator overloading would be resolved
 in Phases~1 and~2, allowing uses of overloaded operators to be
-rewritten to the function calls that they really are. 
+rewritten to the function calls that they really are.
 \begin{figure}[htbp]
-\index{CApBinary@\texttt{CApBinary}}
+\index{CApBinary@\texttt{CApBinary}}%
+\index{rule (dynamic)!binop-fails@\texttt{binop-fails}}%
+\index{rule (dynamic)!binop-computes@\texttt{binop-computes}}%
 \begin{alltt}
 (* RULE-ID: binop-fails *)
      (\(\forall\)res restype. \(\neg\)binop_meaning s f \(\!\)v1 (strip_const type1)
                                        v2 (strip_const type2)
                                        res restype)
    \(\Rightarrow\)
-     mng (s, EX (CApBinary f (ECompVal v1 type1) 
-                             (ECompVal v2 type2)) se0) 
+     mng (s, EX (CApBinary f (ECompVal v1 type1)
+                             (ECompVal v2 type2)) se0)
          (s, EX UndefinedExpr se0)
 \end{alltt}
 
@@ -1302,8 +1351,8 @@ rewritten to the function calls that they really are.
                        v2 (strip_const type2)
                        res restype
    \(\Rightarrow\)
-     mng (s, EX (CApBinary f (ECompVal v1 type1) 
-                             (ECompVal v2 type2)) se) 
+     mng (s, EX (CApBinary f (ECompVal v1 type1)
+                             (ECompVal v2 type2)) se)
          (s, EX (ECompVal res restype) se)
 \end{alltt}
 \caption{Rules for the standard binary operators}
@@ -1312,14 +1361,16 @@ rewritten to the function calls that they really are.
 
 There are analogous rules for the standard unary operators (arithmetic
 and logical negation, unary plus, and bit-wise complement), presented
-in Figure~\ref{fig:capunary-rules}. 
+in Figure~\ref{fig:capunary-rules}.
 \begin{figure}[htbp]
-\index{CApUnary@\texttt{CApUnary}}
+\index{CApUnary@\texttt{CApUnary}}%
+\index{rule (dynamic)!unop-computes@\texttt{unop-computes}}%
+\index{rule (dynamic)!unop-fails@\texttt{unop-fails}}%
 \begin{alltt}
 (* RULE-ID: unop-computes *)
      unop_meaning f ival (strip_const t) result rt
    \(\Rightarrow\)
-     mng (s, EX (CApUnary f (ECompVal ival t)) se) 
+     mng (s, EX (CApUnary f (ECompVal ival t)) se)
          (s, EX (ECompVal result rt) se)
 \end{alltt}
 
@@ -1327,7 +1378,7 @@ in Figure~\ref{fig:capunary-rules}.
 (* RULE-ID: unop-fails *)
      (\(\forall\)res rt. \(\neg\)unop_meaning f ival (strip_const t) res rt)
    \(\Rightarrow\)
-     mng (s0, EX (CApUnary f (ECompVal ival t)) se0) 
+     mng (s0, EX (CApUnary f (ECompVal ival t)) se0)
          (s0, EX UndefinedExpr se0)
 \end{alltt}
 \caption{Rules for the standard unary operators}
@@ -1340,95 +1391,107 @@ conditional operator \texttt{?:}, and the comma operator all evaluate
 their arguments in a prescribed order, and must exhaust the pending
 side effects that may have accumulated in a state before they can move
 from one argument to the next, if indeed they move on at all.   For
-example, the rule where logical-and returns false is 
+example, the rule where logical-and returns false is
+\index{rule (dynamic)!and-false@\texttt{and-false}}%
 \begin{alltt}
 (* RULE-ID: and-false *)
      is_zero t v
    \(\Rightarrow\)
-     mng (s, EX (CAnd (ECompVal v t) sub2) se) 
+     mng (s, EX (CAnd (ECompVal v t) sub2) se)
          (s, EX (ECompVal (signed_int 0) Bool) se)
 \end{alltt}
 When the first argument is true (non-zero), the truth value of the
 second argument is the result.  The conversion of the second argument
 to a truth value is achieved by negating twice:
+\index{rule (dynamic)!and-true@\texttt{and-true}}%
 \begin{alltt}
 (* RULE-ID: and-true *)
      ~is_zero t v \(\land\)
      is_null_se se
    \(\Rightarrow\)
-     mng (s, EX (CAnd (ECompVal v t) sub2) se) 
+     mng (s, EX (CAnd (ECompVal v t) sub2) se)
          (s, EX (CApUnary CNot (CApUnary CNot sub2)) base_se)
 \end{alltt}
-\index{is_null_se@\texttt{is_null_se}} 
+\index{is_null_se@\texttt{is_null_se}|textbf}%
 The \texttt{is_null_se} predicate tests whether or not a side effect
-record is empty of pending side effects. 
+record is empty of pending side effects.
+\index{base_se@\texttt{base_se}|textbf}%
+The \texttt{base_se} value is the empty side effect record; it is the
+appropriate starting point for a new phase of execution after a
+sequence point has been reached.
 
 \medskip
-\noindent 
-\index{CommaSep@\texttt{CommaSep}} The comma operator
-(\texttt{CommaSep} here) always evaluates both of its arguments.  As
-with the other operators, evaluation of the first argument is handled
-by the contextual evaluation rule; we need only provide a rule for
-when the left-hand expression has been fully evaluated.
+\noindent
+\index{CommaSep@\texttt{CommaSep}}%
+The comma operator (\texttt{CommaSep} here) always evaluates both of
+its arguments.  As with the other operators, evaluation of the first
+argument is handled by the contextual evaluation rule; we need only
+provide a rule for when the left-hand expression has been fully
+evaluated.
+\index{rule (dynamic)!comma-progresses@\texttt{comma-progresses}}%
 \begin{alltt}
 (* RULE-ID: comma-progresses *)
      final_value (EX e1 se)
    ==>
-     mng (s0, EX (CommaSep e1 e2) se) 
+     mng (s0, EX (CommaSep e1 e2) se)
          (s0, EX (RValreq e2) base_se)
 \end{alltt}
-\index{final_value@\texttt{final_value}}
+\index{RValreq@\texttt{RValreq}}%
+The special \texttt{RValreq} form is used to force l-values to
+evaluate to r-values if possible.  (See~\cite[\S3.3.3]{Norrish98} for
+why this form is necessary.)
+\index{final_value@\texttt{final_value}|textbf}%
 The \texttt{final_value} predicate (from \HOLfile{statements}) checks
 an extended expression to confirm that it represents a completely
 evaluated form.  Its definition is
-
+\begin{center}
 \begin{minipage}{\textwidth}
 \begin{alltt}
    (final_value (EX e se) =
       is_null_se se \(\land\)
-      ((\(\exists\)v t. (e = ECompVal v t)) \(\lor\)
-       (\(\exists\)a t p. (e = LVal a t p) \(\land\) 
-                class_type (strip_const t)))) \(\land\)
+      ((\(\exists\)v t. e = ECompVal v t) \(\lor\)
+       (\(\exists\)a t p. e = LVal a t p))) \(\land\)
 
    (final_value (ST s c) = F)
 \end{alltt}
 \end{minipage}
-
-\bigskip
-\index{RValreq@\texttt{RValreq}}
-\noindent The special \texttt{RValreq} form is used to force l-values to
-evaluate to r-values if possible.  (See~\cite[\S3.3.3]{Norrish98} for
-why this form is necessary.)
+\end{center}
 
 \paragraph{Pointer Operations}
 The two significant pointer operations are dereferencing and
 address-taking (the \texttt{*} and \texttt{\&} operators
 respectively).  \cpp{} adds two class-related variants of these
-operations to the existing pair, which come across from C unchanged. 
-Thus the rule for taking an address:
-\index{Addr@\texttt{Addr}}
+operations to the existing pair, which come across from C practically
+unchanged.  Thus the rule for taking an address:
+\index{Addr@\texttt{Addr}}%
+\index{rule (dynamic)!addr-lvalue@\texttt{addr-lvalue}}
 \begin{alltt}
 (* RULE-ID: addr-lvalue *)
 (* See 5.3.1 p2-5 - taking the address of an lvalue *)
      (SOME result = ptr_encode s a t pth)
    \(\Rightarrow\)
-     mng (s, EX (Addr (LVal a t pth)) se) 
-         (s, EX (ECompVal result 
+     mng (s, EX (Addr (LVal a t pth)) se)
+         (s, EX (ECompVal result
                           (Ptr (static_type (t,pth)))) se)
 
 \end{alltt}
-\index{LVal@\texttt{LVal}}
-The function \texttt{static_type} computes the static type for a
-l-value given access to the type and path of identifiers.  (For
-non-class values, the static type is simply the second argument to
-\texttt{LVal}.)
+\index{LVal@\texttt{LVal}}%
+The function
+\texttt{static_type}\index{static_type@\texttt{static_type}} computes
+the static type for a l-value given access to the type and path of
+identifiers.  (For non-class values, the static type is simply the
+second argument to \texttt{LVal}.)
 
 There must be two rules for dereferencing a normal pointer; it may or
 may not point to a valid object.  In fact, there must also be a third
 rule because of the possibility that the pointer value being
 dereferenced is actually a pointer to a function. These rules are presented in
-Figure~\ref{fig:deref-rules}. 
+Figure~\ref{fig:deref-rules}.
 \begin{figure}[htbp]
+\index{rule (dynamic)!deref-objptr@\texttt{deref-objptr}}%
+\index{rule (dynamic)!deref-objptr-fails@\texttt{deref-objptr-fails}}%
+\index{rule (dynamic)!deref-fnptr@\texttt{deref-fnptr}}%
+\index{Deref@\texttt{Deref}}%
 \begin{alltt}
 (* RULE-ID: deref-objptr *)
 (* 5.3.1 p1 - pointer to an object type *)
@@ -1436,7 +1499,7 @@ Figure~\ref{fig:deref-rules}.
      (SOME mval = ptr_encode s addr t' pth) \(\land\)
      (static_type (t',pth) = t)
    \(\Rightarrow\)
-     mng (s, EX (Deref (ECompVal mval (Ptr t))) se) 
+     mng (s, EX (Deref (ECompVal mval (Ptr t))) se)
          (s, EX (LVal addr t' pth) se)
 
 
@@ -1445,7 +1508,7 @@ Figure~\ref{fig:deref-rules}.
      ((\(\forall\)addr t' p. \(\neg\)(SOME mval = ptr_encode s addr t' p)) \(\lor\)
       (\(\exists\)t' p. SOME mval = ptr_encode s 0 t' p))
    \(\Rightarrow\)
-     mng (s, EX (Deref (ECompVal mval (Ptr t))) se) 
+     mng (s, EX (Deref (ECompVal mval (Ptr t))) se)
          (s, EX UndefinedExpr se)
 
 
@@ -1453,15 +1516,14 @@ Figure~\ref{fig:deref-rules}.
 (* 5.3.1 p1 - pointer to a function type *)
      v IN FDOM s.fndecode
    \(\Rightarrow\)
-     mng (s, EX (Deref 
-                  (ECompVal v 
-                            (Ptr (Function retty argtys)))) 
-                se) 
-         (s, EX (FVal (s.fndecode ' v) 
-                      (Function retty argtys) 
+     mng (s, EX (Deref
+                  (ECompVal v
+                            (Ptr (Function retty argtys))))
+                se)
+         (s, EX (FVal (s.fndecode ' v)
+                      (Function retty argtys)
                       NONE) se)
 \end{alltt}
-\index{Deref@\texttt{Deref}}
 \caption{Rules for ``C-style'' dereferencing of pointers}
 \label{fig:deref-rules}
 \end{figure}
@@ -1475,48 +1537,50 @@ rather ugly:
    struct C { int x; int y; };
    int C::* cintptr = &C::x; // or &C::y
 \end{verbatim}
-\index{MemAddr@\texttt{MemAddr}}
+\index{MemAddr@\texttt{MemAddr}}%
 In the abstract syntax, the address taking operation is written
 \texttt{MemAddr}, of type
 \begin{verbatim}
    : CPP_ID -> IDComp -> CExpr
 \end{verbatim}
 where the first argument is the name of the class, and the second is
-the name of the field.  
+the name of the field.
 
 If the member whose address is being taken is actually a static
 member, then a normal pointer is generated, as can be seen from the
 type attached to the \texttt{ECompVal} in the conclusion of the rule.
 (There is a similar rule for taking the address of a static member
 function.)
+\index{rule (dynamic)!mem-addr-static-nonfn@\texttt{mem-addr-static-nonfn}}%
 \begin{alltt}
 (* RULE-ID: mem-addr-static-nonfn *)
-(* 5.3.1 p2 *) 
+(* 5.3.1 p2 *)
      object_type ty \(\land\)
-     MEM (FldDecl fldname ty, T, prot) 
+     MEM (FldDecl fldname ty, T, prot)
          (cinfo s cname).fields \(\land\)
-     (lookup_addr s (mk_member cname fldname) = 
+     (lookup_addr s (mk_member cname fldname) =
         SOME (addr, pth)) \(\land\)
      (SOME ptrval = ptr_encode s addr ty (SND pth))
    \(\Rightarrow\)
-     mng (s, EX (MemAddr cname fldname) se) 
+     mng (s, EX (MemAddr cname fldname) se)
          (s, EX (ECompVal ptrval (Ptr ty)) se)
 \end{alltt}
 \index{cinfo@\texttt{cinfo}}
 The function \texttt{cinfo} takes a state and a class-name and returns
 the information about that class in the form of a record, one of whose
 fields is called \texttt{fields}, being a list of all the declarations
-occurring within the class. 
+occurring within the class.
 
 \bigskip\noindent
-The more interesting case occurs when the member is not static. 
+The more interesting case occurs when the member is not static.
+\index{rule (dynamic)!mem-addr-nonstatic@\texttt{mem-addr-nonstatic}}%
 \begin{alltt}
 (* RULE-ID: mem-addr-nonstatic *)
      (encode_offset cnm fldname = SOME bl) \(\land\)
-     ((\(\exists\)prot. MEM (FldDecl fldname ty, F, prot) 
+     ((\(\exists\)prot. MEM (FldDecl fldname ty, F, prot)
                   (cinfo s cnm).fields) \(\lor\)
-      (\(\exists\)prot v rt args bod. 
-          MEM (CFnDefn v rt fldname args bod, F, prot) 
+      (\(\exists\)prot v rt args bod.
+          MEM (CFnDefn v rt fldname args bod, F, prot)
               (cinfo s cnm).fields \(\land\)
           (ty = Function rt (MAP SND args))))
    \(\Rightarrow\)
@@ -1536,7 +1600,7 @@ long as one also had a class object to hand.  Unlike normal C-style
 dereferencing, dereferencing a pointer-to-member is a binary
 operator.  The concrete C++ syntax looks like:
 \begin{verbatim}
-   int f(int C::* cintptr, C c) 
+   int f(int C::* cintptr, C c)
    {
      return c.*cintptr;
    }
@@ -1549,25 +1613,26 @@ dereferencing).  In the abstract syntax, the one operator is called
 The rule is complicated by the fact that if the pointer to a member is
 to a virtual function, then the result must be a reference to a
 virtual function in the class on which the dereference is
-performed. 
+performed.
+\index{rule (dynamic)!offset-deref@\texttt{offset-deref}}%
 \begin{alltt}
 (* RULE-ID: offset-deref *)
      (encode_offset cnm2 fldname = SOME bl) \(\land\)
-     (fld = if function_type fldty then 
+     (fld = if function_type fldty then
               let (r,a) = dest_function_type fldty
               in
-                if is_virtual s cnm2 fldname r a then 
+                if is_virtual s cnm2 fldname r a then
                   IDConstant F [] fldname
                 else
                   mk_member cnm2 fldname
             else
               mk_member cnm2 fldname)
    \(\Rightarrow\)
-     mng (s, EX (OffsetDeref 
-                     (LVal a (Class cnm1) p) 
-                     (ECompVal bl (MPtr cnm2 fldty))) 
+     mng (s, EX (OffsetDeref
+                     (LVal a (Class cnm1) p)
+                     (ECompVal bl (MPtr cnm2 fldty)))
                 se)
-         (s, EX (SVar (LVal a (Class cnm1) p) fld) 
+         (s, EX (SVar (LVal a (Class cnm1) p) fld)
                 se)
 \end{alltt}
 The invariant in the model is that if a reference is made to a virtual
@@ -1583,6 +1648,7 @@ It is possible to have null member pointers
 (see~\cite[\S4.11]{cpp-standard-iso14882}).  We specify
 \texttt{encode_offset} in such a way that the null member pointer
 constant is not in its range, and add the rule
+\index{rule (dynamic)!offset-deref-fails@\texttt{offset-deref-fails}}%
 \begin{center}
 \begin{minipage}{\textwidth}
 \begin{alltt}
@@ -1598,13 +1664,13 @@ constant is not in its range, and add the rule
 \end{minipage}
 \end{center}
 It is undefined behaviour to apply the null member pointer to any
-class. 
+class.
 
 \paragraph{Assignment}
 The rules for assignment do not need to change from their presentation
-in C.  Nonetheless, this semantics adopts Clive Feather's
-proposal~\cite{Feather2000} for handling the infamous language in the
-standard: 
+in C.  Nonetheless, this semantics adopts Clive
+Feather's\index{Feather, Clive} proposal~\cite{Feather2000} for
+handling the infamous language in the standard:
 \begin{quotation}
 \itshape
     Between the previous and next sequence point an  object
@@ -1620,10 +1686,11 @@ assignment considerably simpler, at the cost of requiring an analysis
 of all possible execution paths to see if any of them result in an
 update before a reference.
 
-\index{Assign@\texttt{Assign}}
+\index{Assign@\texttt{Assign}}%
 The rule for a completed assignment expression is:
 \begin{center}
 \label{rule:assign-completes}
+\index{rule (dynamic)!assign-completes@\texttt{assign-completes}}%
 \begin{minipage}{\textwidth}
 \begin{alltt}
 (* RULE-ID: assign-completes *)
@@ -1632,10 +1699,10 @@ The rule for a completed assignment expression is:
      (se = add_se (a, v) se0) \(\land\) (resv = ECompVal v lhs_t)
                           \(\lor\)
      (\(\forall\)v. \(\neg\)nonclass_conversion s (v0, t0) (v, lhs_t)) \(\land\)
-     (resv = UndefinedExpr) \(\land\) 
+     (resv = UndefinedExpr) \(\land\)
      (se = se0))
    \(\Rightarrow\)
-     mng (s, EX (Assign NONE (LVal a lhs_t []) 
+     mng (s, EX (Assign NONE (LVal a lhs_t [])
                              (ECompVal v0 t0)) se0)
          (s, EX resv se)
 \end{alltt}
@@ -1645,12 +1712,13 @@ The \texttt{NONE} value that is the first argument ot \texttt{Assign}
 is where a binary operator can be installed, implementing the
 \texttt{op=} syntax (\texttt{+=}, \texttt{>>=} etc.).  The rule that
 deals with this is
-\index{CApBinary@\texttt{CApBinary}}
+\index{CApBinary@\texttt{CApBinary}}%
+\index{rule (dynamic)!assign-op-assign@\texttt{assign-op-assign}}
 \begin{alltt}
 (* RULE-ID: assign-op-assign *)
      T
    \(\Rightarrow\)
-     mng (s0, EX (Assign (SOME f) (LVal n t p) e) se0) 
+     mng (s0, EX (Assign (SOME f) (LVal n t p) e) se0)
          (s0, EX (Assign NONE
                          (LVal n t p)
                          (CApBinary f (LVal n t p) e)) se0)
@@ -1707,28 +1775,45 @@ required the complete evaluation of the function body.)
 
 \index{FnApp@\texttt{FnApp}}
 At the base level, a function call turns an \texttt{EX} piece of
-syntax into an extended expression tagged with \texttt{ST}.  
-The following rule governs (normal) function calls: 
+syntax into an extended expression tagged with \texttt{ST}.
+The following rule governs (normal) function calls:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!global-function-call@\texttt{global-function-call}}%
+\label{rule:global-function-call}
 \begin{alltt}
 (* RULE-ID: global-function-call *)
-     find_best_fnmatch s0 fnid (MAP valuetype args) 
+     find_best_fnmatch s0 fnid (MAP valuetype args)
                        rtype params body \(\land\)
-     (pdecls = MAP (\(\lambda\)((n,ty),a). 
+     (pdecls = MAP (\(\lambda\)((n,ty),a).
                        VDecInit ty (Base n)
                                    (CopyInit (EX a base_se)))
                    (ZIP (params, args)))
    \(\Rightarrow\)
-     mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se) 
-         (s0, ST (Block F pdecls [body]) 
-                 (return_cont se rtype))
+     mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se)
+         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
+                     thisvalue := NONE;
+                     blockclasses updated_by stackenv_newscope ;
+                     exprclasses updated_by stackenv_newscope ;
+                     env := empty_env |>,
+          ST (Block T pdecls [body]) (return_cont se rtype))
 \end{alltt}
-At this point, the standard rule for evaluating an expression within a
-context (\ruleid{expr-econtext}, p\pageref{rule:econtext-expr}) can
-not fire, because its hypothesis is of the form 
+\end{minipage}
+\end{center}
+
+\index{return_cont@\texttt{return_cont}}%
+(For the details behind \texttt{return_cont}, and the \texttt{RVC}
+function that appears in the next rule, see
+Section~\ref{sec:refs-returned-from-fns}.  For the operations applied
+to \texttt{s0}, setting up the new function's scope, see
+Section~\ref{sec:statements-blocks}.)  At this point, the standard
+rule for evaluating an expression within a context
+(\ruleid{expr-econtext}, p\pageref{rule:econtext-expr}) can not fire,
+because its hypothesis is of the form
 \[
 \texttt{mng (s0, EX e0 se0) (s, EX e se)}
 \]
-Instead, the new rule 
+Instead, the new rule
 \label{rule:econtext-stmt}
 \begin{alltt}
 (* RULE-ID: econtext-stmt *)
@@ -1745,21 +1830,26 @@ into the appropriate expression.
 
 These rules have specified what happens when an expression evaluation
 switches to a statement evaluation.  In the opposite direction, when a
-function call is about to return, the rule is
+function call is about to return, one of the rules is
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!return-rvalue@\texttt{return-rvalue}}
 \begin{alltt}
 (* RULE-ID: return-rvalue *)
      is_null_se se0
    \(\Rightarrow\)
-     mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se)) 
+     mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se))
          (s, EX (c (ECompVal v t)) se)
 \end{alltt}
+\end{minipage}
+\end{center}
 In this situation, the \texttt{return} statement has completely
 evaluated its argument into a value, and there are no remaining side
 effects to be evaluated.  This means that the value can be put back
 into the containing expression tree, and expression evaluation can
 continue.  This is reflected by the switch from \texttt{ST} to
 \texttt{EX}, and the application of the continuation \texttt{c} to the
-value.  
+value.
 
 Note how the argument to the return statement is itself an extended
 expression.  This means that the argument will be tagged with
@@ -1767,1303 +1857,337 @@ expression.  This means that the argument will be tagged with
 continuation (tagged with \texttt{ST}) if the return-expression
 includes a function call.  This means that the rule for evaluation of
 the argument of return is
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!return-eval-under@\texttt{return-eval-under}}
 \begin{alltt}
 (* RULE-ID: return-eval-under *)
      mng (s1, exte0) (s2, exte)
    \(\Rightarrow\)
      mng (s1, ST (Ret exte0) c) (s2, ST (Ret exte) c)
 \end{alltt}
-where \texttt{exte0} and \texttt{exte} may be statements or expressions.
-
-\subsection{Basic Object-Orientation}
-\label{sec:basic-oo}
-
-The inspiration for this part of the semantics is the article by
-Wasserrab~\emph{et al}~\cite{wasserrab-nst-OOPSLA06}, which provides a
-detailed model for multiple inheritance in a simple \cpp-like
-language. 
-
-\subsubsection{Class Declaration}
-\label{sec:class-declaration}
-A class declaration is similar to the original C model's declaration
-of a \texttt{struct} type.  A class declaration takes two parameters,
-the name of the class, and an optional ``class-info''
-argument.\footnote{The information argument is optional to allow the
-  situation where a forward declaration of a class occurs.}  The
-class-info, if present, is a list of fields, coupled with a list of
-ancestors.  The latter allows inheritance from zero or many ancestors.
-Each ancestor is coupled with a boolean flag indicating whether or not
-it is a \texttt{virtual} ancestor.  As the model ignores protection
-issues, there is no scope for indicating protection status for
-ancestors. 
-
-The fields are of two sorts, declarations of members (whether of
-``data'' fields or member functions), and nested classes.  Member
-declarations are accompanied by a flag indicating whether or not they
-are static, and a protection indicator (i.e., \texttt{public},
-\texttt{protected}, or \texttt{private}).  Again, protection
-information is entirely ignored: any field access is assumed to have
-been OK-ed earlier by the compiler. 
-
-Member function definitions give the function's name, return-type,
-parameter list (types and names), function body, and a flag indicating
-whether or not it is virtual.  (Of course, even in the absence of an
-explicit declaration that a member function is virtual, it may be so
-because of an ancestor's prior declaration.) 
-
-When a class declaration is encountered , its member functions are
-entered into the state's function map.  The same function map is used
-for normal (non-class) functions, but the structured nature of \cpp{}
-identifiers allows the model to distinguish both sorts of function. 
-
-\subsubsection{Class Values and Member Functions}
-\label{sec:class-values}
-Classes can not be converted into r-values like other values.  This is
-because of the problems that arise with multiple inheritance.  In
-particular, with multiple inheritance in place, it is no longer true
-that one can extract the byte sequence for a given l-value by starting
-at the base address and taking as many bytes from memory as the size
-of the type.  In particular, virtual base classes may be at completely
-different places in memory, not necessarily even contiguous with the
-rest of the object.  (This is demonstrated for the \texttt{g++}
-compiler by the little program in
-\texttt{notes/mult-inheritance-layout.cpp}.)
-
-Absence of support for r-values means that, in this model, one can not
-assign classes, pass them as parameters, or return them from
-functions.  However, because references are supported (see below),
-much idiomatic \cpp{} is still covered by the model.
-
-\index{LVal@\texttt{LVal}!and dynamic types}
-%
-The presence of classes means that the model's presentation of
-l-values changes from the way it was in the original C model.  In
-particular, an l-value that is statically typed as a base class needs
-to know dynamically that it is really of a derived type.  This
-information is traditionally recorded in \texttt{vtable} fields.
-Following Wasserrab~\emph{et al}, my model instead records an
-additional path accompanying every l-value.  This path is a list of
-strings, listing the path through the ancestry-tree that leads from
-the most-derived class to the static class type.  Moreover, the type
-that accompanies every l-value (recall that the \texttt{LVal}
-constructor takes three arguments, an address, a type and a list of
-identifiers), will have as the type, the \emph{dynamic} type
-of the l-value.
-
-\index{member functions!virtual}
-Consider, for example, the code in Figure~\ref{fig:oo-example}.  The
-body of function \texttt{g} constructs the l-value \texttt{*b} when it
-calls \texttt{f}.  As in the C model, this l-value will be associated
-with some address, and the static type, which is \texttt{Class~B}.
-The actual l-value will be of the form 
-\begin{alltt}
-   LVal a (Class D2) [D2,D1,B]
-\end{alltt}
-The last element of the paths in l-values is always the static class
-of the value.  In the example, when field selection occurs, the
-\texttt{f} chosen will be \texttt{D1}'s.
-
-In Figure~\ref{fig:oo-example}, the expression of interest is
-\texttt{b->f()}, which is syntactic sugar for \texttt{((*b).f)()}.
-(Note how the member selection is syntactically subordinate to the
-function application.)  The \ruleid{virtual-function-member-select}
-rule (see Figure~\ref{fig:virtual-function-member-select}) governs the
-evaluation of \texttt{(*b).f} once the left-hand-side (\texttt{*b})
-has evaluated to an l-value.\footnote{Even when the model allows for
-  class r-values, they will be given a memory location (and thus, a
-  life-time).  This will enable them to also be l-values.  In essence,
-  it is not possible to create an object of any sort without giving it
-  a location.  Contrast numbers, which can be ``created'', and not
-  given a memory location, simply by writing them down.}
-
-\begin{figure}[hbtp]
-\begin{verbatim}
-   class B {
-     public: virtual int f() { return 3; }
-   };
-
-   class D1 : public B {
-     public: int f() { return 4; }
-   };
-
-   class D2 : public D1 { };
-
-   int g(class B *b) { return b->f(); }
-
-   int main()
-   {
-     D2 d;
-     return g(&d);
-   }
-\end{verbatim}
-\caption{C++ code demonstrating OO-polymorphism.  The program will
-  return 4. Though it appears as if \texttt{B}'s function \texttt{f}
-  is called, the version of \texttt{f} called will actually be that
-  attached to \texttt{D1}.}
-\label{fig:oo-example}
-\end{figure}
-
-\begin{figure}[hbtp]
-\begin{center}
-\begin{minipage}{\textwidth}
-\begin{alltt}
-(* RULE-ID: virtual-function-member-select *)
-     (s,\lbr\rbr) |- LAST Cs has least method
-                 (IDName fld) -: 
-                 (static_retty,F,args0,body0) via 
-                 Ds \(\land\)
-     (s,\lbr\rbr) |- (C,Cs ^ Ds) selects 
-                 (IDName fld) -: 
-                 (dyn_retty,F,args,body) via 
-                 Cs'
-   \(\Rightarrow\)
-     mng (s, EX (SVar (LVal a (Class C) Cs)
-                      (IDConstant F [] (IDName fld))) se) 
-         (s, EX (FVal (mk_member (LAST Cs') (IDName fld))
-                      (Function dyn_retty (MAP SND args))
-                      (SOME (LVal a (Class C) Cs'))) se)
-
-\end{alltt}
 \end{minipage}
 \end{center}
-\caption{The rule for virtual member function dispatch}
-\label{fig:virtual-function-member-select}
+where \texttt{exte0} and \texttt{exte} may be statements or
+expressions.
+
+\paragraph{Statement Evaluation Strategy}
+The basic idea behind all of the rules for statements are that they
+should be evaluated until they yield a ``final'' form.  As is
+explained further in Section~\ref{sec:refs-returned-from-fns} below,
+such an evaluation has to be done in the context of the continuation
+that is accompanying the statement.  In essence, a final form is both
+one that can not be further evaluated, and also something that can be
+returned to a higher level as some sort of result.  The definition of
+\texttt{final_stmt} is from \HOLfile{statements}:
+\index{final_stmt@\texttt{final_stmt}|textbf}%
+\index{final_value@\texttt{final_value}}%
+\begin{alltt}
+  (final_stmt EmptyStmt c = T) \(\land\)
+  (final_stmt Break c = T) \(\land\)
+  (final_stmt Cont c = T) \(\land\)
+  (final_stmt (Ret e) c =
+     case c of
+        LVC f se0 -> (\(\exists\)a t p se. (e = EX (LVal a t p) se) \(\land\)
+                                 is_null_se se)
+     || RVC f se0 -> final_value e) \(\land\)
+  (final_stmt (Throw exn) c = \(\exists\)e. (exn = SOME e) \(\land\)
+                                  final_value e) \(\land\)
+  (final_stmt _ c = F)
+\end{alltt}
+\index{Throw@\texttt{Throw}}%
+\index{EmptyStmt@\texttt{EmptyStmt}}%
+\index{Ret@\texttt{Ret}}%
+The \texttt{Throw} form implements exceptions (for which, see
+Section~\ref{sec:exceptions}); most statements will evaluate to either
+an \texttt{EmptyStmt}, or a \texttt{Ret}.
+
+\subsubsection{Simple Statements}
+\label{sec:simple-statements}
+
+The rules for the simplest statement forms, expression statements
+(using the \texttt{Standalone}
+``constructor''\index{Standalone@\texttt{Standalone}}) and
+if~statements are given in Figure~\ref{fig:simple-stmts}.  While an
+expression statement explicitly terminates (yielding an
+\texttt{EmptyStmt}), the if statement just evolves into one of its two
+branches.
+\begin{figure}[htbp]
+\index{rule (dynamic)!standalone-evaluates@\texttt{standalone-evaluates}}%
+\index{rule (dynamic)!standalone-finishes@\texttt{standalone-finishes}}%
+\index{rule (dynamic)!if-eval-guard@\texttt{if-eval-guard}}%
+\index{rule (dynamic)!if-true@\texttt{if-true}}%
+\index{rule (dynamic)!if-false@\texttt{if-false}}%
+\index{CIf@\texttt{CIf}}
+\begin{alltt}
+(* RULE-ID: standalone-evaluates *)
+     mng (s1, exte) (s2, exte')
+   \(\Rightarrow\)
+     mng (s1, ST (Standalone exte) c)
+         (s2, ST (Standalone exte') c)
+
+
+(* RULE-ID: standalone-finishes *)
+     is_null_se se \(\land\)
+     final_value e
+   \(\Rightarrow\)
+     mng (s, ST (Standalone e) c) (s, ST EmptyStmt c)
+
+
+(* RULE-ID: if-eval-guard *)
+     mng (s0, RVR guard) (s, RVR guard')
+   \(\Rightarrow\)
+     mng (s0, ST (CIf guard t e) c)
+         (s, ST (CIf guard' t e) c)
+
+
+(* RULE-ID: if-true *)
+     scalar_type t \(\land\)
+     is_null_se se \(\land\)
+     \(\neg\)is_zero t v
+   \(\Rightarrow\)
+     mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c)
+         (s, ST thenstmt c)
+
+
+(* RULE-ID: if-false *)
+     scalar_type t \(\land\)
+     is_null_se se \(\land\)
+     is_zero t v
+   \(\Rightarrow\)
+     mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c)
+         (s, ST elsestmt c)
+\end{alltt}
+\caption{Statement Rules for Expression and If Statements}
+\label{fig:simple-stmts}
 \end{figure}
 
-In our model, the l-value's address will be the same as the address of
-its most-derived class.  In other words, the \texttt{a} of the rule
-will be the same as the address of the object \texttt{d}.  This is not
-what happens in typical compilers, which will actually make the
-pointer to the \texttt{B} sub-class point at the address of that
-sub-object's fields in the wider object's memory layout.  Then, the
-fact that the most-derived class is a \texttt{D2} is implicitly
-recorded in the \texttt{vtable}, which will contain a pointer to
-\texttt{D1::f}.
-
-In the rule, the variable \texttt{C} containing the name of the static
-class will be \texttt{D2}, and \texttt{Cs}, the path variable, will be
-\texttt{[D2,D1,B]}.  The \texttt{fld} variable will be \texttt{f}.
-Then, the first hypothesis will check the class hierarchy to determine
-where an \texttt{f} can be found, starting at the static type, i.e.,
-at \texttt{B}.  This will reveal that, with respect to \texttt{B}
-there is an \texttt{f} at path \texttt{[B]}.  This will be the value
-for \texttt{Ds}.  The same check determines four pieces of information
-about the function: its static return type (in the variable
-\texttt{static_retty}, that it is not static (virtual functions can
-not be static), and what its arguments and body are (\texttt{args0},
-and \texttt{Body0}).
-
-The second hypothesis calculates which function must be called given
-the class's dynamic type.  This is complicated because of the need to
-handle multiple inheritance (the definition of
-``\texttt{selects-via}'' is discussed below in
-Section~\ref{sec:multiple-inheritance}), but in this case, the path
-\texttt{Cs'} will be found to be \texttt{[D2,D1]}, and the information
-\texttt{(dyn_retty,F,args,body)} found will be that for the function
-\texttt{D1::f}.  
-
-\index{mk_member@\texttt{mk_member}}
-The result of the rule in this circumstance is that the expression
-\texttt{b->f} turns into a reference to the function \texttt{D1::fld}
-(this is the call to \texttt{mk_member}), coupled with with the fact
-that the function call is being made on an object whose dynamic type
-is \texttt{D2}, and whose static type is \texttt{D1} (as is
-appropriate for the body of the function).
-
-Note that the function in this rule is known to be virtual by virtue
-of the fact that the fieldname is unqualified: it is of the form
-\[
-\texttt{IDConstant~F~[]~(IDName~fld)}
-\]
-Name resolution will ensure that non-virtual members all have
-qualified fields.
-
-\paragraph{Other Sorts of Member Function}
-
-There are two other sorts of member functions in \cpp{}: static
-members functions, and normal functions.  Each sort has its own rule
-in the semantics.    
-\index{member functions!static}
-First, the rule for static member functions: 
-\begin{alltt}
-(* RULE-ID: static-function-member-select *)
-     (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
-     (s,\lbr\rbr) |- LAST Ds has least method 
-                  (IDtl fldid) -: (retty,T,ps,body)
-                  via [LAST Ds] \(\land\)
-     (ftype = Function retty (MAP SND ps)) \(\land\)
-     is_qualified fldid
-   \(\Rightarrow\)
-     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se) 
-         (s, EX (FVal fldid ftype NONE) se)
-\end{alltt}
-\index{is_qualified@\texttt{is_qualified}}
-The third hypothesis (\texttt{is_qualified}) checks that the field
-name has multiple components to it.  This qualification will be
-introduced by name resolution if not already provided by the user.
-Name resolution will also ensure that the name given to the field is
-qualified with the name of the class where the field actually
-resides.  
-
-\index{class_part@\texttt{class_part}} The first hypothesis is
-strictly redundant given this pre-processing: we know that the field
-will occur in the class that is at the end of the path \texttt{Ds},
-and that this final element will be equal to the class-part of the
-identifier.  The second hypothesis reinforces this: the deduced path
-from \texttt{LAST~Ds} (which equals \texttt{class_part~fldid})to the
-host class for the given field is the singleton \texttt{[LAST~Ds]}. 
-Because the member is static (witness the \texttt{T} as argument 2 of
-the 4-tuple returned by \texttt{least-method}), the final function
-value does not include a class component.
-
-\index{member functions!non-static}
-The rule for normal, non-static  member functions is:
-\begin{alltt}
-(* RULE-ID: nonstatic-function-member-select *)
-     (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
-     (s,\lbr\rbr) |- LAST Ds has least method 
-                  (IDtl fldid) -: (retty,F,ps,body)
-                  via [LAST Ds] \(\land\)
-     (ftype = Function retty (MAP SND ps)) \(\land\)
-     is_qualified fldid
-   \(\Rightarrow\)
-     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se) 
-         (s, EX (FVal fldid ftype 
-                      (SOME (LVal a (Class cnm) (Cs ^ Ds)))) 
-                se)
-\end{alltt}
-This is very similar to the rule for static functions, but this time
-the identity of the class for which the function is being called is
-important, and recorded in the third argument to \texttt{FVal}.  The
-dynamic type of the object stays the same, but the static type is
-adjusted to reflect the class where the function being called is
-defined. 
-
-\paragraph{Field Selection}
-Field selection is also based on the notion of being able to find the
-most-derived declaration of the given field in the ancestor hierarchy.
-There is no need to worry about adjusting \texttt{this} pointers, or
-performing analyses with dynamic types as field selections are always
-done with respect to a class's static type.  However, there is an
-additional complexity, stemming from the need to give addresses to
-selected fields, so that they can become well-formed l-values.  In
-turn, this relies on knowing how a class is laid out in memory.
-
-The standard \emph{does} require that fields belonging to a particular
-class type be laid out in the order in which they appear (as long as
-they have the same access-specifiers, but I'm not modelling those just
-yet).  But there is no specification of how base sub-objects are laid
-out.  (Recall, moreover, that in the presence of a virtual base-class,
-an object that is not most-derived may be split over distinct parts of
-memory.)
-
-With just single inheritance to model, I use an under-specified
-function \texttt{class\_layout} which takes a set of sub-object paths,
-and returns them in a list.  This then drives the calculation of field
-offsets and class sizes.
-
-\paragraph{What of vtables?}
-The use of paths does away with the need for vtables.  On the other
-hand, we wouldn't want to specify the model in such a way as to
-preclude this perfectly reasonable implementation strategy.  In
-particular, vtables will be catered for just as in the standard, by
-maintaining that it is only in POD (``plain old data'') types where
-one can rely on the address of the first field being the same as the
-address of the containing \texttt{struct}.  The calculation of sizes
-must also be under-specified to allow for the presence of extra,
-user-invisible data at the start of a class.  
-
-\subsubsection{Casting and Other Type Conversions} 
-We have already seen one use of implicit conversion from one type of
-value to another, in the rule \ruleid{assign-completes}
-(p\pageref{rule:assign-completes}), where the relation
-\texttt{nonclass_conversion} is used to this end.  This relation
-governs the way in which various values are allowed to be silently
-converted from one type to another.  Its definition is from the file
-\HOLfile{declaration_dynamics}, and is repeated in
-Figure~\ref{fig:nonclass-conversion}.
-\begin{figure}
-\index{nonclass_conversion@\texttt{nonclass_conversion}} 
-\begin{alltt}
-  nonclass_conversion s (v1,ty1) (v2,ty2) =
-    let ty1 = strip_const ty1
-    and ty2 = strip_const ty2
-    in
-      (integral_type ty1 \(\land\) integral_type ty2 \(\lor\)
-       \(\exists\)ty0. (ty1 = Ptr ty0) \(\land\) (ty2 = Ptr Void)) \(\land\)
-      (\(\exists\)i. (INT_VAL ty1 v1 = SOME i) \(\land\)
-           (SOME v2 = REP_INT ty2 i)) 
-              (* includes null pointer conversion *)
-         \(\lor\)
-      (strip_ptr_const ty1 = strip_ptr_const ty2) \(\land\) (v1 = v2)
-         \(\lor\)
-      (\(\exists\)c1 c2 addr pth1 pth2.  (* this is an upcast *)
-          (ty1 = Ptr (Class (LAST pth1))) \(\land\) (ty2 = Ptr (Class c2)) \(\land\)
-          (SOME v1 = ptr_encode s addr (Class c1) pth1) \(\land\)
-          (s,\lbr\rbr) |- c2 casts pth1 into pth2 \(\land\)
-          (SOME v2 = ptr_encode s addr (Class c1) pth2))
-         \(\lor\)
-      (\(\exists\)ty0 base derived p fld. 
-          (ty1 = MPtr base ty0) \(\land\) (ty2 = MPtr derived ty0) \(\land\)
-          (s,\lbr\rbr) |- path derived to base unique \(\land\)
-          (derived, p) IN rsubobjs (s,\lbr\rbr) \(\land\) 
-             (* rsubobjs ensures base is not virtual *)
-          (LAST p = base) \(\land\)
-          (v2 = v1) \(\land\)
-          ((SOME v1 = encode_offset base fld) \(\lor\) 
-           (v1 = null_member_ptr)))
-         \(\lor\)
-      (\(\exists\)ty0 c. (* null pointer conversion for pointers to member *)
-          (ty1 = Signed Int) \(\land\) (SOME v1 = REP_INT (Signed Int) 0) \(\land\)
-          (ty2 = MPtr c ty0) \(\land\) (v2 = null_member_ptr))
-\end{alltt}
-\caption{The \texttt{nonclass_conversion} relation for implicit type
-  conversions.  Based on the standard's \S4.}
-\label{fig:nonclass-conversion}
-\end{figure}
-
-\index{dynamic_cast@\texttt{dynamic_cast}}
-The most important of \cpp{}'s explicit casts is the
-\texttt{dynamic_cast} operation which allows for run-time checked
-manoeuvering around a class hierarchy.  First up-casts to unambiguous bases
-are permitted (this is the rule for references; there are parallel
-rules for the dynamic casting of pointers):
-\begin{alltt}
-(* RULE-ID: dyncast-derived-to-base-ref *)
-(* assume that base is accessible (checked by compiler) *)
-     (strip_const dty = Class dcnm) \(\land\)
-     (s,\lbr\rbr) |- path (LAST p) to dcnm unique \(\land\) (* static check *)
-     (s,\lbr\rbr) |- path (LAST p) to dcnm via p' 
-   \(\Rightarrow\)
-     mng (s, EX (DynCast (Ref dty) (LVal a (Class scnm) p)) se)
-         (s, EX (LVal a (Class scnm) (p ^ p')) se)
-\end{alltt}
-The second hypothesis is strictly redundant in the dynamics; along
-with the base's accessibility, this will be checked before the
-dynamics gets a chance to execute.  The third hypothesis is where the
-extended path from the dynamic type up to the new base is
-constructed.
-
-In the other direction (back down a class hierarchy), dynamic casts
-can fail, and require the source type to be polymorphic (\ie, the
-source class should have at least one virtual function).
+\index{loops}%
+\index{CLoop}%
+\paragraph{Loops} The loop forms in \cpp{} are modelled just as they
+were in my thesis~\cite[\S3.4.5]{Norrish98}, as syntactic sugar for
+forms involving one loop and different arrangements of the
+\texttt{Trap}, \texttt{continue} and \texttt{break} primitives.
+This allows just one, unconditional rule for all loops:
 \begin{center}
-\begin{minipage}{\textwidth}
+  \begin{minipage}{\textwidth}
 \begin{alltt}
-(* RULE-ID: dyncast-poly-base-to-other-ref *)
-     (strip_const dty = Class dcnm) \(\land\)
-     (src_dynty = Class scnm) \(\land\)
-     polymorphic s (LAST p) \(\land\)
-     (s,\lbr\rbr) |- path scnm to dcnm via p' \(\land\)
-     (result = 
-      if (s,\lbr\rbr) |- path scnm to dcnm unique then 
-        (* should also check accessible, though I think this 
-           could be done statically *)
-        LVal a src_dynty p'
-      else
-        EThrow (SOME (New (Class bad_cast_name) NONE)))
+(* RULE-ID: loop *)
+     T
    \(\Rightarrow\)
-     mng (s, EX (DynCast (Ref dty) (LVal a src_dynty p)) se)
-         (s, EX result se)
+     mng (s, ST (CLoop guard bdy) c)
+         (s, ST (CIf guard (Block F [] [bdy; CLoop guard bdy])
+                           EmptyStmt) c)
 \end{alltt}
-\end{minipage}
-\end{center}
-Note how the dynamic type of the l-value does not change: it remains
-as \texttt{src_dynty}.  Instead the accompanying path value adjusts:
-shifting from a path that leads up as far as \texttt{LAST~p} (the
-original static type), to one that leads to the class \texttt{dcnm}.
-In this way, a \texttt{dynamic_cast} can move the static type from one
-branch of the ancestry tree to another; in one step, one can do more 
-than just make a down-cast.  
-
-\index{bad_cast exception@\texttt{bad_cast} exception}
-When there isn't a class of the desired type available, a reference
-cast causes a \texttt{bad_cast} exception to be thrown.  The
-accompanying rule for dynamic-casting of pointer values has the
-pointer converted to a null pointer if the destination type is unreachable.
-
-
-\subsection{Reference Types}
-\label{sec:reftypes}
-
-Reference types pose problems in the contexts where they are
-distinctive:
-\begin{itemize}
-\item passed as parameters to functions;
-\item returned from functions;
-\item when they are initialised.
-\end{itemize}
-
-Otherwise, it is obvious how the existing semantics should treat
-references: they are l-values.  References are only created from
-l-values, and in the reverse direction, values will turn into r-values
-as required.  They will do the right things when of \texttt{class}
-types because they will have the Wasserrab style paths attached.  In
-other words, a reference to a base class may actually be an l-value
-referring to a derived class.
-
-The remaining sub-sections explain what happens in the three
-interesting situations.
-
-\paragraph{Omissions}
-\begin{itemize}
-\item The semantics does not handle references to functions.
-  Supporting these will require more rules in the dynamic semantics,
-  but these rules will be directly analogous to the rules presented
-  below: wherever an \clvalue{} constructor (which is for l-values of
-  object type) appears, there will need to also be a rule for
-  \cfvalue{}, which is for function values.
-\item The semantics does not handle initialisation of references
-  belonging to classes because these have to happen in the
-  \emph{mem-initialisors} of a class's constructor function(s), and
-  constructor functions are not yet modelled.
-\item The semantics doesn't handle initialisation of \ckey{const}
-  references from r-values because it does not yet handle
-  \ckey{const}.
-\end{itemize}
-
-
-\subsubsection{References as Parameters}
-
-When a formal parameter is of reference type, the actual parameter
-needs to stay an l-value rather than reduce to an r-value.  When the
-called function's environment is being established in its local stack
-frame, the binding for the formal name can be directly to the actual
-l-value's address and type.  In other words, nothing is allocated in
-memory to represent the reference.  This is not very likely in an
-actual environment, which will probably have an address in memory
-somewhere.  (The only way to detect this (and this would require
-undefined behaviour) would be know where local variables were
-allocated, and to scan this area byte-by-byte, presumably starting at
-the address of some other, non-reference, local parameter.)
-
-This requires a change to the existing semantics, to remove function
-arguments from the $\cal L$ (l-value) context.  In order to allow some
-function arguments to decay into r-values, a new rule
-\ruleid{function-application-lval2rval} is introduced:
-\[
-\infer{
-  \statebrack{\textsf{Ex}(f(\mathit{pfx} \frown e_0 ::
-    \mathit{sfx}),
-    \mathit{se}_0),s_0}
-  \rightarrow
-  \statebrack{\textsf{Ex}(f(\mathit{pfx}\frown e ::
-    \mathit{sfx}),\mathit{se}),
-    s}}{%
-  \statebrack{\mathit{se}_0,e_0,s_0}\lvtorv\statebrack{\mathit{se},e,s} &
-  f\mbox{ expects an r-value at position }|\mathit{pfx}|}
-\]
-The variables $\mathit{pfx}$ and $\mathit{sfx}$ are lists of
-expressions corresponding to the other actual parameters being passed
-to the function $f$.  The $\frown$ operator is list concatenation, and
-$::$ is ``cons'', taking an element and putting onto the front of
-another list ($::$ binds tighter than $\frown$).
-
-The rule that determines that a function application's sequence point
-has been reached (\ruleid{function-call-sqpt}) must also change.
-Previously, this rule checked that the function and all of the
-arguments had been fully evaluated, and being ``fully evaluated''
-meant ``had been evaluated to a value (consisting of a list of
-bytes)''.  The new rule checks that every parameter is either a
-byte-list value (when the function doesn't expect a reference type),
-or an l-value.
-
-\subsubsection{References Returned from Functions}
-
-This requires a number of changes to the semantics.  First, there
-shouldn't be an \crvreq{} tag wrapped around the expressions that are
-arguments to \texttt{return} statements.  Secondly, the continuation
-that accompanies all statement evaluations (as of Deliverable-1),
-needs to be adjusted so that it is one of two possibilities, a
-continuation accepting a value, or a continuation accepting an
-l-value.  The decision as to which sort of continuation it will be is
-set up when a function call is made, because the desired return type
-of the function is known at this point.
-
-The new type of continuations is an algebraic type with two
-constructors:
-\begin{verbatim}
-   conttype =
-       RVC of (byte list -> CPP_Type -> CExpr)
-     | LVC of (num -> CPP_Type -> string list -> CExpr)
-\end{verbatim}
-The rules for \texttt{return} are able to examine the type of
-continuation directly.  So that \ruleid{return-lval2rval} is
-\[
-\infer{\statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(e_0,\mathit{se}_0)\ckey{;},\;\ckey{RVC}(c)),s_0}\stmtarrow
-  \statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(e,\mathit{se})\ckey{;},\;\ckey{RVC}(c)),s}}{
-  \statebrack{\mathit{se}_0,e_0,s_0}\lvtorv\statebrack{\mathit{se},e,s}}
-\]
-Every statement is accompanied by a continuation, the second argument
-of the \textsf{St} tag. Also note that the first argument of a
-\ckey{return} might itself be another statement.  If the original
-expression contained a function call, the body of the called function,
-a statement, would eventually become the top of the expression.  In
-this rule, the use of the inner \textsf{Ex} tag precludes this
-possibility.
-
-There are two rules allowing a \ckey{return} statement to pass its
-expression-value to the continuation.  The rule for returning normal
-values is \ruleid{return-rvalue}:
-\[
-\infer{%
-  \begin{array}[t]{l}
-    \statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(\cvalue{m}{\tau},\mathit{se})\ckey{;},\;\ckey{RVC}(c)),
-      \;\sigma}%
-    \;\;\rightarrow\\
-    \qquad\left\langle\!\!\begin{array}{l}
-      \textsf{Ex}(c\;m\;\tau,\mathit{empty\_se}),\\
-      \sigma[\textsf{stack} := \mathit{stack}', \textsf{this} :=
-      \mathit{this}, \Gamma := g, \Sigma := s, A
-      := a]\end{array}\right\rangle
-  \end{array}}{
-  \mathit{se}\mbox{ is empty of side effects} & \textsf{stack}_\sigma = (s,g,a,\mathit{this})
-  :: \mathit{stack}'}
-\]
-The \textsf{stack} and \textsf{this} fields of the state are not in
-the original thesis semantics.  The \textsf{stack} field records the
-stack of environment information.  The environment information
-includes maps for variable typing ($\Gamma$), address information for
-variables ($A$), class information ($\Sigma$) and the current
-(l-)value for \ckey{this}, if there is one.   Use of the
-\textsf{stack} is a necessary part of moving to a small-step semantics
-for statements.
-
-The rule for returning a reference \ruleid{return-lvalue} is similar:
-\[
-\infer{%
-  \begin{array}[t]{l}
-    \statebrack{\textsf{St}(\ckey{return}\;\textsf{Ex}(\clvalue(\mathit{ad},\tau,p),
-      \mathit{se})\ckey{;},\;\ckey{LVC}(c)),
-      \;\sigma}%
-    \;\;\rightarrow\\
-    \qquad\left\langle\!\!\begin{array}{l}
-      \textsf{Ex}(c\;\mathit{ad}\;\tau\;p,\mathit{empty\_se}),\\
-      \sigma[\textsf{stack} := \mathit{stack}', \textsf{this} :=
-      \mathit{this}, \Gamma := g, \Sigma := s, A
-      := a]\end{array}\right\rangle
-  \end{array}}{
-  \mathit{se}\mbox{ is empty of side effects} & \textsf{stack}_\sigma = (s,g,a,\mathit{this})
-  :: \mathit{stack}'}
-\]
-
-\subsubsection{Declaring References}
-
-When a reference is declared, it must also be initialised, and the
-initialising expression must be an l-value.  But normal
-initialisations need to be able to turn l-values into r-values so
-there is an ``lvalue-to-rvalue'' rule for variable declarations that
-are accompanied by initialisations.  This rule is
-\ruleid{block-vdecinit-lval2rval}:
-\[
-\infer{\begin{array}{l}
-    \statebrack{\textsf{St}(\mathbf{\{}
-  (\textsf{VDecInit}\;\tau\;\mathit{name}\;(\textsf{Ex}(e_0,\mathit{se}_0))
-  :: \mathit{vds})\;\mathit{sts} \mathbf{\}}, c),\sigma_0}
-\rightarrow\\[2mm]
-\qquad\statebrack{\textsf{St}(\mathbf{\{}
-  (\textsf{VDecInit}\;\tau\;\mathit{name}\;(\textsf{Ex}(e,\mathit{se}))
-  :: \mathit{vds})\;\mathit{sts} \mathbf{\}}, c)),\sigma}\end{array}}{
-\tau \mbox{ not a reference type} &
-\statebrack{\mathit{se}_0,e_0,\sigma_0}\lvtorv
-  \statebrack{\mathit{se},e,\sigma}}
-\]
-where $\textsf{VDecInit}\;\tau\;\mathit{name}\;e$ is a value in the
-abstract syntax type corresponding to the declaration of variable
-$\mathit{name}$ with type $\tau$, to be initialised with expression
-$e$.  The braces in the syntax above indicate that this happens in the
-context of a statement-block.  (There are corresponding rules for
-variable declarations and initialisations at the top-level of a
-translation unit.)
-
-A variable declaration of reference type is ready to ``fire'' when its
-initialising expression has reduced to an l-value, and when there are
-no remaining side effects in the side effect record.  At this point,
-the variable address map in the state is updated to point at the
-l-value's address, and the type map is also updated to make the type
-of the name the same as the type of the l-value.
-
-
-
-
-
-\subsection{Polymorphism \& Multiple Inheritance}
-\label{sec:multiple-inheritance}
-
-As suggested in earlier deliverables, multiple inheritance has been
-modelled by following the approach described in Wasserrab \emph{et
-  al}~\cite{wasserrab-nst-OOPSLA06}.  The changes supporting this
-addition to the model are relatively minor and almost all appear in
-the theory \texttt{class_info}, where a number of new definitions
-appear.
-
-\newcommand{\Cs}{\mathit{Cs}} \newcommand{\fld}{\mathit{fld}}
-
-At the top level, the rule for calculating the function that will be
-called dynamically (\ruleid{function-member-select}) has changed
-slightly.  It now reads
-\[
-\infer{
-  \begin{array}{l}
-    \statebrack{\textsf{Ex}((\clvalue(a,\texttt{Class}\;C,\Cs))\;\mathbf{.}\;
-      \fld,\mathit{se}),\sigma} \rightarrow \\
-    \qquad\left\langle\textsf{Ex}\left(\cfvalue\left(
-        \begin{array}{l}
-          \texttt{MFn}\;(\last(\Cs'))\;\fld,\\
-          (\funtype{\mathit{argtys}}{\mathit{dynret}}),\\
-          \SOME{(\clvalue\;a\;(\texttt{Class}\;C)\;\Cs')}
-        \end{array}\right),
-      \mathit{se}\right),\sigma\right\rangle
-  \end{array}}{
-  \begin{array}{c}
-    \sigma \vdash \last(\Cs) \textrm{ has least method } \fld :
-    \funtype{\mathit{statargs}}{\mathit{statret}} \textrm{ via } Ds \\
-    \sigma \vdash (C,\Cs \,@_p\, Ds) \textrm{ selects } \fld :
-    \funtype{\mathit{dynargs}}{\mathit{dynret}} \textrm{ via } \Cs'
-  \end{array}}
-\]
-This rule describes how the call to method $\fld$ is resolved
-for an object located at address $a$, with dynamic type $C$, and where
-the static type of the object is the last element of the list $\Cs$.
-The list $\Cs$ is also a path through the class hierarchy, starting at
-the dynamic type and ending at the current static type.  (Note that an
-object's dynamic type is determined on object creation, and persists
-for an object's entire life-time.  In contrast, an object's static
-type is the type ascribed to it by a particular piece of code.
-Different pieces of code may well ``see'' the same object as having
-different types.  In this sense, an object's dynamic type is
-unchanging, but it will have a variety of static types across the text
-of a program.  Confusing, but true!)
-
-The first premise (``has-least-method'') examines the static type of
-the object for which the method will be called, $\last(\Cs)$.
-Starting at that point in the hierarchy it looks upwards (\ie, towards
-base classes) for the nearest base class that provides an
-implementation of the desired method.  This base-class might be
-$\last(\Cs)$ itself, in which case the path found ($Ds$) will be
-empty.  There must also be a unique closest ancestor providing the
-desired method.  If this isn't the case, then there will have been a
-compile-time error, as the call will be statically ambiguous.
-
-The second premise (``selects-via'') then determines the dynamic
-location of the desired method.  There are two cases.  The simple case
-is when there is a unique best method for the dynamic type, $C$.
-Imagine, for example, that there is a four-element singly-linked
-inheritance graph, from base $B_0$ down to most-derived $B_3$, with
-implementations of the method $\fld$ at $B_0$ and $B_2$.  If the
-object is actually of type $B_3$, but is statically seen as type
-$B_1$, then $C$ is $B_3$, and $\Cs$ will be $[B_3,\,B_2,\,B_1]$.  The
-first premise (``has-least-method'') determines that, starting at
-$B_1$ (the static type) there is an implementation of $\fld$ at path
-$[B_1, B_0]$.  This will be the instantiation of the rule's variable
-$Ds$.
-
-The simple case for ``selects-via'' checks whether or not there is
-also a least method for the dynamic type (ignoring, for the moment,
-the path giving the static type).  Thus
-\[
-\infer{\sigma \vdash (C,\Cs) \textrm{ selects } \fld \textrm{ via } \Cs'}{\sigma \vdash C \textrm{ has least method } \fld :
-  \funtype{\mathit{argtys}}{\mathit{retty}} \ \textrm{ via } \Cs'}
-\]
-In the simple example, we will thus conclude that \[
-\sigma \vdash (B_3,[B_3,B_2,B_1,B_0]) \textrm{ selects } \fld
-\textrm{ via } [B_3,B_2]
-\]
-so that the call will be to the implementation of $\fld$ in $B_2$, and
-the \texttt{this} pointer will be adjusted so that the type and path
-information associated with its value will be $(B_3,[B_3,B_2])$ (a
-dynamic type of $B_3$, as always, and a static type of $B_2$).
-
-The same rule applies in a much more complicatd seeming situation,
-where multiple inheritance and shared base objects come into play.
-Consider the program in Figure~\ref{fig:diamond-cpp}.  When the call
-to \texttt{cref.f()} is made, the type and path associated with the
-reference will be $(D,[D,C_1])$.  Statically, the reference is a
-\texttt{C1} value, but dynamically, it's really of class
-\texttt{D}. The first premise in rule \ruleid{function-member-select}
-finds that there is a path ($\mathit{Ds}$ in the rule) which is
-appropriate for \texttt{f}.  This path is $[B]$.  The fact that the
-path does not include the derived object's name, and is just a bare
-reference to a class indicates that it is a path to a shared base.
-When such a path is the second argument of path concatenation (the
-$@_p$ operator in the second premise), the result is just the second
-argument, so that the second hypothesis in the rule becomes
-\[
-\sigma \vdash (D,[B]) \textrm{ selects } f :
-\funtype{\texttt{void}}{\texttt{int}} \textrm{ via } \Cs'
-\]
-\begin{figure}[hbtp]
-\begin{verbatim}
-#include <iostream>
-
-class B {
-public:
-  virtual int f() { std::cout << "B's f\n"; return 3; }
-  virtual ~B() { }
-};
-
-class C1 : virtual public B {
-};
-
-class C2 : virtual public B {
-public:
-  virtual int f() { std::cout << "C2's f\n"; return 4; }
-};
-
-class D : public C1, public C2 {
-};
-
-int dosomething(C1 &cref)
-{
-  return cref.f();
-}
-
-int main()
-{
-  D d;
-  return dosomething(d);
-}
-\end{verbatim}
-\label{fig:diamond-cpp}
-\caption{Multiple inheritance with shared base objects.  (This program is
-in the \texttt{notes} directory with name \texttt{diamond-multinherit.cpp}.)}
-\end{figure}
-
-The first, simple, rule for ``selects-via'' resolves this.  Ignoring
-the path $[B]$, the simple rule checks whether or not there is a
-unique least path to an \texttt{f} from $D$.  There is such a path,
-and it is $[D,C_2]$.  So, the call to \texttt{cref.f()} ends up being
-a call to the \texttt{f} in class $C_2$, in an ``unrelated'' part of
-the object hierarchy.
-\[
-\rule{0.2\textwidth}{.1mm}
-\]
-
-For those situations where there is not a unique path from the dynamic
-type to a best selection, there is another more complicated rule
-defining ``selects-via''.  In Figure~\ref{fig:lopsided-v}, the
-inheritance hierarchy looks like
-\[
-\psset{rowsep=3ex,nodesep=2mm,colsep=2em}
-\begin{psmatrix}
-\texttt{\psframebox{B}} \\
-\texttt{Left1}\\
-\texttt{\psframebox{Left2}} & & \texttt{\psframebox{Right}}\\
-& \texttt{D}
-\end{psmatrix}
-\ncline{1,1}{2,1}
-\ncline{2,1}{3,1}
-\ncline{3,1}{4,2}
-\ncline{3,3}{4,2}
-\]
-where the boxed class names are those that implement the function
-\texttt{f}.  The question is which \texttt{f} will be called when the
-dynamic type is \texttt{D}, and when the static type is
-\texttt{Left1}.  There is no unique, least implementation of
-\texttt{f} visible from the dynamic type (\texttt{D}), so the simple
-rule does not apply.  Instead, the notion of \emph{overrider} is
-introduced via the rule
-\[
-\infer{\sigma\vdash (C,\Cs) \textrm{ selects }\fld : m \textrm{ via }
-  \Cs'}{
-\begin{array}{c}
-  \forall m\;\Cs'. \;\;\neg \;\sigma \vdash C \textrm{ has least }\fld : m
-\textrm{ via } \Cs'\\
-\sigma \vdash (C,\Cs) \textrm{ has overrider } \fld : m \textrm{ via }
-\Cs'
-\end{array}}
-\]
-where the static type of the value again plays a role.  In this case,
-the \texttt{f} that gets called is that in \texttt{Left2}.  For
-further details on exactly how this is defined, see either
-\texttt{class_infoScript}, or~\cite{wasserrab-nst-OOPSLA06}.
-
-\begin{figure}[hbtp]
-\begin{verbatim}
-#include <iostream>
-
-class B {
-public:
-  virtual void f() { std::cout << "B's f\n"; }
-  virtual ~B() { }
-};
-
-class Left1 : public B { };
-
-class Left2 : public Left1 {
-public:
-  virtual void f() { std::cout << "Left2's f\n";  }
-};
-
-class Right {
-public:
-  virtual void f() { std::cout << "Right's f\n"; }
-  virtual ~Right() { }
-};
-
-class D : public Left2, public Right { };
-
-void dosomething(Left1 &l1ref) { l1ref.f(); }
-
-int main()
-{
-  D d;
-  // d.f();  would be statically ambiguous
-  dosomething(d);
-  return 0;
-}
-\end{verbatim}
-\caption{A lop-sided `V' inheritance hierarchy.  Available as
-  \texttt{notes/lopsided-v.cpp}.}
-\label{fig:lopsided-v}
-\end{figure}
-
-\subsection{Object Lifetimes}
-\label{sec:object-lifetimes}
-
-\paragraph{Constructors}
-Handling constructors has easily wrought the greatest change to the
-previous deliverable's model.  The basic approach taken to objects has
-been to encode as much as possible with ``evolving syntax''.  Just as
-\texttt{while} can be modelled by having
-\[
-\texttt{while}\;\texttt{(}G\texttt{)}\;\mathit{body}
-\] become \[
-\texttt{if}\;\texttt{(}G\texttt{)}\;\texttt{\{}\mathit{body}\texttt{;}\;\texttt{while}\;\texttt{(}G\texttt{)}\;\mathit{body} \texttt{\}}
-\]
-so too do calls to \cpp{} constructors create new programs ``in
-place''.  The advantage of this approach is that there is less need
-for relatively complicated state to be recorded in yet more fields in
-the big record type \texttt{state} (in \texttt{statesScript}).
-Instead, programs can unfold into more elaborate forms directly.  The
-disadvantage of this approach is that the original syntax may not
-support enough forms, requiring new constructors to be created, or
-extended with new parameters.
-
-The existing handling of block-statements is an example of this latter
-disadvantage.  In particular, the abstract syntax has a constructor
-\texttt{Block} with type
-\[
-\texttt{:bool -> decl list -> stmt list}
-\]
-where the boolean flag indicates whether or not the block has been
-entered yet.  In this way, the abstract syntax has values in it that
-can't be written down in the concrete syntax.  (Simiarly, the original
-\textsf{Cholera} model for C included the \texttt{RVR} constructor and
-the $\hat{f}$ intermediate form for function calls.)
-
-Constructors are intimately tied up with declarations and
-initialization.  In the simple C world, a variable comes into being in
-two stages.  First space in memory is allocated for the variable
-(whether on the stack or heap), and the variable name is associated
-with that space for the span of the variable's life.  Then there is an
-optional initialization phase, when the piece of memory associated
-with the variable space is filled in with some value.
-
-The \cpp{} model is similar.  All new objects (but not references)
-must be associated with some new space.  Then they may or may not be
-initialised.  Additionally, in \cpp{}, an object that is only
-declared, and which does not appear to be initialised, will actually
-have its default constructor called.
-
-The abstract syntax supporting this is all defined in the HOL source
-file \texttt{statementsScript}:
-
-\begin{center}
-\begin{tabular}{lll}
-Constructor & Argument Types & Description\\
-\hline
-\texttt{VDec} & $\mathit{name},\mathit{type}$ & no initialization\\
-\texttt{VDecInit} &
-$\mathit{name},\mathit{type},\mathit{initializer}$ &
-initialization (unallocated) \\
-\texttt{VDecInitA} &
-$\mathit{varlocation},\mathit{type},\mathit{initializer}$ &
-initialization (space allocated)
-\end{tabular}
+  \end{minipage}
 \end{center}
 
-For example, when a class is declared with no explicit initialization
-of any sort, meaning that the default constructor will be called, the
-syntax moves through all three stages.  The abstract syntax
-corresponding to something like
-\begin{verbatim}
-{
-   classname c;
-   ...
-}
-\end{verbatim}
-will be \texttt{VDec "c" classname}.  Because this is a class type,
-rule \ruleid{decl-vdec-class} will fire (and can do so immediately),
-and the declaration will become \texttt{VDecInit "c" classname init},
-where the form of \texttt{init} will encode the fact that a direct
-initialization is being performed, and that there are no arguments.
-Then the rule \ruleid{decl-vdecinit-start-evaluate-direct-class}
-fires.  Side conditions of this rule cause space to be allocated (at
-address \texttt{a}), the state's maps from names to addresses be
-updated, and for the construction of the class to be recorded so that
-it can be destroyed later.
-
-The syntax also evolves to become
-\begin{verbatim}
-   VDecInitA classname (ObjPlace a) init'
-\end{verbatim}
-where the new initializer records that a function call to a
-constructor is about to happen, and where that construction will
-happen (\ie, \texttt{init'} includes a reference to \texttt{a}).
-
-There are three forms of initializer.  The first two are
-\texttt{DirectInit0} and \texttt{DirectInit} and correspond to direct
-initialization~\cite[\S 8.5 paragraph 12]{cpp-standard-iso14882}.  The
-\texttt{DirectInit0} constructor takes as arguments a list of
-expressions.  In this way, concrete syntax such as
-\begin{verbatim}
-{
-  Classname c(x,&y,z+1);
-}
-\end{verbatim}
-is directly modelled.  (When the rule \ruleid{decl-vdec-class} fires,
-the newly created \texttt{DirectInit0} constructor takes an empty list
-of arguments.)
-
-The \texttt{DirectInit} constructor takes one argument, an ``extended
-expression'', which will initially be an expression constructed by an
-application of the special constructor \texttt{ConstructorFVal} to the
-same argument list.  This form needs to be an extended expression so
-that the body of the constructor (a statement) can be entered.
-
-The other form of initializer is constructed by the function
-\texttt{CopyInit}.  This corresponds to the syntax
-\begin{verbatim}
-{
-  type varname = expression;
-  ...
-}
-\end{verbatim}
-which is a
-copy-initialization~\cite[\emph{ibid}]{cpp-standard-iso14882}.  When
-the type of the new object is not a class, there is no difference
-between copy-initialization and direct-initialization, reflected in
-the rule \ruleid{decl-vdecinit-start-evaluate-direct-nonclass}, which
-moves from a \texttt{DirectInit0} to a \texttt{CopyInit} initializer.
-
-When a \texttt{CopyInit} initializer completes its evaluation,
-yielding a value, that value be copied across into the space earlier
-allocated for the object.  For non-class types this is done with the
-same \texttt{val2mem} helper function that is used to apply side
-effects.  For class types, this copying must be performed by a call to
-the copy constructor.
-
-\paragraph{Constructor Calls}
-The expression form corresponding to a constructor call uses the
-expression form for function applications, but with a special form in
-the place of the function value.  This allows the normal evaluation of
-function applications (with the unspecified order of evaluation of
-arguments, for example).  The function value position is filled by a
-new abstract syntactic form \texttt{ConstructorFVal}.  This takes
-three parameters:
-\begin{itemize}
-\item a boolean indicating whether or not the constructor is being
-  called for a most-derived object or not;
-\item the address of the space which the constructor is to operate
-  over; and
-\item the name of the class that is being constructed
-\end{itemize}
-So, if a declaration is made of the form
-\begin{verbatim}
-{
-   class v(x);
-}
-\end{verbatim}
-then, once sufficient space is allocated for the new object \texttt{v}
-(at address \texttt{a}, say), the abstract syntax will look like
-\begin{verbatim}
-  VDecInitA "class"
-            (ObjPlace a)
-            (DirectInit
-               (NormE (FnApp (ConstructorFVal T a "class")
-                             [Var "x"])
-                      base_se))
-\end{verbatim}
-The \texttt{ObjPlace} constructor is used to distinguish this from the
-situation where a reference is being initialised.  The \texttt{NormE}
-constructor specifies that the current form is an expression (as
-opposed to the statement that will be in this position once the
-constructor body is entered).  The \texttt{base_se} value is the empty
-side-effect record.  This will evolve as references to and updates of
-memory occur.
-
-Once the parameters to the constructor have been evaluated, the
-constructor body can be entered.  This happens in rule
-\ruleid{constructor-function-call}:
-\[
-\infer{
-  \begin{array}{c}
-    \statebrack{\textsf{Ex}(\texttt{FnApp_sqpt}\;
-      (\texttt{ConstructorFVal}\;\mathit{mdp}\;\mathit{addr}\;C)\; \vec{a},
-      \mathit{se}_0),\sigma_0)}\\
-    \longrightarrow\\
-    \left\langle
-      \begin{array}{l}
-        \textsf{St}\left(
-          \begin{array}{l}
-            \texttt{Block}\;\bot\;(\mathit{pdecls}\frown\mathit{cpfx})\;b,\\
-            \texttt{return_cont}\;\mathit{se}_0\;\texttt{Void}
-          \end{array}\right),\\
-        \sigma_0 \textrm{ with }
-        \texttt{thisvalue := }\lfloor\underline{(\mathit{this},(C\texttt{*}))}\rfloor
-      \end{array}
-    \right\rangle
-  \end{array}}{
-  \begin{array}{l}
-    \texttt{find_constructor_info}\;\sigma_0\;C\;\vec{a}\;\vec{p}\;\vec{\mathit{m\imath}}\;b\\
-    \!\!\begin{array}{l}
-      \mathit{pdecls} =\\
-      \quad\textsf{map}
-      \begin{array}[t]{l}
-        (\lambda((n,\tau),a).\;
-        \texttt{VDecInit}\;\tau\;n\;(\texttt{CopyInit}(\textsf{Ex}(a,\texttt{base_se})))) \\
-        (\textsf{zip}(\vec{p},\vec{a}))
-      \end{array}
-    \end{array}\\
-    \lfloor \mathit{this}\rfloor =
-    \texttt{ptr_encode}\;\sigma_0\;\mathit{addr}\;C\;[C]\\
-    \mathit{cpfx} = \texttt{construct_ctor_pfx}\;\sigma_0\;\mathit{mdp}\;\mathit{addr}\;C\;\vec{\mathit{m\imath}}
-  \end{array}}
-\]
-This is complicated enough, and there is more complexity hidden behind
-the auxiliary functions and relations.  The first auxiliary is the
-relation \texttt{find_constructor_info}, which appears in the rule's
-first hypothesis.  This relation treats its first three parameters
-($\sigma_0$, $C$ and $\vec{a}$) as inputs.  These are the current
-state, the name of the class being constructed, and the actual
-arguments being passed to the constructor.  The remaining arguments to
-the relation are ``outputs''.  The vector $\vec{p}$ is the list of
-formal parameters (names and types).  The vector
-$\vec{\mathit{m\imath}}$ is the list of ``mem-initializers''
-(see~\cite[\S12.6.2]{cpp-standard-iso14882}) associated with the
-constructor, and $b$ is the constructor's body.  The
-\texttt{find_constructor_info} auxiliary is responsible for resolving
-which constructor needs to be called, based on the types of the actual
-arguments.
-
-The second hypothesis of the rule constructs the sequence of variable
-declarations corresponding to the parameters, using standard
-functional programming auxiliaries \textsf{map} and \textsf{zip}.
-Parameter passing is just like variable declaration\footnote{This does
-  away with the \textsf{Cholera} approach which had a number of
-  auxiliary relations effectively duplicating what occurred in
-  variable declaration}, and so the model's existing treatment of
-declarations can be re-used to set up the binding between formal names
-and actual values.  Note that the expressions that initialise the
-parameters have already been fully evaluated, so that there will be no
-expression evaluation done when the declarations come to be evaluated
-(except for any class construction that may be called for).
-
-The third hypothesis calculates a value for the \texttt{this} value.
-The dynamic and static type of the \texttt{this} pointer will be the
-same (as the pair $C$ and $[C]$ are passed to \texttt{ptr_encode}),
-and there will not be any polymorphic dispatch to functions in derived
-classes if any virtual functions are called in the constructor bodies.
-
-The fourth hypothesis constructs a ``c-prefix'' of declaration calls
-to initialise class members and bases.  This is all done in the
-complicated function \texttt{construct_ctor_pfx} (defined in
-\texttt{dynamicsScript}).  This constructs a sequence of declarations
-to initialise the non-static members of the new class, and the class's
-immediate bases.  The mem-initializers are consulted to see what
-initializers should be provided.  (If a mem-initializer is not
-provided for a given member or base, then that object will be value-
-or default-initialized; see~\cite[\S12.6.2, paragraphs
-3--4]{cpp-standard-iso14882}.)
-
-For example, in Figure~\ref{fig:mem-inits}, before class \texttt{C}'s
-constructor body is even entered, the parameters \texttt{cptr} and
-\texttt{i} need to be declared and initialised with actual values.
-Subsequently, all of \texttt{C}'s immediate bases (just \texttt{B} in
-this case) need to be constructed, followed by its members
-(\texttt{ptr} and \texttt{sz}).  Note that while the paramters need to
-have space allocated for them, the bases and members do not (because
-the space for the entire object was allocated at the \texttt{VDecInit}
-stage).
+\paragraph{Traps, and Loop Interruptions}
+\index{Trap@\texttt{Trap}}%
+\index{Break@\texttt{Break}}%
+\index{Cont@\texttt{Cont}}%
+Again, following my thesis, the rules for traps are straightforward,
+though relatively plentiful because of the different possible
+combinations of \texttt{continue} (written \texttt{Cont}) and
+\texttt{break} (written \texttt{Break}).  The simplest rules for these
+forms are presented in Figure~\ref{fig:traps}.  The rule for the way
+in which \texttt{break}, \texttt{continue}, \texttt{return} and
+exceptions all cause flow of control to alter within a block is
+presented in Section~\ref{sec:statements-blocks} below.
 
 \begin{figure}[htbp]
-\begin{verbatim}
-#include <cstring>
+\index{rule (dynamic)!trap-stmt-evaluation@\texttt{trap-stmt-evaluation}}%
+\index{rule (dynamic)!trap-break-catches@\texttt{trap-break-catches}}%
+\index{rule (dynamic)!trap-continue-catches@\texttt{trap-continue-catches}}%
+\index{rule (dynamic)!trap-continue-passes-break@\texttt{trap-continue-passes-break}}%
+\index{rule (dynamic)!trap-break-passes-continue@\texttt{trap-break-passes-continue}}%
+\index{rule (dynamic)!trap-emptystmt-passes@\texttt{trap-emptystmt-passes}}%
+\index{rule (dynamic)!trap-ret-passes@\texttt{trap-ret-passes}}%
+\begin{alltt}
+(* RULE-ID: trap-stmt-evaluation *)
+     mng (s0, ST st c) (s, ST st' c)
+   \(\Rightarrow\)
+     mng (s0, ST (Trap tt st) c) (s, ST (Trap tt st') c)
 
-class B {
-  int x;
-public:
-  B(int i) : x(i) {}
-};
+(* RULE-ID: trap-break-catches *)
+     T
+   \(\Rightarrow\)
+     mng (s, ST (Trap BreakTrap Break) c) (s, ST EmptyStmt c)
 
-class C : public B {
-  char *ptr;
-  int sz;
-public:
-  C(char *cptr, int i)
-    : B(cptr[i]), ptr(cptr), sz(strlen(cptr)) { }
-};
-\end{verbatim}
-\caption{\cpp{} constructors with \emph{mem-initializers}.  (Available
-as \texttt{notes/mem-inits.cpp}.)}
-\label{fig:mem-inits}
+(* RULE-ID: trap-continue-catches *)
+     T
+   \(\Rightarrow\)
+     mng (s0, ST (Trap ContTrap Cont) c) (s0, ST EmptyStmt c)
+
+(* RULE-ID: trap-continue-passes-break *)
+     T
+   \(\Rightarrow\)
+     mng (s, ST (Trap ContTrap Break) c) (s, ST Break c)
+
+(* RULE-ID: trap-break-passes-continue *)
+     T
+   \(\Rightarrow\)
+     mng (s, ST (Trap BreakTrap Cont) c) (s, ST Cont c)
+
+(* RULE-ID: trap-emptystmt-passes *)
+     T
+   \(\Rightarrow\)
+     mng (s0, ST (Trap tt EmptyStmt) c) (s0, ST EmptyStmt c)
+
+(* RULE-ID: trap-ret-passes *)
+     final_value e
+   \(\Rightarrow\)
+     mng (s, ST (Trap tt (Ret e)) c) (s, ST (Ret e) c)
+\end{alltt}
+  \caption{Dynamic Rules for Loop Interruptions and Traps}
+  \label{fig:traps}
 \end{figure}
 
-Assume that the constructor has been called with parameters \texttt{x}
-and \texttt{y}, and that these have evaluated to values \texttt{xval}
-and \texttt{yval}. The sequence of declarations that are constructed
-to precede the constructor body is given in
-Figure~\ref{fig:constructor-vdecs}. The first two declarations are of
-the parameters.  The next constructs the base \texttt{B}, and the last
-two construct the non-static members.  The body of
-\texttt{construct_ctor_pfx} is responsible for calculating the offsets
-of the members (given as \texttt{Boff}, \texttt{ptroff} and
-\texttt{szoff} in the figure.
-
-\begin{figure}[hbtp]
+\paragraph{Declarations in Guards}
+\cpp{} allows variables to be declared in the guard positions of loop
+forms and if statements.  This is a syntactic nicety that we can assume
+has been compiled away.  For example, something like
 \begin{verbatim}
-  VDecInit (char *) cptr (CopyInit (NormE xval base_se))
-  VDecInit int      i    (CopyInit (NormE yval base_se))
-
-  VDecInitA B (ObjPlace (a + Boff))
-              (DirectInit
-                 (NormE
-                    (FnApp (ConstructorFVal F (a + Boff) B)
-                           [Deref(Plus (Var "cptr")
-                                       (Var "i"))])
-                    base_se))
-
-  VDecInitA (char *) (ObjPlace (a + ptroff))
-                     (CopyInit (NormE (Var "cptr") base_se))
-  VDecInitA int      (ObjPlace (a + szoff))
-                     (CopyInit (NormE (FnApp (Var "strlen")
-                                             [Var "cptr"])
-                                      base_se))
+   if (int i = e) { ... }
 \end{verbatim}
-\caption{The variable declarations constructed to precede the body of
-  C's constructor (from Figure~\ref{fig:mem-inits}).}
-\label{fig:constructor-vdecs}
-\end{figure}
-
-Note how the first argument of the \texttt{ConstructorFVal} form in
-the construction of the base \texttt{B} is false; this is because
-\texttt{B} is not the most-derived object.  If there were any shared
-bases in the example, the most-derived object would be ``responsible''
-for constructing them (see~\cite[\S12.6.2, paragraph
-5]{cpp-standard-iso14882}).  If \texttt{C} had any non-static members
-of class type, then these would be constructed with their
-$\mathit{mdp}$ flag set to true.
-
-When the constructor for the base class \texttt{B} comes to be called,
-it will in turn initialise its members.  The constructor for
-\texttt{B} is called with an argument (\texttt{cptr[i]}) that needs to
-be evaluated in the context where the parameters are in scope, so it
-is clear that the declarations for the parameters must come before the
-base and member initialisations.
-
-\paragraph{Object Destruction}
-When an object of class type is first declared (with a
-\texttt{VDecInit} form), it has memory allocated sufficient to contain
-the new class in its entirety (including sub-objects).  This
-allocation is reflected in the state's \texttt{allocmap}.  When the
-block in which this declaration was made is left, this allocation is
-forgotten.  At the same time, the destructor for the object must be
-called.  This is modelled with a new field for the state,
-\texttt{blockclasses}.  This is of type
+can be rewritten into
 \begin{verbatim}
-   (addr # CPPname # CPPname list) list list
+   { int i = e; if (i) { ... } }
 \end{verbatim}
-The address is the address of the object which is to be destroyed, and
-the two remaining are the class name and path which serve to identify
-the object's type.  The inner list constructor reflects the fact that
-multiple objects may be declared at the same scope level.  The outer
-list constructor appears because of the stack discipline necessary for
-multiple nested scopes.
+I take a similar attitude to \cpp's relaxation of C's rule that
+declarations and statements can intermingle.  Such an intermingling
+can be rewritten to successive nested blocks, all of which respect the
+basic C rule that a block is a sequence of declarations followed by a
+sequence of statements.
 
-When an object of class type is declared, the rule responsible
-(\ruleid{decl-vdecinit-start-evaluate-direct-class}) both allocates
-the necessary memory, and adds address and type information for all of
-the object's sub-classes and members (not just immediate bases, but
-doing a complete traversal of the inheritance graph) to the
-\texttt{blockclasses} field.  This is done by the
-\texttt{update_blockclasses} relation defined in
-\texttt{class_infoScript}.  The object information has to be added
-to the list in the correct order so that objects will be destroyed in
-reverse order of construction.
+\subsubsection{Statements in Blocks}
+\label{sec:statements-blocks}
 
-The rule for exitting from a block is then adjusted so that it can
-only occur if the current scope's \texttt{blockclasses} information is
-empty.  As long as it is not empty, the destructor corresponding to
-the object on the top of the stack is set up to be called.  This is
-done in rule \ruleid{block-exit-destructor-call}:
-\[
-\infer{
-  \begin{array}{c}
-    \statebrack{
-      \textsf{St}(\texttt{Block}\;\top\;[]\;[\mathit{st}],c),\sigma}\\
-    \longrightarrow\\
-    % resulting state
-    \left\langle
-      \begin{array}{l}
-        \textsf{St}\left(\texttt{Block}\;\top\;[]\;
-          \left[
-            \begin{array}{l}
-              \texttt{Alone}
-              (\textsf{Ex}(\texttt{DestCall}\;a\;\mathit{cnm}),\texttt{base_se}),\\
-              \mathit{st}
-            \end{array}\right],
-          c\right),\\
-        \sigma\textrm{ with }\texttt{blockclasses := }
-        \mathit{rest} :: \mathit{bcs}\\
-      \end{array}
-    \right\rangle % end of resulting state
-  \end{array}
-  }{\texttt{final_stmt}\;\mathit{st} &
-    \sigma.\texttt{blockclasses} = ((a,\!\mathit{cnm},p) ::
-    \mathit{rest}) :: \mathit{bcs}}
-\]
-This is another example of evolving syntax: the block that the flow of
-control is about to leave, has this departure deferred with the
-insertion of a new statement before the block's final statement.  The
-rule allowing an exit to eventually occur is \ruleid{block-exit}:
-\[
-\infer{
-  \statebrack{
-    \textsf{St}(\texttt{Block}\;\top\;[]\;[\mathit{st}], c), \sigma_0}
-  \longrightarrow
-  \statebrack{\textsf{St}(\mathit{st}, c), \sigma}
-}{
-  \begin{array}{l}
-    \sigma_0.\texttt{stack} =
-    (\mathit{stm},\mathit{tym},\mathit{vrm},\mathit{this}) ::
-    \mathit{stk}
-    \\
-    \texttt{final_stmt}\;\mathit{st}
-    \\
-    \sigma_0.\texttt{blockclasses} = [] :: \mathit{bcs}
-    \\
-    \sigma = \sigma_0 \textrm{ with } \left\langle\begin{array}{ll}
-        \texttt{stack := }\mathit{stk}; &
-        \texttt{classmap := }\mathit{stm};\\
-        \texttt{typemap := }\mathit{tym}; &
-        \texttt{varmap := }\mathit{vrm};\\
-        \texttt{thisvalue := }\mathit{this}; &
-        \texttt{blockclasses := }\mathit{bcs}
-      \end{array}\right\rangle
-  \end{array}
-}
-\]
-The predicate \texttt{final_stmt} is true of a statement if it is
-an abnormal exit form (such as \texttt{break} or \texttt{return}), or
-simply \texttt{EmptyStmt}.
+\index{Block@\texttt{Block}}
+The compound statement is the basic syntactic structure expressing
+scope at the statement level.  Its manifestation in this model is as
+the constant \texttt{Block}, with type
+\begin{verbatim}
+   : bool -> var_decl list -> CStmt list -> CStmt
+\end{verbatim}
+The initial boolean field is used to record whether or not a block has
+been entered.  It starts as false (\texttt{F}).  The rule for entering
+a block is
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!block-entry@\texttt{block-entry}}
+\begin{alltt}
+(* RULE-ID: block-entry *)
+     T
+   \(\Rightarrow\)
+     mng (s, ST (Block F vds sts) c)
+         (s with <| stack updated_by
+                      (CONS (s.env, s.thisvalue));
+                    blockclasses updated_by
+                      stackenv_newscope ;
+                    exprclasses updated_by
+                      stackenv_newscope |>,
+          ST (Block T vds sts) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+\index{stack (state field)@\texttt{stack} (\texttt{state} field)}%
+\index{env (state field)@\texttt{env} (\texttt{state} field)}%
+The \texttt{blockclasses} and \texttt{exprclasses} fields are to do
+with pending destructor calls, and are further explained in
+Section~\ref{sec:exceptions}.  The field \texttt{stack} is a stack of
+local environments, coupled with a stack of values for the
+\texttt{this} pointer.  When a block is entered, the old value for
+the environment needs to be stored so that it can be restored on block
+exit.  Recall that the field \texttt{env} stores all of the
+information about \emph{local} entities.  Information on non-local
+entities is all recorded in the \texttt{genv} field.
 
-Actually calling a destructor is straightforward because there are no
-parameters, nor anything comparable to the mem-initializers.  The
-requirement in the standard that sub-objects be destroyed before the
-body of a destructor is entered is handled by the fact that the
-sub-object information is entered into the \texttt{blockclasses} stack
-ahead of the final encompassing object.
+After a block is entered, its variable declarations must be executed.
+This is handled by the rule \ruleid{block-declmng}:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!block-declmng@\texttt{block-declmng}}
+\begin{alltt}
+(* RULE-ID: block-declmng *)
+     declmng mng (d0, s0) (ds, s)
+   \(\Rightarrow\)
+     mng (s0, ST (Block T (d0 :: vds) sts) c)
+         (s, ST (Block T (ds ++ vds) sts) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+\index{declmng relation@\texttt{declmng} relation}%
+The auxiliary \texttt{declmng} (which takes \texttt{mng} as a
+parameter, allowing it to recurse back to it) has type
+\begin{verbatim}
+   : ((state # ExtE) -> (state # ExtE) -> bool) ->
+     (var_decl # state) -> (var_decl list # state) -> bool
+\end{verbatim}
+The ``return'' of a list of new variable declarations allows
+termination to be indicated (by returning the empty list), and also
+allows complicated object constructions, which involve multiple calls
+to initialise sub-objects, done through special forms of variable
+declaration.  There is more on the simple forms of \texttt{declmng} in
+Section~\ref{sec:simple-declarations} below.
+
+When the declaration list is exhausted, execution of a block's body of
+statements can proceed.  The congruence rule for a block is
+\ruleid{block-stmt-evaluate}:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!block-stmt-evaluate@\texttt{block-stmt-evaluate}}%
+\begin{alltt}
+(* RULE-ID: block-stmt-evaluate *)
+     mng (s0, ST st c) (s, ST st' c)
+   \(\Rightarrow\)
+     mng (s0, ST (Block T [] (st :: sts)) c)
+         (s, ST (Block T [] (st' :: sts)) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+Note the form of \texttt{Block} required: it must have no further
+variable declarations to evaluate, and must have been entered (has its
+boolean flag set to~\texttt{T}.)
+
+\index{EmptyStmt@\texttt{EmptyStmt}}
+If the first statement inside a \texttt{Block} is, or becomes, an
+\texttt{EmptyStmt}, and there are more statements beyond it to
+evaluate, then the \texttt{EmptyStmt} can be discarded:
+\begin{center}
+  \begin{minipage}{\textwidth}
+\begin{alltt}
+(* RULE-ID: block-emptystmt *)
+     \(\neg\)(sts = [])
+   \(\Rightarrow\)
+     mng (s, ST (Block T [] (EmptyStmt::sts)) c)
+         (s, ST (Block T [] sts) c)
+
+\end{alltt}
+\end{minipage}
+\end{center}
+
+Alternatively, if the head statement is an exception or interruption
+form, and it is followed by other statements, then it causes all
+following statements to disappear:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!block-interrupted@\texttt{block-interrupted}}
+\begin{alltt}
+(* RULE-ID: block-interrupted *)
+     final_stmt exstmt c \(\land\)
+     \(\neg\)(exstmt = EmptyStmt) \(\land\)
+     \(\neg\)(sts = [])
+   ==>
+     mng (s, ST (Block T [] (exstmt::sts)) c)
+         (s, ST (Block T [] [exstmt]) c)
+\end{alltt}
+  \end{minipage}
+\end{center}
+
+
+\subsubsection{Simple Declarations}
+\label{sec:simple-declarations}
 
 \subsection{Exceptions}
 \label{sec:exceptions}
@@ -3493,29 +2617,1454 @@ To get this situation to work in the model, the state's
 construction (which are to be unwound later), sub-object creation and
 normal object creation.  When a block exits normally, sub-object
 destructors are not called, but instead delayed so that they can be
-recorded as having the same lifetime as the enclosing object.  In
-Deliverable~3's version of the semantics, all sub-objects were
-constructed at the same, uppermost, level, but the addition of
-exceptions requires the model to be able to destroy sub-objects
-earlier.
+recorded as having the same lifetime as the enclosing object.  For
+more on this, see Section~\ref{sec:object-lifetimes}.
 
+\subsection{Basic Object-Orientation}
+\label{sec:basic-oo}
+
+The inspiration for this part of the semantics is the article by
+Wasserrab~\emph{et al}~\cite{wasserrab-nst-OOPSLA06}, which provides a
+detailed model for multiple inheritance in a simple \cpp-like
+language.
+
+\subsubsection{Class Declarations}
+\label{sec:class-declaration}
+A class declaration is similar to the original C model's declaration
+of a \texttt{struct} type.  A class declaration takes two parameters,
+the name of the class, and an optional ``class-info''
+argument.\footnote{The information argument is optional to allow the
+  situation where a forward declaration of a class occurs.}  The
+class-info, if present, is a list of fields, coupled with a list of
+ancestors.  The latter allows inheritance from zero or many ancestors.
+Each ancestor is coupled with a boolean flag indicating whether or not
+it is a \texttt{virtual} ancestor.  As the model ignores protection
+issues, there is no scope for indicating protection status for
+ancestors.
+
+The fields are of two sorts, declarations of members (whether of
+``data'' fields or member functions), and nested classes.  Member
+declarations are accompanied by a flag indicating whether or not they
+are static, and a protection indicator (i.e., \texttt{public},
+\texttt{protected}, or \texttt{private}).  Again, protection
+information is entirely ignored: any field access is assumed to have
+been OK-ed earlier by the compiler.
+
+Member function definitions give the function's name, return-type,
+parameter list (types and names), function body, and a flag indicating
+whether or not it is virtual.  (Of course, even in the absence of an
+explicit declaration that a member function is virtual, it may be so
+because of an ancestor's prior declaration.)
+
+When a class declaration is encountered , its member functions are
+entered into the state's function map.  The same function map is used
+for normal (non-class) functions, but the structured nature of \cpp{}
+identifiers allows the model to distinguish both sorts of function.
+
+\subsubsection{Class Values and Member Functions}
+\label{sec:class-values}
+Classes can not be converted into r-values like other values.  This is
+because of the problems that arise with multiple inheritance.  In
+particular, with multiple inheritance in place, it is no longer true
+that one can extract the byte sequence for a given l-value by starting
+at the base address and taking as many bytes from memory as the size
+of the type.  In particular, virtual base classes may be at completely
+different places in memory, not necessarily even contiguous with the
+rest of the object.  (This is demonstrated for the \texttt{g++}
+compiler by the little program in
+\texttt{notes/mult-inheritance-layout.cpp}.)
+
+Absence of support for r-values means that, in this model, one can not
+assign classes, pass them as parameters, or return them from
+functions.  However, because references are supported (see
+Section~\ref{sec:reftypes}) much idiomatic \cpp{} is still covered by
+the model.
+
+\index{LVal@\texttt{LVal}!and dynamic types}
+%
+The presence of classes means that the model's presentation of
+l-values changes from the way it was in the original C model.  In
+particular, an l-value that is statically typed as a base class needs
+to know dynamically that it is really of a derived type.  This
+information is traditionally recorded in \texttt{vtable} fields.
+Following Wasserrab~\emph{et al}, my model instead records an
+additional path accompanying every l-value.  This path is a list of
+strings, listing the path through the ancestry-tree that leads from
+the most-derived class to the static class type.  Moreover, the type
+that accompanies every l-value (recall that the \texttt{LVal}
+constructor takes three arguments, an address, a type and a list of
+identifiers), will have as the type, the \emph{dynamic} type
+of the l-value.
+
+\index{member functions!virtual}
+Consider, for example, the code in Figure~\ref{fig:oo-example}.  The
+body of function \texttt{g} constructs the l-value \texttt{*b} when it
+calls \texttt{f}.  As in the C model, this l-value will be associated
+with some address, and the static type, which is \texttt{Class~B}.
+The actual l-value will be of the form
+\begin{alltt}
+   LVal a (Class D2) [D2,D1,B]
+\end{alltt}
+The last element of the paths in l-values is always the static class
+of the value.
+
+In Figure~\ref{fig:oo-example}, the expression of interest is
+\texttt{b->f()}, which is syntactic sugar for \texttt{((*b).f)()}.
+(Note how the member selection is syntactically subordinate to the
+function application.)  The \ruleid{virtual-fn-member-select}
+rule (see Figure~\ref{fig:virtual-fn-member-select}) governs the
+evaluation of \texttt{(*b).f} once the left-hand-side (\texttt{*b})
+has evaluated to an l-value.\footnote{Even when the model allows for
+  class r-values, they will be given a memory location (and thus, a
+  life-time).  This will enable them to also be l-values.  In essence,
+  it is not possible to create an object of any sort without giving it
+  a location.  Contrast numbers, which can be ``created'', and not
+  given a memory location, simply by writing them down.}
+
+\begin{figure}[hbtp]
+\begin{verbatim}
+   class B {
+     public: virtual int f() { return 3; }
+   };
+
+   class D1 : public B {
+     public: int f() { return 4; }
+   };
+
+   class D2 : public D1 { };
+
+   int g(class B *b) { return b->f(); }
+
+   int main()
+   {
+     D2 d;
+     return g(&d);
+   }
+\end{verbatim}
+\caption{C++ code demonstrating OO-polymorphism.  The program will
+  return 4. Though it appears as if \texttt{B}'s function \texttt{f}
+  is called, the version of \texttt{f} called will actually be that
+  attached to \texttt{D1}.}
+\label{fig:oo-example}
+\end{figure}
+
+\begin{figure}[hbtp]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!virtual-fn-member-select@\texttt{virtual-fn-member-select}}%
+\begin{alltt}
+(* RULE-ID: virtual-fn-member-select *)
+     (s,\lbr\rbr) |- LAST Cs has least method
+                 (IDName fld) -:
+                 (static_retty,F,args0,body0) via
+                 Ds \(\land\)
+     (s,\lbr\rbr) |- (C,Cs ^ Ds) selects
+                 (IDName fld) -:
+                 (dyn_retty,F,args,body) via
+                 Cs'
+   \(\Rightarrow\)
+     mng (s, EX (SVar (LVal a (Class C) Cs)
+                      (IDConstant F [] (IDName fld))) se)
+         (s, EX (FVal (mk_member (LAST Cs') (IDName fld))
+                      (Function dyn_retty (MAP SND args))
+                      (SOME (LVal a (Class C) Cs'))) se)
+
+\end{alltt}
+\end{minipage}
+\end{center}
+\caption{The rule for virtual member function dispatch}
+\label{fig:virtual-fn-member-select}
+\end{figure}
+
+In our model, the l-value's address will be the same as the address of
+its most-derived class.  In other words, the \texttt{a} of the rule
+will be the same as the address of the object \texttt{d}.  This is not
+what happens in typical compilers, which will actually make the
+pointer to the \texttt{B} sub-class point at the address of that
+sub-object's fields in the wider object's memory layout.  Then, the
+fact that the most-derived class is a \texttt{D2} is implicitly
+recorded in the \texttt{vtable}, which will contain a pointer to
+\texttt{D1::f}.
+
+In the rule, the variable \texttt{C} containing the name of the static
+class will be \texttt{D2}, and \texttt{Cs}, the path variable, will be
+\texttt{[D2,D1,B]}.  The \texttt{fld} variable will be \texttt{f}.
+Then, the first hypothesis will check the class hierarchy to determine
+where an \texttt{f} can be found, starting at the static type, i.e.,
+at \texttt{B}.  This will reveal that, with respect to \texttt{B}
+there is an \texttt{f} at path \texttt{[B]}.  This will be the value
+for \texttt{Ds}.  The same check determines four pieces of information
+about the function: its static return type (in the variable
+\texttt{static_retty}, that it is not static (virtual functions can
+not be static), and what its arguments and body are (\texttt{args0},
+and \texttt{Body0}).
+
+The second hypothesis calculates which function must be called given
+the class's dynamic type.  This is complicated because of the need to
+handle multiple inheritance (the definition of
+``\texttt{selects-via}'' is discussed below in
+Section~\ref{sec:multiple-inheritance}), but in this case, the path
+\texttt{Cs'} will be found to be \texttt{[D2,D1]}, and the information
+\texttt{(dyn_retty,F,args,body)} found will be that for the function
+\texttt{D1::f}.
+
+\index{mk_member@\texttt{mk_member}}
+The result of the rule in this circumstance is that the expression
+\texttt{b->f} turns into a reference to the function \texttt{D1::f}
+(this is the call to \texttt{mk_member}), coupled with with the fact
+that the function call is being made on an object whose dynamic type
+is \texttt{D2}, and whose static type is \texttt{D1} (as is
+appropriate for the body of the function).
+
+Note that the function in this rule is known to be virtual by virtue
+of the fact that the fieldname is unqualified: it is of the form
+\[
+\texttt{IDConstant~F~[]~(IDName~fld)}
+\]
+Name resolution will ensure that non-virtual members all have
+qualified fields.
+
+\paragraph{Other Sorts of Member Function}
+
+There are two other sorts of member functions in \cpp{}: static
+members functions, and normal functions.  Each sort has its own rule
+in the semantics.
+\index{member functions!static}
+First, the rule for static member functions:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!static-fn-member-select@\texttt{static-fn-member-select}}%
+\begin{alltt}
+(* RULE-ID: static-fn-member-select *)
+     (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
+     (s,\lbr\rbr) |- LAST Ds has least method
+                  (IDtl fldid) -: (retty,T,ps,body)
+                  via [LAST Ds] \(\land\)
+     (ftype = Function retty (MAP SND ps)) \(\land\)
+     is_qualified fldid
+   \(\Rightarrow\)
+     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se)
+         (s, EX (FVal fldid ftype NONE) se)
+\end{alltt}
+\end{minipage}
+\end{center}
+\index{is_qualified@\texttt{is_qualified}}%
+The third hypothesis (\texttt{is_qualified}) checks that the field
+name has multiple components to it.  This qualification will be
+introduced by name resolution if not already provided by the user.
+Name resolution will also ensure that the name given to the field is
+qualified with the name of the class where the field actually
+resides.
+
+\index{class_part@\texttt{class_part}}%
+In the rule, the first hypothesis is strictly redundant given this
+pre-processing: we know that the field will occur in the class that is
+at the end of the path \texttt{Ds}, and that this final element will
+be equal to the class-part of the identifier.  The second hypothesis
+reinforces this: the deduced path from \texttt{LAST~Ds} (which equals
+\texttt{class_part~fldid})to the host class for the given field is the
+singleton \texttt{[LAST~Ds]}.  Because the member is static (witness
+the \texttt{T} as argument 2 of the 4-tuple returned by
+\texttt{least-method}), the final function value does not include a
+class component.
+
+\index{member functions!non-static}
+The rule for normal, non-static  member functions is:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!nstatic-fn-member-select@\texttt{nstatic-fn-member-select}}%
+\begin{alltt}
+(* RULE-ID: nstatic-fn-member-select *)
+     (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
+     (s,\lbr\rbr) |- LAST Ds has least method
+                  (IDtl fldid) -: (retty,F,ps,body)
+                  via [LAST Ds] \(\land\)
+     (ftype = Function retty (MAP SND ps)) \(\land\)
+     is_qualified fldid
+   \(\Rightarrow\)
+     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se)
+         (s, EX (FVal fldid ftype
+                      (SOME (LVal a (Class cnm) (Cs ^ Ds))))
+                se)
+\end{alltt}
+\end{minipage}
+\end{center}
+This is very similar to the rule for static functions, but this time
+the identity of the class for which the function is being called is
+important, and recorded in the third argument to \texttt{FVal}.  The
+dynamic type of the object stays the same, but the static type is
+adjusted to reflect the class where the function being called is
+defined.
+
+\paragraph{Field Selection}
+Field selection is also based on the notion of being able to find the
+most-derived declaration of the given field in the ancestor hierarchy.
+There is no need to worry about adjusting \texttt{this} pointers, or
+performing analyses with dynamic types as field selections are always
+done with respect to a class's static type.  However, there is an
+additional complexity, stemming from the need to give addresses to
+selected fields, so that they can become well-formed l-values.  In
+turn, this relies on knowing how a class is laid out in memory.
+
+The standard \emph{does} require that fields belonging to a particular
+class type be laid out in the order in which they appear\footnote{The
+  order is actually required to hold as long as they have the members
+  have the same access-specifiers, but the model doesn't handle
+  accessibility.}  But there is no specification of how base
+sub-objects are laid out.  (Recall, moreover, that in the presence of
+a virtual base-class, an object that is not most-derived may be split
+over distinct parts of memory.)
+
+The rule for finding the offset of a non-static data member is
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!nstatic-data-field-select@\texttt{nstatic-data-field-select}}%
+\begin{alltt}
+(* RULE-ID: nstatic-data-field-select *)
+     (s,\lbr\rbr) |- path (LAST p) to cnm2 via p' \(\land\)
+     (s,\lbr\rbr) |- LAST p' has least
+                 (IDtl fldid) -: (ty, F)  (* F = non-static *)
+                 via [LAST p'] \(\land\)
+     object_type ty \(\land\)
+     (mdp = (cnm1 = cnm2) \(\land\) (p = [cnm1])) \(\land\)
+     is_qualified fldid \(\land\)
+     (class_part fldid = cnm2) \(\land\)
+     (SOME offn = lookup_offset s mdp fldid)
+   \(\Rightarrow\)
+     mng (s, EX (SVar (LVal a (Class cnm1) p) fldid) se)
+         (s, EX (LVal
+                  (a + subobj_offset s (cnm1, p ^ p') + offn)
+                  ty
+                  (SND (default_path ty))) se)
+\end{alltt}
+\end{minipage}
+\end{center}
+Recall that static analysis done by Phase~1 will have turned all data
+field references into fully-qualified identifiers.  That means the
+dynamics already knows exactly which sub-class holds the desired
+field.  In the rule, that sub-class is \texttt{cnm2}.  The first
+hypothesis confirms that there is indeed a path from the static type
+of the l-value to that sub-class (which might be itself, of course).
+The second hypothesis then extracts both the type of the field and
+confirms that it is not static.
+
+The rule also determines whether or not the sub-class is actually the
+most-derived class, and records this in the boolean variable
+\texttt{mdp}.  This is done so that the underspecified calculation in
+\texttt{lookup_offset} can return a different value for field offsets
+depending on whether or not a class is most-derived.  (It seems very
+unlikely that an implementation would do this; most would put any
+virtual bases at the end of their internal layout, meaning that all
+other offset calculations could proceed undisturbed.)
+
+The variable \texttt{offn} is the offset of the field within its host
+class.  The function \texttt{subobj_offset} is used to calculate the
+offset of the sub-class within the larger containing (dynamic) class,
+allowing a final offset to be calculated.  Finally, the second
+component of \texttt{default_path~ty} function returns the singleton
+list consisting of the class name if \texttt{ty} is a class type, and
+the empty list otherwise.
+
+
+\paragraph{What of vtables?}
+The use of paths does away with the need for vtables.  On the other
+hand, we wouldn't want to specify the model in such a way as to
+preclude this perfectly reasonable implementation strategy.  In
+particular, vtables will be catered for just as in the standard, by
+maintaining that it is only in POD (``plain old data'') types where
+one can rely on the address of the first field being the same as the
+address of the containing \texttt{struct}.  The calculation of sizes
+must also be under-specified to allow for the presence of extra,
+user-invisible data at the start of a class.
+
+\subsubsection{Casting and Other Type Conversions}
+We have already seen one use of implicit conversion from one type of
+value to another, in the rule \ruleid{assign-completes}
+(p\pageref{rule:assign-completes}), where the relation
+\texttt{nonclass_conversion} is used to this end.  This relation
+governs the way in which various values are allowed to be silently
+converted from one type to another.  Its definition is from the file
+\HOLfile{declaration_dynamics}, and is repeated in
+Figure~\ref{fig:nonclass-conversion}.
+\begin{figure}
+\index{nonclass_conversion@\texttt{nonclass_conversion}}
+\begin{alltt}
+  nonclass_conversion s (v1,ty1) (v2,ty2) =
+    let ty1 = strip_const ty1
+    and ty2 = strip_const ty2
+    in
+      (integral_type ty1 \(\land\) integral_type ty2 \(\lor\)
+       \(\exists\)ty0. (ty1 = Ptr ty0) \(\land\) (ty2 = Ptr Void)) \(\land\)
+      (\(\exists\)i. (INT_VAL ty1 v1 = SOME i) \(\land\)
+           (SOME v2 = REP_INT ty2 i))
+              (* includes null pointer conversion *)
+         \(\lor\)
+      (strip_ptr_const ty1 = strip_ptr_const ty2) \(\land\) (v1 = v2)
+         \(\lor\)
+      (\(\exists\)c1 c2 addr pth1 pth2.  (* this is an upcast *)
+          (ty1 = Ptr (Class (LAST pth1))) \(\land\) (ty2 = Ptr (Class c2)) \(\land\)
+          (SOME v1 = ptr_encode s addr (Class c1) pth1) \(\land\)
+          (s,\lbr\rbr) |- c2 casts pth1 into pth2 \(\land\)
+          (SOME v2 = ptr_encode s addr (Class c1) pth2))
+         \(\lor\)
+      (\(\exists\)ty0 base derived p fld.
+          (ty1 = MPtr base ty0) \(\land\) (ty2 = MPtr derived ty0) \(\land\)
+          (s,\lbr\rbr) |- path derived to base unique \(\land\)
+          (derived, p) IN rsubobjs (s,\lbr\rbr) \(\land\)
+             (* rsubobjs ensures base is not virtual *)
+          (LAST p = base) \(\land\)
+          (v2 = v1) \(\land\)
+          ((SOME v1 = encode_offset base fld) \(\lor\)
+           (v1 = null_member_ptr)))
+         \(\lor\)
+      (\(\exists\)ty0 c. (* null pointer conversion for pointers to member *)
+          (ty1 = Signed Int) \(\land\) (SOME v1 = REP_INT (Signed Int) 0) \(\land\)
+          (ty2 = MPtr c ty0) \(\land\) (v2 = null_member_ptr))
+\end{alltt}
+\caption{The \texttt{nonclass_conversion} relation for implicit type
+  conversions.  Based on the standard's \S4.}
+\label{fig:nonclass-conversion}
+\end{figure}
+
+\index{dynamic_cast@\texttt{dynamic_cast}}
+The most important of \cpp{}'s explicit casts is the
+\texttt{dynamic_cast} operation which allows for run-time checked
+manoeuvering around a class hierarchy.  First up-casts to unambiguous bases
+are permitted (this is the rule for references; there are parallel
+rules for the dynamic casting of pointers):
+\index{rule (dynamic)!dyncast-derived-base-ref@\texttt{dyncast-derived-base-ref}}%
+\begin{alltt}
+(* RULE-ID: dyncast-derived-base-ref *)
+(* assume that base is accessible (checked by compiler) *)
+     (strip_const dty = Class dcnm) \(\land\)
+     (s,\lbr\rbr) |- path (LAST p) to dcnm unique \(\land\) (* static check *)
+     (s,\lbr\rbr) |- path (LAST p) to dcnm via p'
+   \(\Rightarrow\)
+     mng (s, EX (DynCast (Ref dty) (LVal a (Class scnm) p)) se)
+         (s, EX (LVal a (Class scnm) (p ^ p')) se)
+\end{alltt}
+The second hypothesis is strictly redundant in the dynamics; along
+with the base's accessibility, this will be checked before the
+dynamics gets a chance to execute.  The third hypothesis is where the
+extended path from the dynamic type up to the new base is
+constructed.
+
+In the other direction (back down a class hierarchy), dynamic casts
+can fail, and require the source type to be polymorphic (\ie, the
+source class should have at least one virtual function).
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!dyncast-base-other-ref@\texttt{dyncast-base-other-ref}}%
+\begin{alltt}
+(* RULE-ID: dyncast-base-other-ref *)
+     (strip_const dty = Class dcnm) \(\land\)
+     (src_dynty = Class scnm) \(\land\)
+     polymorphic s (LAST p) \(\land\)
+     (s,\lbr\rbr) |- path scnm to dcnm via p' \(\land\)
+     (result =
+      if (s,\lbr\rbr) |- path scnm to dcnm unique then
+        (* should also check accessible, though I think this
+           could be done statically *)
+        LVal a src_dynty p'
+      else
+        EThrow (SOME (New (Class bad_cast_name) NONE)))
+   \(\Rightarrow\)
+     mng (s, EX (DynCast (Ref dty) (LVal a src_dynty p)) se)
+         (s, EX result se)
+\end{alltt}
+\end{minipage}
+\end{center}
+Note how the dynamic type of the l-value does not change: it remains
+as \texttt{src_dynty}.  Instead the accompanying path value adjusts:
+shifting from a path that leads up as far as \texttt{LAST~p} (the
+original static type), to one that leads to the class \texttt{dcnm}.
+In this way, a \texttt{dynamic_cast} can move the static type from one
+branch of the ancestry tree to another; in one step, one can do more
+than just make a down-cast.
+
+\index{bad_cast exception@\texttt{bad_cast} exception}
+When there isn't a class of the desired type available, a reference
+cast causes a \texttt{bad_cast} exception to be thrown.  The
+accompanying rule for dynamic-casting of pointer values has the
+pointer converted to a null pointer if the destination type is unreachable.
+
+
+\subsection{Reference Types}
+\label{sec:reftypes}
+
+Reference types pose problems in the contexts where they are
+distinctive:
+\begin{itemize}
+\item passed as parameters to functions;
+\item returned from functions;
+\item when they are initialised.
+\end{itemize}
+
+Otherwise, it is obvious how the existing semantics should treat
+references: they are l-values.  References are only created from
+l-values, and in the reverse direction, l-values can turn into
+r-values as required.  They will do the right things when of
+\texttt{class} types because they will have the Wasserrab style paths
+attached.  In other words, a reference to a base class may actually be
+an l-value referring to a derived class.
+
+The remaining sub-sections explain what happens in the three
+interesting situations.
+
+\paragraph{Omissions}
+\begin{itemize}
+\item The semantics does not handle references to functions.
+  Supporting these will require more rules in the dynamic semantics,
+  but these rules will be directly analogous to the rules presented
+  below: wherever an \clvalue{} constructor (which is for l-values of
+  object type) appears, there will need to also be a rule for
+  \cfvalue{}, which is for function values.
+\item The semantics doesn't handle initialisation of \texttt{const}
+  references from r-values.
+\end{itemize}
+
+
+\subsubsection{References as Parameters}
+
+When a formal parameter is of reference type, the actual parameter
+needs to stay an l-value rather than reduce to an r-value.  When the
+called function's environment is being established in its local stack
+frame, the binding for the formal name can be directly to the actual
+l-value's address and type.  In other words, nothing is allocated in
+memory to represent the reference.  This is not very likely in an
+actual environment, which will probably have an address in memory
+somewhere.  (The only way to detect this (and this would require the
+use of undefined behaviour) would be know where local variables were
+allocated, and to scan this area byte-by-byte, presumably starting at
+the address of some other, non-reference, local parameter.)
+
+This requires a change to the existing semantics, to remove function
+arguments from the l-value context (as defined by
+\texttt{valid_lvcontext}.\index{valid_lvcontext@\texttt{valid_lvcontext}}
+In order to allow some function arguments to decay into r-values, a
+new rule is introduced:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!fnapp-lval2rval@\texttt{fnapp-lval2rval}}%
+\begin{alltt}
+(* RULE-ID: fnapp-lval2rval *)
+     lval2rval (s0,e0,se0) (s,e,se) \(\land\)
+     fn_expects_rval s0
+       (case s0.thisvalue of
+           SOME (ECompVal bytes (Ptr ty)) -> SOME ty
+        || _ -> NONE)
+       f
+       (LENGTH pfx)
+   \(\Rightarrow\)
+     mng (s0, EX (FnApp f (pfx ++ (e0 :: sfx))) se0)
+         (s, EX (FnApp f (pfx ++ (e :: sfx))) se)
+\end{alltt}
+\end{minipage}
+\end{center}
+The variables \texttt{pfx} and \texttt{sfx} are lists of expressions
+corresponding to the other actual parameters being passed to the
+function $f$.  The predicate \texttt{fn_expects_rval} examines the
+type of \texttt{f} to determine whether or not the argument at the
+given position (\texttt{LENGTH~pfx} here) is required to be an l-value.
+
+The rule that determines that a function application's sequence point
+has been reached (\ruleid{function-call-sqpt}) must also change.
+Previously, this rule checked that the function and all of the
+arguments had been fully evaluated, and being ``fully evaluated''
+meant ``had been evaluated to a value (consisting of a list of
+bytes)''.  The new rule checks that every parameter is either a
+byte-list value (when the function doesn't expect a reference type),
+or an l-value:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!function-call-sqpt@\texttt{function-call-sqpt}}%
+\begin{alltt}
+(* RULE-ID: function-call-sqpt *)
+     (fty = Function retty argtys) \(\land\)
+     EVERYi (\(\lambda\)i e. if ref_type (EL i argtys) then
+                     \(\exists\)a t p. e = LVal a t p
+                   else \(\exists\)v t. e = ECompVal v t)
+            params \(\land\)
+     is_null_se se
+   \(\Rightarrow\)
+     mng (s, EX (FnApp (FVal fnid fty eopt) params) se)
+         (s, EX (FnApp_sqpt (FVal fnid fty eopt) params)
+                base_se)
+\end{alltt}
+\end{minipage}
+\end{center}
+The \texttt{EVERYi} function (from \HOLfile{utils}) is of type
+\begin{verbatim}
+   : (num -> 'a -> bool) -> 'a list -> bool
+\end{verbatim}
+and checks whether or not every element of a list satisfies the given
+predicate, but where the predicate is also given access to the
+element's index in the list.
+
+\subsubsection{References Returned from Functions}
+\label{sec:refs-returned-from-fns}
+
+In order to return a reference from a function, the model must not
+force the ``l-value to rvalue'' conversion that would normally turn
+l-value expressions in \texttt{return} statements into r-values.  But
+it must also allow that conversion to occur when appropriate.  This in
+turn requires the model to be able to recognise when a function is due
+to return a reference as opposed to a normal value.  The model
+achieves this by encoding this expectation in the continuation that
+accompanies every statement evaluation.
+
+\index{return_cont@\texttt{return_cont}}%
+The rules for function calls (see, for example
+\ruleid{global-function-call} on
+page~\pageref{rule:global-function-call}) construct the continuation
+with a call to \texttt{return_cont}.  The continuation type is defined
+in \HOLfile{statements}:
+\begin{verbatim}
+  conttype = RVC of (CExpr -> CExpr) => se_info
+           | LVC of (CExpr -> CExpr) => se_info
+\end{verbatim}
+meaning that a continuation stores both the side effect record that is
+to accompany the re-established expression, and a function which will
+construct it when given the result of the function call.
+
+The definition of \texttt{return_cont} is
+\begin{verbatim}
+  return_cont se ty = if ref_type ty then LVC I se
+                      else RVC I se
+\end{verbatim}
+where \texttt{I} is the identity combinator (the function equal to
+$(\lambda x.\;x)$).
+
+In the continuations, the ``tags'', \texttt{RVC} and \texttt{LVC},
+allow other rules to determine what is expected.  To return to the
+example of the ``l-value to r-value'' conversion, this is done by the
+following rule:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!return-lval2rval@\texttt{return-lval2rval}}%
+\index{lval2rval@\texttt{lval2rval}}%
+\begin{alltt}
+(* RULE-ID: return-lval2rval *)
+     lval2rval (s0,e,se0) (s,e,se)
+   \(\Rightarrow\)
+     mng (s0, ST (Ret (EX e0 se0)) (RVC c ret_se))
+         (s, ST (Ret (EX e se)) (RVC c ret_se))
+\end{alltt}
+\end{minipage}
+\end{center}
+The continuation that accompanies every statement is the second
+argument of the \texttt{ST} tag. Also note that the first argument of
+a \ckey{return} might itself be another statement.  If the original
+expression contained a function call, the body of the called function,
+a statement, would eventually become the top of the expression.  In
+this rule, the use of the inner \texttt{EX} tag precludes this
+possibility.
+
+There are two rules allowing a \ckey{return} statement to pass its
+expression-value to the continuation.  The rule for returning normal
+values is \ruleid{return-rvalue} (we saw this rule earlier, in
+Section~\ref{sec:small-step-stmts}):
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!return-rvalue@\texttt{return-rvalue}}%
+\begin{alltt}
+(* RULE-ID: return-rvalue *)
+     is_null_se se0
+   \(\Rightarrow\)
+     mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se))
+         (s, EX (c (ECompVal v t)) se)
+
+\end{alltt}
+\end{minipage}
+\end{center}
+
+\smallskip\noindent
+The rule for returning a reference \ruleid{return-lvalue} is similar:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!return-lvalue@\texttt{return-lvalue}}%
+\begin{alltt}
+(* RULE-ID: return-lvalue *)
+     is_null_se se0
+   \(\Rightarrow\)
+     mng (s, ST (Ret (EX (LVal a t p) se0)) (LVC c se))
+         (s, EX (c (LVal a t p)) se)
+
+\end{alltt}
+\end{minipage}
+\end{center}
+
+\subsubsection{Declaring References}
+
+When a reference is declared, it must also be initialised, and the
+initialising expression must be an l-value.  But normal
+initialisations need to be able to turn l-values into r-values so
+there is an ``lvalue-to-rvalue'' rule for variable declarations that
+are accompanied by initialisations:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (declaration dynamics)!decl-vdecinit-lval2rval@\texttt{decl-vdecinit-lval2rval}}%
+\begin{alltt}
+(* RULE-ID: decl-vdecinit-lval2rval *)
+     lval2rval (s0,e0,se0) (s,e,se) \(\land\)
+     \(\neg\)ref_type ty \(\land\)
+     ((f = CopyInit) \(\lor\) (f = DirectInit))
+   \(\Rightarrow\)
+     declmng mng (VDecInitA ty loc (f (EX e0 se0)), s0)
+                 ([VDecInitA ty loc (f (EX e se))], s)
+\end{alltt}
+  \end{minipage}
+\end{center}
+
+A variable declaration of reference type is ready to ``fire'' when its
+initialising expression has reduced to an l-value, and when there are
+no remaining side effects in the side effect record.  At this point,
+the variable address map in the state is updated to point at the
+l-value's address, and the type map is also updated to make the type
+of the name the same as the type of the l-value.
+This step is controlled by the rule \ruleid{decl-vdecinit-finish-ref},
+for which see Figure~\ref{fig:decl-vdecinit-finish-ref}.
+\begin{figure}[hbtp]
+\begin{center}
+  \begin{minipage}{\textwidth}
+\index{rule (declaration dynamics)!decl-vdecinit-finish-ref@\texttt{decl-vdecinit-finish-ref}}%
+\begin{alltt}
+(* RULE-ID: decl-vdecinit-finish-ref *)
+(* if isSome, aopt is the address of a containing class *)
+     is_null_se se \(\land\)
+     ((f = CopyInit) \(\lor\) (f = DirectInit)) \(\land\)
+     (if class_type ty1 then
+        (s0,\lbr\rbr) |- dest_class ty1 casts p into p'
+      else (p' = p)) \(\land\)
+     (s = new_addr_binding refnm aopt (a,dest_class ty2,p') s0)
+   \(\Rightarrow\)
+     declmng mng
+             (VDecInitA (Ref ty1)
+                        (RefPlace aopt refnm)
+                        (f (EX (LVal a ty2 p) se)), s0)
+             ([], s)
+\end{alltt}
+  \end{minipage}
+\end{center}
+\caption{How References are Initialised}
+\label{fig:decl-vdecinit-finish-ref}
+\end{figure}
+
+
+
+
+\subsection{Polymorphism \& Multiple Inheritance}
+\label{sec:multiple-inheritance}
+
+As suggested in earlier deliverables, multiple inheritance has been
+modelled by following the approach described in Wasserrab \emph{et
+  al}~\cite{wasserrab-nst-OOPSLA06}.  The changes supporting this
+addition to the model are relatively minor and almost all appear in
+the theory \texttt{class_info}, where a number of new definitions
+appear.
+
+\newcommand{\Cs}{\mathit{Cs}} \newcommand{\fld}{\mathit{fld}}
+
+At the top level, the rule for calculating the function that will be
+called dynamically (\ruleid{function-member-select}) has changed
+slightly.  It now reads
+\[
+\infer{
+  \begin{array}{l}
+    \statebrack{\textsf{Ex}((\clvalue(a,\texttt{Class}\;C,\Cs))\;\mathbf{.}\;
+      \fld,\mathit{se}),\sigma} \rightarrow \\
+    \qquad\left\langle\textsf{Ex}\left(\cfvalue\left(
+        \begin{array}{l}
+          \texttt{MFn}\;(\last(\Cs'))\;\fld,\\
+          (\funtype{\mathit{argtys}}{\mathit{dynret}}),\\
+          \SOME{(\clvalue\;a\;(\texttt{Class}\;C)\;\Cs')}
+        \end{array}\right),
+      \mathit{se}\right),\sigma\right\rangle
+  \end{array}}{
+  \begin{array}{c}
+    \sigma \vdash \last(\Cs) \textrm{ has least method } \fld :
+    \funtype{\mathit{statargs}}{\mathit{statret}} \textrm{ via } Ds \\
+    \sigma \vdash (C,\Cs \,@_p\, Ds) \textrm{ selects } \fld :
+    \funtype{\mathit{dynargs}}{\mathit{dynret}} \textrm{ via } \Cs'
+  \end{array}}
+\]
+This rule describes how the call to method $\fld$ is resolved
+for an object located at address $a$, with dynamic type $C$, and where
+the static type of the object is the last element of the list $\Cs$.
+The list $\Cs$ is also a path through the class hierarchy, starting at
+the dynamic type and ending at the current static type.  (Note that an
+object's dynamic type is determined on object creation, and persists
+for an object's entire life-time.  In contrast, an object's static
+type is the type ascribed to it by a particular piece of code.
+Different pieces of code may well ``see'' the same object as having
+different types.  In this sense, an object's dynamic type is
+unchanging, but it will have a variety of static types across the text
+of a program.  Confusing, but true!)
+
+The first premise (``has-least-method'') examines the static type of
+the object for which the method will be called, $\last(\Cs)$.
+Starting at that point in the hierarchy it looks upwards (\ie, towards
+base classes) for the nearest base class that provides an
+implementation of the desired method.  This base-class might be
+$\last(\Cs)$ itself, in which case the path found ($Ds$) will be
+empty.  There must also be a unique closest ancestor providing the
+desired method.  If this isn't the case, then there will have been a
+compile-time error, as the call will be statically ambiguous.
+
+The second premise (``selects-via'') then determines the dynamic
+location of the desired method.  There are two cases.  The simple case
+is when there is a unique best method for the dynamic type, $C$.
+Imagine, for example, that there is a four-element singly-linked
+inheritance graph, from base $B_0$ down to most-derived $B_3$, with
+implementations of the method $\fld$ at $B_0$ and $B_2$.  If the
+object is actually of type $B_3$, but is statically seen as type
+$B_1$, then $C$ is $B_3$, and $\Cs$ will be $[B_3,\,B_2,\,B_1]$.  The
+first premise (``has-least-method'') determines that, starting at
+$B_1$ (the static type) there is an implementation of $\fld$ at path
+$[B_1, B_0]$.  This will be the instantiation of the rule's variable
+$Ds$.
+
+The simple case for ``selects-via'' checks whether or not there is
+also a least method for the dynamic type (ignoring, for the moment,
+the path giving the static type).  Thus
+\[
+\infer{\sigma \vdash (C,\Cs) \textrm{ selects } \fld \textrm{ via } \Cs'}{\sigma \vdash C \textrm{ has least method } \fld :
+  \funtype{\mathit{argtys}}{\mathit{retty}} \ \textrm{ via } \Cs'}
+\]
+In the simple example, we will thus conclude that \[
+\sigma \vdash (B_3,[B_3,B_2,B_1,B_0]) \textrm{ selects } \fld
+\textrm{ via } [B_3,B_2]
+\]
+so that the call will be to the implementation of $\fld$ in $B_2$, and
+the \texttt{this} pointer will be adjusted so that the type and path
+information associated with its value will be $(B_3,[B_3,B_2])$ (a
+dynamic type of $B_3$, as always, and a static type of $B_2$).
+
+The same rule applies in a much more complicatd seeming situation,
+where multiple inheritance and shared base objects come into play.
+Consider the program in Figure~\ref{fig:diamond-cpp}.  When the call
+to \texttt{cref.f()} is made, the type and path associated with the
+reference will be $(D,[D,C_1])$.  Statically, the reference is a
+\texttt{C1} value, but dynamically, it's really of class
+\texttt{D}. The first premise in rule \ruleid{function-member-select}
+finds that there is a path ($\mathit{Ds}$ in the rule) which is
+appropriate for \texttt{f}.  This path is $[B]$.  The fact that the
+path does not include the derived object's name, and is just a bare
+reference to a class indicates that it is a path to a shared base.
+When such a path is the second argument of path concatenation (the
+$@_p$ operator in the second premise), the result is just the second
+argument, so that the second hypothesis in the rule becomes
+\[
+\sigma \vdash (D,[B]) \textrm{ selects } f :
+\funtype{\texttt{void}}{\texttt{int}} \textrm{ via } \Cs'
+\]
+\begin{figure}[hbtp]
+\begin{verbatim}
+#include <iostream>
+
+class B {
+public:
+  virtual int f() { std::cout << "B's f\n"; return 3; }
+  virtual ~B() { }
+};
+
+class C1 : virtual public B {
+};
+
+class C2 : virtual public B {
+public:
+  virtual int f() { std::cout << "C2's f\n"; return 4; }
+};
+
+class D : public C1, public C2 {
+};
+
+int dosomething(C1 &cref)
+{
+  return cref.f();
+}
+
+int main()
+{
+  D d;
+  return dosomething(d);
+}
+\end{verbatim}
+\caption{Multiple inheritance with shared base objects.  (This program is
+in the \texttt{notes} directory with name \texttt{diamond-multinherit.cpp}.)}
+\label{fig:diamond-cpp}
+\end{figure}
+
+The first, simple, rule for ``selects-via'' resolves this.  Ignoring
+the path $[B]$, the simple rule checks whether or not there is a
+unique least path to an \texttt{f} from $D$.  There is such a path,
+and it is $[D,C_2]$.  So, the call to \texttt{cref.f()} ends up being
+a call to the \texttt{f} in class $C_2$, in an ``unrelated'' part of
+the object hierarchy.
+\[
+\rule{0.2\textwidth}{.1mm}
+\]
+
+For those situations where there is not a unique path from the dynamic
+type to a best selection, there is another more complicated rule
+defining ``selects-via''.  In Figure~\ref{fig:lopsided-v}, the
+inheritance hierarchy looks like
+\[
+\psset{rowsep=3ex,nodesep=2mm,colsep=2em}
+\begin{psmatrix}
+\texttt{\psframebox{B}} \\
+\texttt{Left1}\\
+\texttt{\psframebox{Left2}} & & \texttt{\psframebox{Right}}\\
+& \texttt{D}
+\end{psmatrix}
+\ncline{1,1}{2,1}
+\ncline{2,1}{3,1}
+\ncline{3,1}{4,2}
+\ncline{3,3}{4,2}
+\]
+where the boxed class names are those that implement the function
+\texttt{f}.  The question is which \texttt{f} will be called when the
+dynamic type is \texttt{D}, and when the static type is
+\texttt{Left1}.  There is no unique, least implementation of
+\texttt{f} visible from the dynamic type (\texttt{D}), so the simple
+rule does not apply.  Instead, the notion of \emph{overrider} is
+introduced via the rule
+\[
+\infer{\sigma\vdash (C,\Cs) \textrm{ selects }\fld : m \textrm{ via }
+  \Cs'}{
+\begin{array}{c}
+  \forall m\;\Cs'. \;\;\neg \;\sigma \vdash C \textrm{ has least }\fld : m
+\textrm{ via } \Cs'\\
+\sigma \vdash (C,\Cs) \textrm{ has overrider } \fld : m \textrm{ via }
+\Cs'
+\end{array}}
+\]
+where the static type of the value again plays a role.  In this case,
+the \texttt{f} that gets called is that in \texttt{Left2}.  For
+further details on exactly how this is defined, see either
+\texttt{class_infoScript}, or
+Wasserab~\emph{et~al}~\cite{wasserrab-nst-OOPSLA06}.
+
+\begin{figure}[hbtp]
+\begin{verbatim}
+#include <iostream>
+
+class B {
+public:
+  virtual void f() { std::cout << "B's f\n"; }
+  virtual ~B() { }
+};
+
+class Left1 : public B { };
+
+class Left2 : public Left1 {
+public:
+  virtual void f() { std::cout << "Left2's f\n";  }
+};
+
+class Right {
+public:
+  virtual void f() { std::cout << "Right's f\n"; }
+  virtual ~Right() { }
+};
+
+class D : public Left2, public Right { };
+
+void dosomething(Left1 &l1ref) { l1ref.f(); }
+
+int main()
+{
+  D d;
+  // d.f();  would be statically ambiguous
+  dosomething(d);
+  return 0;
+}
+\end{verbatim}
+\caption{A lop-sided `V' inheritance hierarchy.  Available as
+  \texttt{notes/lopsided-v.cpp}.}
+\label{fig:lopsided-v}
+\end{figure}
+
+\subsection{Object Lifetimes}
+\label{sec:object-lifetimes}
+
+\paragraph{Constructors}
+Handling constructors has easily wrought the greatest change to the
+simple C model.  The basic approach taken has been to encode as much
+as possible with ``evolving syntax''.  Just as \texttt{while} can be
+modelled by having
+\[
+\texttt{while}\;\texttt{(}G\texttt{)}\;\mathit{body}
+\] become \[
+\texttt{if}\;\texttt{(}G\texttt{)}\;\texttt{\{}\mathit{body}\texttt{;}\;\texttt{while}\;\texttt{(}G\texttt{)}\;\mathit{body} \texttt{\}}
+\]
+so too do calls to \cpp{} constructors create new programs ``in
+place''.  The advantage of this approach is that there is less need
+for relatively complicated state to be recorded in yet more fields in
+the big record type \texttt{state} (see Figure~\ref{fig:state-type}).
+Instead, programs can unfold into more elaborate forms directly.  The
+disadvantage of this approach is that the original syntax may not
+support enough forms, requiring new special syntax to be created, or
+for existing forms to be extended with new parameters.
+
+\index{Block@\texttt{Block}}
+The existing handling of block-statements is an example of this latter
+disadvantage.  In particular, the abstract syntax has a constructor
+\texttt{Block} with type
+\begin{verbatim}
+   : bool -> decl list -> stmt list
+\end{verbatim}
+where the boolean flag indicates whether or not the block has been
+entered yet.  In this way, the abstract syntax has values in it that
+can't be written down in the concrete syntax.  (Simiarly, the original
+thesis model for C included the \texttt{RVR} constructor and the
+$\hat{f}$ intermediate form for function calls.)
+
+Constructors are intimately tied up with declarations and
+initialization.  In the simple C world, a variable comes into being in
+two stages.  First space in memory is allocated for the variable
+(whether on the stack or heap), and the variable name is associated
+with that space for the span of the variable's life.  Then there is an
+optional initialization phase, when the piece of memory associated
+with the variable space is filled in with some value.
+
+The \cpp{} model is similar.  All new objects (but not references)
+must be associated with some new space.  Then they may or may not be
+initialised.  Additionally, in \cpp{}, an object that is only
+declared, and which does not appear to be initialised, will actually
+have its default constructor called.
+
+The abstract syntax supporting this is all defined in
+\HOLfile{statements}:
+
+\begin{center}
+\begin{tabular}{lll}
+Constructor & Argument Types & Description\\
+\hline
+\texttt{VDec} & $\mathit{name},\mathit{type}$ & no initialization\\
+\texttt{VDecInit} &
+$\mathit{name},\mathit{type},\mathit{initializer}$ &
+initialization (unallocated) \\
+\texttt{VDecInitA} &
+$\mathit{varlocation},\mathit{type},\mathit{initializer}$ &
+initialization (space allocated)
+\end{tabular}
+\end{center}
+
+For example, when a class is declared with no explicit initialization
+of any sort, meaning that the default constructor will be called, the
+syntax moves through all three stages.  The abstract syntax
+corresponding to something like
+\begin{verbatim}
+{
+   classname c;
+   ...
+}
+\end{verbatim}
+will be \texttt{VDec "c" classname}.  Because this is a class type,
+rule \ruleid{decl-vdec-class} will fire (and can do so immediately),
+and the declaration will become \texttt{VDecInit "c" classname init},
+where the form of \texttt{init} will encode the fact that a direct
+initialization is being performed, and that there are no arguments.
+Then the rule \ruleid{decl-vdecinit-start-evaluate-direct-class}
+fires.  Side conditions of this rule cause space to be allocated (at
+address \texttt{a}), the state's maps from names to addresses be
+updated, and for the construction of the class to be recorded so that
+it can be destroyed later.
+
+The syntax also evolves to become
+\begin{verbatim}
+   VDecInitA classname (ObjPlace a) init'
+\end{verbatim}
+where the new initializer records that a function call to a
+constructor is about to happen, and where that construction will
+happen (\ie, \texttt{init'} includes a reference to \texttt{a}).
+
+There are three forms of initializer.  The first two are
+\texttt{DirectInit0} and \texttt{DirectInit} and correspond to direct
+initialization~\cite[\S 8.5 paragraph 12]{cpp-standard-iso14882}.  The
+\texttt{DirectInit0} constructor takes as arguments a list of
+expressions.  In this way, concrete syntax such as
+\begin{verbatim}
+{
+  Classname c(x,&y,z+1);
+}
+\end{verbatim}
+is directly modelled.  (When the rule \ruleid{decl-vdec-class} fires,
+the newly created \texttt{DirectInit0} constructor takes an empty list
+of arguments.)
+
+The \texttt{DirectInit} constructor takes one argument, an ``extended
+expression'', which will initially be an expression constructed by an
+application of the special constructor
+\texttt{ConstructorFVal}\index{ConstructorFVal@\texttt{ConstructorFVal}}
+to the same argument list.  This form needs to be an extended
+expression so that the body of the constructor (a statement) can be
+entered.
+
+The other form of initializer is constructed by the function
+\texttt{CopyInit}.  This corresponds to the syntax
+\begin{verbatim}
+{
+  type varname = expression;
+  ...
+}
+\end{verbatim}
+which is a
+copy-initialization~\cite[\emph{ibid}]{cpp-standard-iso14882}.  When
+the type of the new object is not a class, there is no difference
+between copy-initialization and direct-initialization, reflected in
+the rule \ruleid{decl-vdecinit-start-evaluate-direct-nonclass}, which
+moves from a \texttt{DirectInit0} to a \texttt{CopyInit} initializer.
+
+When a \texttt{CopyInit} initializer completes its evaluation,
+yielding a value, that value be copied across into the space earlier
+allocated for the object.  For non-class types this is done with the
+same \texttt{val2mem} helper function that is used to apply side
+effects.  For class types, this copying must be performed by a call to
+the copy constructor.
+
+\paragraph{Constructor Calls}
+The expression form corresponding to a constructor call uses the
+expression form for function applications, but with a special form in
+the place of the function value.  This allows the normal evaluation of
+function applications (with the unspecified order of evaluation of
+arguments, for example).  The function value position is filled by a
+new abstract syntactic form
+\texttt{ConstructorFVal}.\index{ConstructorFVal@\texttt{ConstructorFVal}}
+This takes three parameters:
+\begin{itemize}
+\item a boolean indicating whether or not the constructor is being
+  called for a most-derived object or not;
+\item the address of the space which the constructor is to operate
+  over; and
+\item the name of the class that is being constructed
+\end{itemize}
+So, if a declaration is made of the form
+\begin{verbatim}
+{
+   class v(x);
+}
+\end{verbatim}
+then, once sufficient space is allocated for the new object \texttt{v}
+(at address \texttt{a}, say), the abstract syntax will look like
+\begin{alltt}
+   VDecInitA (Class \(\mathit{cnm}\))
+             (ObjPlace a)
+             (DirectInit
+                (EX (FnApp (ConstructorFVal T a \(\mathit{cnm}\))
+                           [Var "x"])
+                    base_se))
+\end{alltt}
+where $\mathit{cnm}$ is the identifier corresponding to the class
+\texttt{class}.
+
+The \texttt{ObjPlace} constructor is used to distinguish this from the
+situation where a reference is being initialised.  The \texttt{EX}
+constructor specifies that the current form is an expression (as
+opposed to the statement that will be in this position once the
+constructor body is entered).  The \texttt{base_se} value is the empty
+side-effect record.  This will evolve as references to and updates of
+memory occur.
+
+Once the parameters to the constructor have been evaluated, the
+constructor body can be entered.  This happens in rule
+\ruleid{constructor-function-call}, for which see
+Figure~\ref{fig:constructor-function-call}.
+\begin{figure}[htbp]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!constructor-function-call@\texttt{constructor-function-call}}%
+\begin{alltt}
+(* RULE-ID: constructor-function-call *)
+     find_constructor_info s0 cnm args params mem_inits body \(\land\)
+     (pdecls = MAP (\(\lambda\)((n,ty),a).
+                        VDecInit ty (Base n)
+                                    (CopyInit (EX a base_se)))
+                   (ZIP (params, args))) \(\land\)
+     (SOME this = ptr_encode s0 a (Class cnm) [cnm]) \(\land\)
+     (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits) \(\land\)
+     (newstmt =
+        if is_catch body then
+          let (bod,handlers) = dest_catch body
+          in
+            Block T pdecls
+              [Catch (Block F cpfx [bod])
+                     (MAP (\(\lambda\)(e,st).
+                             (e, Block F [] [st; Throw NONE]))
+                          handlers)]
+        else Block T (pdecls ++ cpfx) [body])
+   \(\Rightarrow\)
+     mng (s0, EX (FnApp_sqpt (ConstructorFVal mdp subp a cnm)
+                             args) se0)
+         (s0 with <| thisvalue :=
+                       SOME (ECompVal this (Ptr (Class cnm)));
+                     stack updated_by
+                       (CONS (s0.env, s0.thisvalue));
+                     blockclasses updated_by stackenv_newscope;
+                     exprclasses updated_by stackenv_newscope;
+                     env := empty_env |>,
+          ST newstmt (RVC (\(\lambda\)e. ConstructedVal subp a cnm)
+                          se0))
+\end{alltt}
+    \end{minipage}
+  \end{center}
+
+  \caption{Making a call to a class constructor}
+\label{fig:constructor-function-call}
+\end{figure}
+The basic rule is complicated enough, and there is more complexity
+hidden behind the auxiliary functions and relations.  The first
+auxiliary is the relation \texttt{find_constructor_info}, which
+appears in the rule's first hypothesis.  This relation treats its
+first three parameters (\texttt{s0}, \texttt{cnm} and \texttt{args})
+as inputs.  These are the current state, the name of the class being
+constructed, and the actual arguments being passed to the constructor.
+The remaining arguments to the relation are ``outputs''.  The variable
+\texttt{params} is the list of formal parameters (names and types).
+The variable \texttt{mem_inits} is the list of ``mem-initializers''
+(see~\cite[\S12.6.2]{cpp-standard-iso14882}) associated with the
+constructor, and \texttt{body} is the constructor's body.  The
+\texttt{find_constructor_info} auxiliary is responsible for resolving
+which constructor needs to be called, based on the types of the actual
+arguments.
+
+The second hypothesis of the rule constructs the sequence of variable
+declarations corresponding to the parameters, using standard
+functional programming auxiliaries \texttt{MAP} and \texttt{ZIP}.
+Parameter passing is just like variable declaration\footnote{This does
+  away with the \textsf{Cholera} approach which had a number of
+  auxiliary relations effectively duplicating what occurred in
+  variable declaration}, and so the model's existing treatment of
+declarations can be re-used to set up the binding between formal names
+and actual values.  Note that the expressions that initialise the
+parameters have already been fully evaluated, so that there will be no
+expression evaluation done when the declarations come to be evaluated
+(except for any class construction that may be called for).
+
+The third hypothesis calculates a value for the \texttt{this} value.
+The dynamic and static type of the \texttt{this} pointer will be the
+same (as the pair $C$ and $[C]$ are passed to \texttt{ptr_encode}),
+and thus there will not be any polymorphic dispatch to functions in
+derived classes if any virtual functions are called in the constructor
+bodies.
+
+The fourth hypothesis constructs a \texttt{cpfx} of declaration calls
+to initialise class members and bases.  This is all done in the
+complicated function \texttt{construct_ctor_pfx} (defined in
+\texttt{dynamicsScript}).  This constructs a sequence of declarations
+to initialise the non-static members of the new class, and the class's
+immediate bases.  The mem-initializers are consulted to see what
+initializers should be provided.  (If a mem-initializer is not
+provided for a given member or base, then that object will be value-
+or default-initialized; see~\cite[\S12.6.2, paragraphs
+3--4]{cpp-standard-iso14882}.)
+
+For example, in Figure~\ref{fig:mem-inits}, before class \texttt{C}'s
+constructor body is even entered, the parameters \texttt{cptr} and
+\texttt{i} need to be declared and initialised with actual values.
+Subsequently, all of \texttt{C}'s immediate bases (just \texttt{B} in
+this case) need to be constructed, followed by its members
+(\texttt{ptr} and \texttt{sz}).  Note that while the paramters need to
+have space allocated for them, the bases and members do not (because
+the space for the entire object was allocated at the \texttt{VDecInit}
+stage).
+
+\begin{figure}[htbp]
+\begin{verbatim}
+#include <cstring>
+
+class B {
+  int x;
+public:
+  B(int i) : x(i) {}
+};
+
+class C : public B {
+  char *ptr;
+  int sz;
+public:
+  C(char *cptr, int i)
+    : B(cptr[i]), ptr(cptr), sz(strlen(cptr)) { }
+};
+\end{verbatim}
+\caption{\cpp{} constructors with \emph{mem-initializers}.  (Available
+as \texttt{notes/mem-inits.cpp}.)}
+\label{fig:mem-inits}
+\end{figure}
+
+Assume that the constructor has been called with parameters \texttt{x}
+and \texttt{y}, and that these have evaluated to values \texttt{xval}
+and \texttt{yval}. The sequence of declarations that are constructed
+to precede the constructor body is given in
+Figure~\ref{fig:constructor-vdecs}. The first two declarations are of
+the parameters.  The next constructs the base \texttt{B}, and the last
+two construct the non-static members.  The body of
+\texttt{construct_ctor_pfx} is responsible for calculating the offsets
+of the members (given as \texttt{Boff}, \texttt{ptroff} and
+\texttt{szoff} in the figure.
+
+\begin{figure}[hbtp]
+\begin{verbatim}
+  VDecInit (char *) cptr (CopyInit (NormE xval base_se))
+  VDecInit int      i    (CopyInit (NormE yval base_se))
+
+  VDecInitA B (ObjPlace (a + Boff))
+              (DirectInit
+                 (NormE
+                    (FnApp (ConstructorFVal F (a + Boff) B)
+                           [Deref(Plus (Var "cptr")
+                                       (Var "i"))])
+                    base_se))
+
+  VDecInitA (char *) (ObjPlace (a + ptroff))
+                     (CopyInit (NormE (Var "cptr") base_se))
+  VDecInitA int      (ObjPlace (a + szoff))
+                     (CopyInit (NormE (FnApp (Var "strlen")
+                                             [Var "cptr"])
+                                      base_se))
+\end{verbatim}
+\caption{The variable declarations constructed to precede the body of
+  C's constructor (from Figure~\ref{fig:mem-inits}).}
+\label{fig:constructor-vdecs}
+\end{figure}
+
+Note how the first argument of the \texttt{ConstructorFVal} form in
+the construction of the base \texttt{B} is false; this is because
+\texttt{B} is not the most-derived object.  If there were any shared
+bases in the example, the most-derived object would be ``responsible''
+for constructing them (see~\cite[\S12.6.2, paragraph
+5]{cpp-standard-iso14882}).  If \texttt{C} had any non-static members
+of class type, then these would be constructed with their
+$\mathit{mdp}$ flag set to true.
+
+When the constructor for the base class \texttt{B} comes to be called,
+it will in turn initialise its members.  The constructor for
+\texttt{B} is called with an argument (\texttt{cptr[i]}) that needs to
+be evaluated in the context where the parameters are in scope, so it
+is clear that the declarations for the parameters must come before the
+base and member initialisations.
+
+\paragraph{Object Destruction}
+When an object of class type is first declared (with a
+\texttt{VDecInit} form), it has memory allocated sufficient to contain
+the new class in its entirety (including sub-objects).  This
+allocation is reflected in the state's \texttt{allocmap}.  When the
+block in which this declaration was made is left, this allocation is
+forgotten.  At the same time, the destructor for the object must be
+called.  This is modelled with the
+\texttt{blockclasses} field of the state.%
+\index{blockclasses (state field)@\texttt{blockclasses} (\texttt{state} field)}%
+This is of type
+\begin{verbatim}
+   : constructed list list
+\end{verbatim}
+Where the type \texttt{constructed} is defined (see \HOLfile{states})
+as
+\begin{verbatim}
+   constructed = NormalConstruct of construction_locn
+               | SubObjConstruct of construction_locn
+\end{verbatim}
+and \texttt{construction_locn} is an abbreviation for
+\begin{verbatim}
+   :addr # CPP_ID # CPP_ID list
+\end{verbatim}
+The address is the address of the object which is to be destroyed, and
+the two remaining are the class name and path which serve to identify
+the object's type.  The inner list constructor of the type of
+\texttt{blockclasses} reflects the fact that multiple objects may be
+declared at the same scope level.  The outer list constructor appears
+because of the stack discipline necessary for multiple nested scopes.
+
+When an object of class type is declared, the rule responsible
+(\ruleid{decl-vdecinit-start-evaluate-direct-class}) both allocates
+the necessary memory, and adds address and type information for all of
+the object's sub-classes and members (not just immediate bases, but
+doing a complete traversal of the inheritance graph) to the
+\texttt{blockclasses} field.  This is done by the
+\texttt{update_blockclasses} relation defined in
+\texttt{class_infoScript}.  The object information has to be added
+to the list in the correct order so that objects will be destroyed in
+reverse order of construction.
+
+The rule for exitting from a block is then adjusted so that it can
+only occur if the current scope's \texttt{blockclasses} information is
+empty.  As long as it is not empty, the destructor corresponding to
+the object on the top of the stack is set up to be called.  This is
+done in rule \ruleid{block-exit-destructors-to-call}:
+\begin{center}
+  \begin{minipage}{\textwidth}
+\begin{alltt}
+(* RULE-ID: block-exit-destructors-to-call *)
+     (s0.blockclasses = destroy_these :: bcs) \(\land\)
+     \(\neg\)(destroy_these = []) \(\land\)
+     final_stmt st c \(\land\)
+     ((destcalls, s) =
+        realise_destructor_calls (exception_stmt st) s0)
+   \(\Rightarrow\)
+     mng (s0, ST (Block T [] [st]) c)
+         (s, ST (Block T [] (destcalls ++ [st])) c)
+\end{alltt}
+  \end{minipage}
+\end{center}
+This is another example of evolving syntax: the block that the flow of
+control is about to leave, has this departure deferred with the
+insertion of new statements before the block's final statement.  The
+rule allowing an exit to eventually occur is \ruleid{block-exit}:
+\[
+\infer{
+  \statebrack{
+    \textsf{St}(\texttt{Block}\;\top\;[]\;[\mathit{st}], c), \sigma_0}
+  \longrightarrow
+  \statebrack{\textsf{St}(\mathit{st}, c), \sigma}
+}{
+  \begin{array}{l}
+    \sigma_0.\texttt{stack} =
+    (\mathit{stm},\mathit{tym},\mathit{vrm},\mathit{this}) ::
+    \mathit{stk}
+    \\
+    \texttt{final_stmt}\;\mathit{st}
+    \\
+    \sigma_0.\texttt{blockclasses} = [] :: \mathit{bcs}
+    \\
+    \sigma = \sigma_0 \textrm{ with } \left\langle\begin{array}{ll}
+        \texttt{stack := }\mathit{stk}; &
+        \texttt{classmap := }\mathit{stm};\\
+        \texttt{typemap := }\mathit{tym}; &
+        \texttt{varmap := }\mathit{vrm};\\
+        \texttt{thisvalue := }\mathit{this}; &
+        \texttt{blockclasses := }\mathit{bcs}
+      \end{array}\right\rangle
+  \end{array}
+}
+\]
+The predicate \texttt{final_stmt} is true of a statement if it is
+an abnormal exit form (such as \texttt{break} or \texttt{return}), or
+simply \texttt{EmptyStmt}.
+
+Actually calling a destructor is straightforward because there are no
+parameters, nor anything comparable to the mem-initializers.  The
+requirement in the standard that sub-objects be destroyed before the
+body of a destructor is entered is handled by the fact that the
+sub-object information is entered into the \texttt{blockclasses} stack
+ahead of the final encompassing object.
 
 \section{Validation}
 \label{sec:validation}
 
-Deliverable-2 includes a directory \texttt{holsrcs/testfiles}.  In
+The deliverable includes a directory \texttt{holsrcs/testfiles}.  In
 this directory there is some preliminary work towards the creation of
 a symbolic evaluator, for demonstrating that programs in the model can
 behave as one might expect.  This work builds on the ideas
 in~\cite{netsem:popl2006}, allowing symbolic exploration of a semantic
 definition that features non-deterministic branching.  For the moment,
 the code only handles a sequence of external declarations not
-requiring any expression evaluation.
+requiring any expression evaluation, which is very minimalist.
 
-In order to make using this tool even easier, I will need to develop
-some sort of parser for C++ source code as having to write out
-abstract syntax trees by hand is a major annoyance.  It's possible
-that the front-end of \texttt{g++} might be usable in this regard.
+This tool requires some sort of parser for \cpp{} source code, as
+having to write out abstract syntax trees by hand is a major
+annoyance.  It's possible that the front-end of \texttt{g++} might be
+usable in this regard.
 
 
 \section{Omissions}
@@ -3530,12 +4079,13 @@ Phase~2~(Templates).  There a call to a bare \texttt{f} would
 ultimately turn into a call into the \texttt{f} whose parameters'
 types best matched the types of the actual arguments.  This resolved
 call would then be to an exact name and type combination, so that
-\texttt{f} might become \texttt{::ns::f(int,char)}.
+\texttt{f} might become \texttt{::ns::f(int,char)} for example.
 
 Similarly, there is no treatment of operator overloading.  Again, any
 modelling of this feature would naturally occur in Phases~1 and~2,
 where calls to operators such as \texttt{+} would be resolved into
-particular calls to functions in particular namespaces and classes.
+calls to functions over particular types, in particular namespaces and
+classes.
 
 Two other large omissions in the realm of statics are \texttt{const},
 and protection statuses.  In general, the \texttt{const}-ness of an
@@ -3552,10 +4102,9 @@ classes as being \texttt{public}, \texttt{protected} or
 \texttt{private}), are similarly a static mechanism, and have almost
 no impact on the dynamics of a program.  (They make a difference to
 the behaviour of \texttt{dynamic_cast}, and to the dynamic
-type-matching that is done in exception handlers.)
-
-I feel that all of these omissions are justified given the commission
-to prefer treatment of dynamics rather than static issues.
+type-matching that is done in exception handlers.)  I feel that all of
+these omissions are justified given the commission to prefer treatment
+of dynamics rather than static issues.
 
 I believe the most significant dynamic omission is the failure to
 support class r-values.
@@ -3640,7 +4189,7 @@ proceed.  The source code fits into 60MB.  Issue the command
 \noindent (also used in the \texttt{login} command), and where
 \textit{\ttfamily date} is the desired date, best specified as an
 ISO~8601 string enclosed in double-quotes.  For example,
-\texttt{"2006-06-30 04:05Z"}.
+\texttt{"2007-05-30 00:00Z"}.
 
 Once a copy of the sources have been downloaded, further commands can
 be used to update this copy to correspond to different dates.  As long
