@@ -105,22 +105,22 @@ val malloc_def = Define`
 `
 
 (* ----------------------------------------------------------------------
-    pointers to member, including the null member pointer 
+    pointers to member, including the null member pointer
    ---------------------------------------------------------------------- *)
 
 val encode_offset_def = new_specification(
   "encode_offset_def",
-  ["encode_offset", "null_member_ptr"], 
-  prove(``?(f:CPP_ID -> IDComp -> byte list option) null. 
-              (!cnm1 sf1 cnm2 sf2 bl. 
-                  (f cnm1 sf1 = SOME bl) /\ (f cnm2 sf2 = SOME bl) ==> 
+  ["encode_offset", "null_member_ptr"],
+  prove(``?(f:CPP_ID -> IDComp -> byte list option) null.
+              (!cnm1 sf1 cnm2 sf2 bl.
+                  (f cnm1 sf1 = SOME bl) /\ (f cnm2 sf2 = SOME bl) ==>
                   (cnm1 = cnm2) /\ (sf1 = sf2)) /\
-              (!cnm sf bl. (f cnm sf = SOME bl) ==> 
+              (!cnm sf bl. (f cnm sf = SOME bl) ==>
                            (LENGTH bl = ptr_size Void) /\
                            ~(bl = null)) /\
               (LENGTH null = ptr_size Void)``,
-        Q.EXISTS_TAC `\x y. NONE` THEN SRW_TAC [][] THEN 
-        Q.EXISTS_TAC `GENLIST (\n. ARB) (ptr_size Void)` THEN 
+        Q.EXISTS_TAC `\x y. NONE` THEN SRW_TAC [][] THEN
+        Q.EXISTS_TAC `GENLIST (\n. ARB) (ptr_size Void)` THEN
         SRW_TAC [][rich_listTheory.LENGTH_GENLIST]));
 
 (* ----------------------------------------------------------------------
@@ -155,7 +155,7 @@ val nonclass_conversion_def = Define`
           (s,{}) |- c2 casts pth1 into pth2 /\
           (SOME v2 = ptr_encode s addr (Class c1) pth2))
          \/
-      (?ty0 base derived p fld. 
+      (?ty0 base derived p fld.
           (ty1 = MPtr base ty0) /\ (ty2 = MPtr derived ty0) /\
           (s,{}) |- path derived to base unique /\
           (derived, p) IN rsubobjs (s,{}) /\ (* ensures no virtual base *)
@@ -616,12 +616,13 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 (* RULE-ID: decl-vdecinit-lval2rval *)
 (!ty loc e0 se0 s0 s e se f.
-     lval2rval (s0,e0,se0) (s,e,se) /\ 
+     lval2rval (s0,e0,se0) (s,e,se) /\
      ~ref_type ty /\
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
      declmng mng (VDecInitA ty loc (f (EX e0 se0)), s0)
-                 ([VDecInitA ty loc (f (EX e se))], s))
+                 ([VDecInitA ty loc (f (EX e se))], s)
+)
 
    /\
 
@@ -656,7 +657,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
              (VDecInitA (Ref ty1)
                         (RefPlace aopt refnm)
                         (f (EX (LVal a ty2 p) se)), s0)
-             ([], s))
+             ([], s)
+)
 
    /\
 

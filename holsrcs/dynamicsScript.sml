@@ -71,8 +71,8 @@ val valid_lvcontext_def = Define`
         (?e1 opt. (f = Assign opt e1)) \/
         (?args. f = \e. FnApp e args) \/
         (?t. f = Cast t) \/
-        (?e1. f = OffsetDeref e1) \/ 
-        (?e2. f = \e1. OffsetDeref e1 e2) 
+        (?e1. f = OffsetDeref e1) \/
+        (?e2. f = \e1. OffsetDeref e1 e2)
 `
 
 val addr_nonloopy = prove(
@@ -407,7 +407,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!n bl se s.
      (REP_INT (Signed Int) n = SOME bl)
    ==>
-     mng (s, EX (Cnum n) se) 
+     mng (s, EX (Cnum n) se)
          (s, EX (ECompVal bl (Signed Int)) se)
 )
 
@@ -426,7 +426,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!t se s.
      T
    ==>
-     mng (s, EX (Cnullptr t) se) 
+     mng (s, EX (Cnullptr t) se)
          (s, EX (ECompVal (THE (ptr_encode s 0 t (SND (default_path t))))
                           (Ptr t))
                 se)
@@ -489,17 +489,17 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v t t' se s i.
      (INT_VAL t v = SOME i) /\ (REP_INT t' i = NONE)
    ==>
-     mng (s, EX (Cast t' (ECompVal v t)) se) 
+     mng (s, EX (Cast t' (ECompVal v t)) se)
          (s, EX UndefinedExpr se))
 
    /\
 
-(* RULE-ID: dyncast-derived-to-base-ref *)
+(* RULE-ID: dyncast-derived-base-ref *)
 (* assume that base is accessible (checked by compiler) *)
 (!a dty dcnm scnm s se p p'.
      (strip_const dty = Class dcnm) /\
      (s,{}) |- path (LAST p) to dcnm unique /\ (* static check *)
-     (s,{}) |- path (LAST p) to dcnm via p' 
+     (s,{}) |- path (LAST p) to dcnm via p'
    ==>
      mng (s, EX (DynCast (Ref dty) (LVal a (Class scnm) p)) se)
          (s, EX (LVal a (Class scnm) (p ^ p')) se)
@@ -507,7 +507,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: dyncast-derived-to-base-ptr *)
+(* RULE-ID: dyncast-derived-base-ptr *)
 (* assume that base is accessible (checked by compiler) *)
 (!dty dcnm srcval srcty s se p p' a newval src_dynty.
      (strip_const dty = Class dcnm) /\
@@ -523,7 +523,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: dyncast-base-to-other-ptr *)
+(* RULE-ID: dyncast-base-other-ptr *)
 (!s se dcnm dty destval srcval srcty a a' p p' src_dynty.
      (strip_const dty = Class dcnm) /\
      (ptr_encode s a src_dynty p = SOME srcval) /\
@@ -531,7 +531,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      polymorphic s (LAST p) /\ (* statically checked *)
      (s,{}) |- path (dest_class src_dynty) to dcnm via p' /\
      (SOME destval = ptr_encode s a' src_dynty p') /\
-     (a' = 
+     (a' =
       if (s,{}) |- path (dest_class src_dynty) to dcnm unique then a
         (* should also check accessible, though I think this could be
            done statically *)
@@ -543,14 +543,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: dyncast-base-to-other-ref *)
+(* RULE-ID: dyncast-base-other-ref *)
 (!s se dcnm dty scnm p p' a result src_dynty.
      (strip_const dty = Class dcnm) /\
      (src_dynty = Class scnm) /\
      polymorphic s (LAST p) /\
      (s,{}) |- path scnm to dcnm via p' /\
-     (result = 
-      if (s,{}) |- path scnm to dcnm unique then 
+     (result =
+      if (s,{}) |- path scnm to dcnm unique then
         (* should also check accessible, though I think this could
            be done statically *)
         LVal a src_dynty p'
@@ -585,11 +585,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: fcontext *)
 (!f fnid ty se s bytes.
-     fnid IN FDOM s.fnencode /\ 
+     fnid IN FDOM s.fnencode /\
      (s.fnencode ' fnid = bytes) /\
      valid_fvcontext f
    ==>
-     mng (s, EX (f (FVal fnid ty NONE)) se) 
+     mng (s, EX (f (FVal fnid ty NONE)) se)
          (s, EX (f (ECompVal bytes (Ptr ty))) se)
 )
 
@@ -606,7 +606,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: lvcontext *)
 (!f e0 se0 s0 s e se.
-     valid_lvcontext f /\ 
+     valid_lvcontext f /\
      lval2rval (s0,e0,se0) (s,e,se)
    ==>
      mng (s0, EX (f e0) se0) (s, EX (f e) se)
@@ -619,7 +619,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!e se s c.
      T
    ==>
-     mng (s, EX (EThrow (SOME e)) se) 
+     mng (s, EX (EThrow (SOME e)) se)
          (s, ST (Throw (SOME (EX e se))) c)
 )
 
@@ -646,7 +646,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: apply-se-fails *)
 (!e se0 s0.
      (!se s. ~(apply_se (se0, s0) (se, s))) /\
-     ~is_null_se se0 /\ 
+     ~is_null_se se0 /\
      ~(e = UndefinedExpr)
    ==>
      mng (s0, EX e se0) (s0, EX UndefinedExpr se0)
@@ -669,7 +669,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                                        v2 (strip_const type2)
                                        res restype)
    ==>
-     mng (s, EX (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se0) 
+     mng (s, EX (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se0)
          (s, EX UndefinedExpr se0)
 )
 
@@ -681,7 +681,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                        v2 (strip_const type2)
                        res restype
    ==>
-      mng (s, EX (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se) 
+      mng (s, EX (CApBinary f (ECompVal v1 type1) (ECompVal v2 type2)) se)
           (s, EX (ECompVal res restype) se)
 )
 
@@ -691,7 +691,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!s f ival t result rt se.
      unop_meaning f ival (strip_const t) result rt
    ==>
-     mng (s, EX (CApUnary f (ECompVal ival t)) se) 
+     mng (s, EX (CApUnary f (ECompVal ival t)) se)
          (s, EX (ECompVal result rt) se)
 )
 
@@ -701,7 +701,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!s0 se0 f ival t.
      (!res rt. ~(unop_meaning f ival (strip_const t) res rt))
    ==>
-     mng (s0, EX (CApUnary f (ECompVal ival t)) se0) 
+     mng (s0, EX (CApUnary f (ECompVal ival t)) se0)
          (s0, EX UndefinedExpr se0)
 )
 
@@ -711,7 +711,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v t se s sub2.
      is_zero t v
    ==>
-     mng (s, EX (CAnd (ECompVal v t) sub2) se) 
+     mng (s, EX (CAnd (ECompVal v t) sub2) se)
          (s, EX (ECompVal (signed_int 0) Bool) se)
 )
 
@@ -721,7 +721,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v t se s sub2.
      ~is_zero t v /\ is_null_se se
    ==>
-     mng (s, EX (CAnd (ECompVal v t) sub2) se) 
+     mng (s, EX (CAnd (ECompVal v t) sub2) se)
          (s, EX (CApUnary CNot (CApUnary CNot sub2)) base_se)
 )
 
@@ -731,7 +731,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v t sub2 se s.
      ~is_zero t v
    ==>
-     mng (s, EX (COr (ECompVal v t) sub2) se) 
+     mng (s, EX (COr (ECompVal v t) sub2) se)
          (s, EX (ECompVal (signed_int 1) Bool) se)
 )
 
@@ -741,7 +741,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v t sub2 se s.
      is_zero t v /\ is_null_se se
    ==>
-     mng (s, EX (COr (ECompVal v t) sub2) se) 
+     mng (s, EX (COr (ECompVal v t) sub2) se)
          (s, EX (CApUnary CNot (CApUnary CNot sub2)) base_se)
 )
 
@@ -772,7 +772,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ((t2 = Class sn) /\ (resexpr = e2) \/
        (!sn. ~(t2 = Class sn)) /\ (resexpr = Cast result_type e2))
    ==>
-     mng (s, EX (CCond (ECompVal v t) e2 e3) se) 
+     mng (s, EX (CCond (ECompVal v t) e2 e3) se)
          (s, EX resexpr base_se)
 )
 
@@ -781,11 +781,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: deref-objptr *)
 (* 5.3.1 p1 - pointer to an object type *)
 (!mval t t' se s addr pth.
-     object_type t /\ 
+     object_type t /\
      (SOME mval = ptr_encode s addr t' pth) /\
      (static_type (t',pth) = t)
    ==>
-     mng (s, EX (Deref (ECompVal mval (Ptr t))) se) 
+     mng (s, EX (Deref (ECompVal mval (Ptr t))) se)
          (s, EX (LVal addr t' pth) se)
 )
 
@@ -797,7 +797,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ((!addr t' p. ~(SOME mval = ptr_encode s addr t' p)) \/
       (?t' p. SOME mval = ptr_encode s 0 t' p))
    ==>
-     mng (s, EX (Deref (ECompVal mval (Ptr t))) se) 
+     mng (s, EX (Deref (ECompVal mval (Ptr t))) se)
          (s, EX UndefinedExpr se)
 )
 
@@ -808,7 +808,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v retty argtys se s.
      v IN FDOM s.fndecode
    ==>
-     mng (s, EX (Deref (ECompVal v (Ptr (Function retty argtys)))) se) 
+     mng (s, EX (Deref (ECompVal v (Ptr (Function retty argtys)))) se)
          (s, EX (FVal (s.fndecode ' v) (Function retty argtys) NONE) se)
 )
 
@@ -819,7 +819,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!a t pth se s result.
      (SOME result = ptr_encode s a t pth)
    ==>
-     mng (s, EX (Addr (LVal a t pth)) se) 
+     mng (s, EX (Addr (LVal a t pth)) se)
          (s, EX (ECompVal result (Ptr (static_type (t,pth)))) se)
 )
 
@@ -836,7 +836,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (lookup_addr s (mk_member cname fldname) = SOME (addr, pth)) /\
      (SOME ptrval = ptr_encode s addr ty (SND pth))
    ==>
-     mng (s, EX (MemAddr cname fldname) se) 
+     mng (s, EX (MemAddr cname fldname) se)
          (s, EX (ECompVal ptrval (Ptr ty)) se)
 )
 
@@ -844,10 +844,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: mem-addr-static-function *)
 (!s se cnm fldname rt args bod prot.
-     MEM (CFnDefn F rt fldname args bod, T, prot) (cinfo s cnm).fields 
+     MEM (CFnDefn F rt fldname args bod, T, prot) (cinfo s cnm).fields
    ==>
      mng (s, EX (MemAddr cnm fldname) se)
-         (s, EX (FVal (mk_member cnm fldname) 
+         (s, EX (FVal (mk_member cnm fldname)
                       (Function rt (MAP SND args))
                       NONE) se)
 )
@@ -858,8 +858,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!cnm fldname bl ty s se.
      (encode_offset cnm fldname = SOME bl) /\
      ((?prot. MEM (FldDecl fldname ty, F, prot) (cinfo s cnm).fields) \/
-      (?prot v rt args bod. 
-          MEM (CFnDefn v rt fldname args bod, F, prot) 
+      (?prot v rt args bod.
+          MEM (CFnDefn v rt fldname args bod, F, prot)
               (cinfo s cnm).fields /\
           (ty = Function rt (MAP SND args))))
    ==>
@@ -872,21 +872,21 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: offset-deref *)
 (!cnm1 cnm2 fldname s se a p bl fld fldty.
      (encode_offset cnm2 fldname = SOME bl) /\
-     (fld = if function_type fldty then 
+     (fld = if function_type fldty then
               let (r,a) = dest_function_type fldty
               in
-                if is_virtual s cnm2 fldname r a then 
+                if is_virtual s cnm2 fldname r a then
                   IDConstant F [] fldname
                 else
                   mk_member cnm2 fldname
             else
               mk_member cnm2 fldname)
    ==>
-     mng (s, EX (OffsetDeref 
-                     (LVal a (Class cnm1) p) 
-                     (ECompVal bl (MPtr cnm2 fldty))) 
+     mng (s, EX (OffsetDeref
+                     (LVal a (Class cnm1) p)
+                     (ECompVal bl (MPtr cnm2 fldty)))
                 se)
-         (s, EX (SVar (LVal a (Class cnm1) p) fld) 
+         (s, EX (SVar (LVal a (Class cnm1) p) fld)
                 se)
 )
 
@@ -911,7 +911,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!f n t p e se0 s0.
      T
    ==>
-     mng (s0, EX (Assign (SOME f) (LVal n t p) e) se0) 
+     mng (s0, EX (Assign (SOME f) (LVal n t p) e) se0)
          (s0, EX (Assign NONE
                          (LVal n t p)
                          (CApBinary f (LVal n t p) e)) se0)
@@ -972,7 +972,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      expr_type s0 LValue e0 (Class cnm) /\
      polymorphic s0 cnm
    ==>
-     mng (s0, EX (ExpTypeID e0) se0) 
+     mng (s0, EX (ExpTypeID e0) se0)
          (s, EX (ExpTypeID e) se)
 )
 
@@ -983,7 +983,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      polymorphic s cnm /\
      typeid_info s (Class cnm) type_value
    ==>
-     mng (s, EX (ExpTypeID (LVal a (Class cnm) p)) se) 
+     mng (s, EX (ExpTypeID (LVal a (Class cnm) p)) se)
          (s, EX type_value se)
 )
 
@@ -1050,7 +1050,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (class_part fldid = cnm2) /\
      (SOME offn = lookup_offset s mdp fldid)
    ==>
-     mng (s, EX (SVar (LVal a (Class cnm1) p) fldid) se) 
+     mng (s, EX (SVar (LVal a (Class cnm1) p) fldid) se)
          (s, EX (LVal (a + subobj_offset s (cnm1, p ^ p') + offn) ty
                       (SND (default_path ty))) se)
 )
@@ -1062,9 +1062,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (s,{}) |- path (LAST p) to (class_part fldid) via p' /\
      (s,{}) |- LAST p' has least (IDtl fldid) -: (ty0, T) via [LAST p'] /\
      (lookup_addr s fldid = SOME (a, cnm, statpath)) /\
-     (ty = if class_type ty0 then Class cnm else ty0) 
+     (ty = if class_type ty0 then Class cnm else ty0)
    ==>
-     mng (s, EX (SVar (LVal a (Class cnm1) p) fldid) se) 
+     mng (s, EX (SVar (LVal a (Class cnm1) p) fldid) se)
          (s, EX (LVal a ty statpath) se)
 )
 
@@ -1081,7 +1081,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (ftype = Function retty (MAP SND ps)) /\
      is_qualified fldid
    ==>
-     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se) 
+     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se)
          (s, EX (FVal fldid ftype (SOME (LVal a (Class cnm) (Cs ^ Ds)))) se)
 )
 
@@ -1095,7 +1095,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (ftype = Function retty (MAP SND ps)) /\
      is_qualified fldid
    ==>
-     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se) 
+     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se)
          (s, EX (FVal fldid ftype NONE) se)
 )
 
@@ -1122,7 +1122,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
          via Cs'
    ==>
      mng (s, EX (SVar (LVal a (Class C) Cs)
-                      (IDConstant F [] (IDName fld))) se) 
+                      (IDConstant F [] (IDName fld))) se)
          (s, EX (FVal (mk_member (LAST Cs') (IDName fld))
                       (Function dyn_retty (MAP SND args))
                       (SOME (LVal a (Class C) Cs')))
@@ -1139,7 +1139,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
             params /\
      is_null_se se
    ==>
-     mng (s, EX (FnApp (FVal fnid fty eopt) params) se) 
+     mng (s, EX (FnApp (FVal fnid fty eopt) params) se)
          (s, EX (FnApp_sqpt (FVal fnid fty eopt) params) base_se)
 )
 
@@ -1158,7 +1158,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                                  else s0.constmap DIFF range_set a sz|>) /\
      (SOME ptrval = ptr_encode s0 a result_ty [])
    ==>
-     mng (s0, EX (New ty NONE) se) 
+     mng (s0, EX (New ty NONE) se)
          (s, EX (ECompVal ptrval (Ptr result_ty)) se)
 )
 
@@ -1180,7 +1180,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                                  else s0.constmap DIFF range_set a sz|>) /\
      (SOME ptrval = ptr_encode s0 a ty [cnm])
    ==>
-     mng (s0, EX (New ty (SOME args)) se) 
+     mng (s0, EX (New ty (SOME args)) se)
          (s, EX (CommaSep (FnApp (ConstructorFVal T F a cnm) args)
                           (ECompVal ptrval (Ptr ty)))
                 se)
@@ -1197,7 +1197,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
             params /\
      is_null_se se
    ==>
-     mng (s, EX (FnApp (ConstructorFVal mdp subp a cnm) params) se) 
+     mng (s, EX (FnApp (ConstructorFVal mdp subp a cnm) params) se)
          (s, EX (FnApp_sqpt (ConstructorFVal mdp subp a cnm) params) base_se)
 )
 
@@ -1209,7 +1209,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v retty argtys args se s.
      v IN FDOM s.fndecode
    ==>
-     mng (s, EX (FnApp (ECompVal v (Ptr (Function retty argtys))) args) se) 
+     mng (s, EX (FnApp (ECompVal v (Ptr (Function retty argtys))) args) se)
          (s, EX (FnApp (FVal (s.fndecode ' v)
                              (Function retty argtys)
                              NONE)
@@ -1228,8 +1228,13 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                                            (CopyInit (EX a base_se)))
                    (ZIP (params, args)))
    ==>
-     mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se) 
-         (s0, ST (Block F pdecls [body]) (return_cont se rtype))
+     mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se)
+         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
+                     thisvalue := NONE;
+                     blockclasses updated_by stackenv_newscope ;
+                     exprclasses updated_by stackenv_newscope ;
+                     env := empty_env |>,
+          ST (Block T pdecls [body]) (return_cont se rtype))
 )
 
    /\
@@ -1254,7 +1259,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
          (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
                      thisvalue := SOME (ECompVal this (Ptr (Class cname)));
                      blockclasses updated_by stackenv_newscope ;
-                     exprclasses updated_by stackenv_newscope
+                     exprclasses updated_by stackenv_newscope ;
+                     env := empty_env
                   |>,
           ST (Block T pdecls [body]) (return_cont se0 rtype))
 )
@@ -1284,7 +1290,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
          (s0 with <| thisvalue := SOME (ECompVal this (Ptr (Class cnm))) ;
                      stack updated_by (CONS (s0.env, s0.thisvalue)) ;
                      blockclasses updated_by stackenv_newscope ;
-                     exprclasses updated_by stackenv_newscope |>,
+                     exprclasses updated_by stackenv_newscope ;
+                     env := empty_env |>,
           ST newstmt (RVC (\e. ConstructedVal subp a cnm) se0))
 )
 
@@ -1300,7 +1307,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                      f
                      (LENGTH pfx)
    ==>
-     mng (s0, EX (FnApp f (pfx ++ (e0 :: sfx))) se0) 
+     mng (s0, EX (FnApp f (pfx ++ (e0 :: sfx))) se0)
          (s, EX (FnApp f (pfx ++ (e :: sfx))) se)
 )
 
@@ -1319,7 +1326,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!e0 se0 s0 e se ret_se s c.
      lval2rval (s0,e,se0) (s,e,se)
    ==>
-     mng (s0, ST (Ret (EX e0 se0)) (RVC c ret_se)) 
+     mng (s0, ST (Ret (EX e0 se0)) (RVC c ret_se))
          (s, ST (Ret (EX e se)) (RVC c ret_se))
 )
 
@@ -1333,7 +1340,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v t s se0 se c.
      is_null_se se0
    ==>
-     mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se)) 
+     mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se))
          (s, EX (c (ECompVal v t)) se)
 )
 
@@ -1343,7 +1350,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!a t p se0 se c s.
      is_null_se se0
    ==>
-     mng (s, ST (Ret (EX (LVal a t p) se0)) (LVC c se)) 
+     mng (s, ST (Ret (EX (LVal a t p) se0)) (LVC c se))
          (s, EX (c (LVal a t p)) se)
 )
 
@@ -1362,7 +1369,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!s c.
      T
    ==>
-     mng (s, ST EmptyRet c) 
+     mng (s, ST EmptyRet c)
          (s, ST (Ret (EX (ECompVal [] Void) base_se)) c)
 )
 
@@ -1372,7 +1379,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!s c se.
      T
    ==>
-     mng (s, ST EmptyStmt (RVC c se)) 
+     mng (s, ST EmptyStmt (RVC c se))
          (s, EX (c (ECompVal [] Void)) se)
 )
 
@@ -1422,8 +1429,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!s0 e es c.
      (s0.current_exns = e::es)
    ==>
-     mng (s0, ST (Throw NONE) c) 
-         (s0 with current_exns := es, 
+     mng (s0, ST (Throw NONE) c)
+         (s0 with current_exns := es,
           ST (Throw (SOME (EX e base_se))) c)
 )
 
@@ -1433,7 +1440,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!s0 ct.
      (s0.current_exns = [])
    ==>
-     mng (s0, ST (Throw NONE) ct) 
+     mng (s0, ST (Throw NONE) ct)
          (s0, ST (Standalone (EX ^callterminate base_se)) ct)
 )
 
@@ -1443,7 +1450,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!s0 c e es.
      (s0.current_exns = e::es)
    ==>
-     mng (s0, ST ClearExn c) 
+     mng (s0, ST ClearExn c)
          (s0 with current_exns := es, ST EmptyStmt c)
 )
 
@@ -1476,7 +1483,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!exn e hnd_body rest c s0.
      (exn = SOME (EX e base_se))
    ==>
-     mng (s0, ST (Catch (Throw exn) ((NONE, hnd_body) :: rest)) c) 
+     mng (s0, ST (Catch (Throw exn) ((NONE, hnd_body) :: rest)) c)
          (s0 with current_exns updated_by (CONS e),
           ST (Block F [] [hnd_body; ClearExn]) c)
 )
@@ -1489,10 +1496,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!exn e hnd_body rest c s0 pty pnameopt pname.
      (exn = SOME (EX e base_se)) /\
      exception_parameter_match s0 pty (value_type e) /\
-     (pname = case pnameopt of SOME s -> Base s 
+     (pname = case pnameopt of SOME s -> Base s
                             || NONE -> (Base " no name "))
    ==>
-     mng (s0, ST (Catch (Throw exn) 
+     mng (s0, ST (Catch (Throw exn)
                         ((SOME(pnameopt, pty), hnd_body) :: rest)) c)
          (s0 with current_exns updated_by (CONS e),
           ST (Block F [VDecInit pty pname
@@ -1507,7 +1514,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (exn = SOME (EX e base_se)) /\
      ~exception_parameter_match s0 pty (value_type e)
    ==>
-     mng (s0, ST (Catch (Throw exn) 
+     mng (s0, ST (Catch (Throw exn)
                         ((SOME(pnameopt, pty), hnd_body) :: rest)) c)
          (s0, ST (Catch (Throw exn) rest) c)
 )
@@ -1517,35 +1524,37 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* final cases for Traps.  *)
 (* RULE-ID: trap-break-catches *)
-(!c s0.
+(!c s.
      T
    ==>
-     mng (s0, ST (Trap BreakTrap Break) c) (s0, ST EmptyStmt c)
+     mng (s, ST (Trap BreakTrap Break) c) (s, ST EmptyStmt c)
 )
 
    /\
 
 (* RULE-ID: trap-continue-catches *)
-(!c s0.
-     mng (s0, ST (Trap ContTrap Cont) c) (s0, ST EmptyStmt c)
+(!c s.
+     T
+   ==>
+     mng (s, ST (Trap ContTrap Cont) c) (s, ST EmptyStmt c)
 )
 
    /\
 
 (* RULE-ID: trap-continue-passes-break *)
-(!c s0.
+(!c s.
      T
    ==>
-     mng (s0, ST (Trap ContTrap Break) c) (s0, ST Break c)
+     mng (s, ST (Trap ContTrap Break) c) (s, ST Break c)
 )
 
    /\
 
 (* RULE-ID: trap-break-passes-continue *)
-(!c s0.
+(!c s.
      T
    ==>
-     mng (s0, ST (Trap BreakTrap Cont) c) (s0, ST Cont c)
+     mng (s, ST (Trap BreakTrap Cont) c) (s, ST Cont c)
 )
 
    /\
@@ -1560,11 +1569,10 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: trap-ret-passes *)
-(!c tt v t se s0.
-     is_null_se se
+(!c tt e s.
+     final_value e
    ==>
-     mng (s0, ST (Trap tt (Ret (EX (ECompVal v t) se))) c) 
-         (s0, ST (Ret (EX (ECompVal v t) se)) c)
+     mng (s, ST (Trap tt (Ret e)) c) (s, ST (Ret e) c)
 )
 
    /\
@@ -1593,7 +1601,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      final_value e
    ==>
      mng (s, ST (Standalone e) c) (s, ST EmptyStmt c)
-) 
+)
 
    /\
 
@@ -1619,7 +1627,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v t se thenstmt elsestmt c s.
      scalar_type t /\ is_null_se se /\ ~is_zero t v
    ==>
-     mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c) 
+     mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c)
          (s, ST thenstmt c)
 )
 
@@ -1629,7 +1637,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!v t se thenstmt elsestmt c s.
      scalar_type t /\ is_null_se se /\ is_zero t v
    ==>
-     mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c) 
+     mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c)
          (s, ST elsestmt c)
 )
 
@@ -1639,7 +1647,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!guard thenstmt elsestmt c s.
      is_exnval guard
    ==>
-     mng (s, ST (CIf guard thenstmt elsestmt) c) 
+     mng (s, ST (CIf guard thenstmt elsestmt) c)
          (s, mk_exn guard c)
 )
 
@@ -1651,7 +1659,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!guard bdy c s.
      T
    ==>
-     mng (s, ST (CLoop guard bdy) c) 
+     mng (s, ST (CLoop guard bdy) c)
          (s, ST (CIf guard (Block F [] [bdy; CLoop guard bdy])
                            EmptyStmt) c)
 )
@@ -1662,7 +1670,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!vds sts s c.
      T
    ==>
-     mng (s, ST (Block F vds sts) c) 
+     mng (s, ST (Block F vds sts) c)
          (s with <| stack updated_by (CONS (s.env, s.thisvalue));
                     blockclasses updated_by stackenv_newscope ;
                     exprclasses updated_by stackenv_newscope |>,
@@ -1678,7 +1686,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      final_stmt st c /\
      ((destcalls, s) = realise_destructor_calls (exception_stmt st) s0)
    ==>
-     mng (s0, ST (Block T [] [st]) c) 
+     mng (s0, ST (Block T [] [st]) c)
          (s, ST (Block T [] (destcalls ++ [st])) c)
 )
 
@@ -1686,27 +1694,30 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: destructor-call *)
 (!a p se0 s0 this cnm body.
-     (cnm = LAST p) /\ is_null_se se0 /\
+     (cnm = LAST p) /\
+     is_null_se se0 /\
      (SOME this = ptr_encode s0 a (Class cnm) [cnm]) /\
      find_destructor_info s0 cnm body
    ==>
      mng (s0, EX (DestructorCall a cnm) se0)
          (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
-                     thisvalue := SOME (ECompVal this (Ptr (Class cnm)))
-                  |>,
-          ST body (return_cont se0 Void))
+                     env := empty_env;
+                     thisvalue := SOME (ECompVal this (Ptr (Class cnm)));
+                     blockclasses updated_by stackenv_newscope ;
+                     exprclasses updated_by stackenv_newscope |>,
+          ST (Block T [] [body]) (return_cont se0 Void))
 )
 
    /\
 
 (* RULE-ID: block-exit *)
 (!st s c env stk' this bcs ecs.
-     (s.stack = (env,this) :: stk') /\ 
+     (s.stack = (env,this) :: stk') /\
      final_stmt st c /\
      (s.blockclasses = []::bcs) /\
      (s.exprclasses = []::ecs)
    ==>
-     mng (s, ST (Block T [] [st]) c) 
+     mng (s, ST (Block T [] [st]) c)
          (s with <| stack := stk';
                     env := env;
                     thisvalue := this;
@@ -1721,7 +1732,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!sts s c.
      ~(sts = [])
    ==>
-     mng (s, ST (Block T [] (EmptyStmt::sts)) c) 
+     mng (s, ST (Block T [] (EmptyStmt::sts)) c)
          (s, ST (Block T [] sts) c)
 )
 
@@ -1731,7 +1742,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!sts exstmt s c.
      final_stmt exstmt c /\ ~(exstmt = EmptyStmt) /\ ~(sts = [])
    ==>
-     mng (s, ST (Block T [] (exstmt::sts)) c) 
+     mng (s, ST (Block T [] (exstmt::sts)) c)
          (s, ST (Block T [] [exstmt]) c)
 )
 
@@ -1741,7 +1752,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!st st' sts c s0 s.
      mng (s0, ST st c) (s, ST st' c)
    ==>
-     mng (s0, ST (Block T [] (st :: sts)) c) 
+     mng (s0, ST (Block T [] (st :: sts)) c)
          (s, ST (Block T [] (st' :: sts)) c)
 )
 
@@ -1751,7 +1762,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!s0 s d0 ds vds sts c.
      declmng mng (d0, s0) (ds, s)
    ==>
-     mng (s0, ST (Block T (d0 :: vds) sts) c) 
+     mng (s0, ST (Block T (d0 :: vds) sts) c)
          (s, ST (Block T (ds ++ vds) sts) c)
 )
 
@@ -1764,7 +1775,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      is_exnval e /\
      (e = ST (Throw (SOME ex)) c')
    ==>
-     mng (s0, ST (Block T (d0 :: vds) sts) c) 
+     mng (s0, ST (Block T (d0 :: vds) sts) c)
          (s, ST (Block T [] [Throw (SOME ex)]) c)
 )
 
@@ -1777,7 +1788,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!name vds sts c s0.
      T
    ==>
-     mng (s0, ST (Block T (VStrDec name NONE :: vds) sts) c) 
+     mng (s0, ST (Block T (VStrDec name NONE :: vds) sts) c)
          (s0, ST (Block T vds sts) c)
 )
 
@@ -1791,7 +1802,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      ~is_abs_id name /\
      (SOME env' = update_class name (info,userdefs) s.env)
    ==>
-     mng (s0, ST (Block T (VStrDec name (SOME info0) :: vds) sts) c) 
+     mng (s0, ST (Block T (VStrDec name (SOME info0) :: vds) sts) c)
          (s with env := env', ST (Block T (lclasses ++ vds) sts) c))
 `
 val _ = overload_on ("meaning", ``mng``)
