@@ -523,7 +523,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: dyncast-poly-base-to-other-ptr *)
+(* RULE-ID: dyncast-base-to-other-ptr *)
 (!s se dcnm dty destval srcval srcty a a' p p' src_dynty.
      (strip_const dty = Class dcnm) /\
      (ptr_encode s a src_dynty p = SOME srcval) /\
@@ -543,7 +543,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: dyncast-poly-base-to-other-ref *)
+(* RULE-ID: dyncast-base-to-other-ref *)
 (!s se dcnm dty scnm p p' a result src_dynty.
      (strip_const dty = Class dcnm) /\
      (src_dynty = Class scnm) /\
@@ -595,7 +595,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: econtext-propagates-undefinedness *)
+(* RULE-ID: econtext-undefinedness *)
 (!f se s.
      valid_econtext f
    ==>
@@ -1021,7 +1021,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: non-static-data-member-field-selection *)
+(* RULE-ID: nstatic-data-field-select *)
 (* Note how the path p is used:
      - to figure out the static type of the l-value (LAST p)
      - to derive the path from the most-derived class to the sub-object
@@ -1070,7 +1070,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: nonstatic-function-member-select *)
+(* RULE-ID: nstatic-fn-member-select *)
 (* this is very similar to the above, because this is a non-virtual function
    that is being looked up.  We can tell it's not virtual because the
    identifier is structured (making the call to class_part well-formed) *)
@@ -1087,7 +1087,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: static-function-member-select *)
+(* RULE-ID: static-fn-member-select *)
 (!se s a fldid ftype Cs Ds cnm retty ps body.
      (s,{}) |- path (LAST Cs) to class_part fldid via Ds /\
      (s,{}) |- LAST Ds has least method (IDtl fldid) -: (retty,T,ps,body)
@@ -1101,7 +1101,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: virtual-function-member-select *)
+(* RULE-ID: virtual-fn-member-select *)
 (* looking up a function member *)
 (* This is the equivalent of most of Wasserab's rule BS10.  *)
 (* As the FVal has its last component with path = Cs', the method call will
@@ -1290,7 +1290,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: function-application-lval2rval *)
+(* RULE-ID: fnapp-lval2rval *)
 (!f pfx e0 e sfx se0 se s0 s.
      lval2rval (s0,e0,se0) (s,e,se) /\
      fn_expects_rval s0
@@ -1580,7 +1580,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: standalone-evaluates *)
 (!exte c s1 s2 exte'.
-     mng (s1, RVR exte) (s2, RVR exte')
+     mng (s1, exte) (s2, exte')
    ==>
      mng (s1, ST (Standalone exte) c) (s2, ST (Standalone exte') c)
 )
@@ -1588,11 +1588,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: standalone-finishes *)
-(!v t se c s.
-     is_null_se se
+(!e se c s.
+     is_null_se se /\
+     final_value e
    ==>
-     mng (s, ST (Standalone (EX (ECompVal v t) se)) c) 
-         (s, ST EmptyStmt c)) /\
+     mng (s, ST (Standalone e) c) (s, ST EmptyStmt c)
+) 
+
+   /\
 
 (* RULE-ID: standalone-exception *)
 (!e c s.

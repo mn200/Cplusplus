@@ -184,8 +184,7 @@ val _ = export_rewrites ["CStmt_size_def"]
 val final_value_def = Define`
   (final_value (EX e se) =
       is_null_se se /\
-      ((?v t. (e = ECompVal v t)) \/
-       (?a t p. (e = LVal a t p) /\ class_type (strip_const t)))) /\
+      ((?v t. e = ECompVal v t) \/ (?a t p. e = LVal a t p))) /\
   (final_value (ST s c) = F)
 `;
 
