@@ -1229,7 +1229,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                    (ZIP (params, args)))
    ==>
      mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se)
-         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
+         (s0 with <| stack updated_by 
+                        (CONS (s0.env, s0.thisvalue, s0.allocmap));
                      thisvalue := NONE;
                      blockclasses updated_by stackenv_newscope ;
                      exprclasses updated_by stackenv_newscope ;
@@ -1256,7 +1257,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      mng (s0, EX (FnApp_sqpt (FVal fnid ftype (SOME (LVal a (Class cname) p)))
                              args) se0)
-         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
+         (s0 with <| stack updated_by 
+                       (CONS (s0.env, s0.thisvalue, s0.allocmap));
                      thisvalue := SOME (ECompVal this (Ptr (Class cname)));
                      blockclasses updated_by stackenv_newscope ;
                      exprclasses updated_by stackenv_newscope ;
@@ -1288,7 +1290,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      mng (s0, EX (FnApp_sqpt (ConstructorFVal mdp subp a cnm) args) se0)
          (s0 with <| thisvalue := SOME (ECompVal this (Ptr (Class cnm))) ;
-                     stack updated_by (CONS (s0.env, s0.thisvalue)) ;
+                     stack updated_by 
+                       (CONS (s0.env, s0.thisvalue, s0.allocmap)) ;
                      blockclasses updated_by stackenv_newscope ;
                      exprclasses updated_by stackenv_newscope ;
                      env := empty_env |>,
@@ -1671,7 +1674,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      mng (s, ST (Block F vds sts) c)
-         (s with <| stack updated_by (CONS (s.env, s.thisvalue));
+         (s with <| stack updated_by 
+                      (CONS (s.env, s.thisvalue, s.allocmap));
                     blockclasses updated_by stackenv_newscope ;
                     exprclasses updated_by stackenv_newscope |>,
           ST (Block T vds sts) c)
@@ -1700,7 +1704,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      find_destructor_info s0 cnm body
    ==>
      mng (s0, EX (DestructorCall a cnm) se0)
-         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
+         (s0 with <| stack updated_by 
+                        (CONS (s0.env, s0.thisvalue,s0.allocmap));
                      env := empty_env;
                      thisvalue := SOME (ECompVal this (Ptr (Class cnm)));
                      blockclasses updated_by stackenv_newscope ;
@@ -1711,14 +1716,15 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: block-exit *)
-(!st s c env stk' this bcs ecs.
-     (s.stack = (env,this) :: stk') /\
+(!st s c env stk' this amap bcs ecs.
+     (s.stack = (env,this,amap) :: stk') /\
      final_stmt st c /\
      (s.blockclasses = []::bcs) /\
      (s.exprclasses = []::ecs)
    ==>
      mng (s, ST (Block T [] [st]) c)
          (s with <| stack := stk';
+                    allocmap := amap;
                     env := env;
                     thisvalue := this;
                     blockclasses := bcs;

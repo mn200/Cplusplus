@@ -478,7 +478,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      object_type ty /\
      ~class_type (strip_array ty)
    ==>
-     declmng mng (VDec ty name, s0) ([], s))
+     declmng mng (VDec ty name, s0) ([], s)
+)
 
    /\
 
@@ -535,8 +536,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      (SOME (a,pth) = lookup_addr s1 name)
    ==>
      declmng mng
-             (VDecInit ty name (DirectInit0 args),
-              s0)
+             (VDecInit ty name (DirectInit0 args), s0)
              ([VDecInitA ty
                          (ObjPlace a)
                          (DirectInit
@@ -580,7 +580,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (* A direct initialisation of a non-class object is the same as a
    copy-initialisation *)
 (!s0 ty name arg s a pth loc.
-     (!cnm. ~(ty = Class cnm)) /\
+     ~class_type ty /\
      vdeclare s0 ty name s /\
      (SOME (a,pth) = lookup_addr s name) /\
      (loc = if ref_type ty then RefPlace NONE name else ObjPlace a)

@@ -68,9 +68,9 @@ val _ = Hol_datatype `
      locmap   : addr -> byte ;
                 (* memory.  Domain might also be ( void * ) words *)
 
-     stack    : (environment #CExpr option) list ;
-                (* stack of environment and this info.  Updated
-                   as blocks are entered and left *)
+     stack    : (environment # CExpr option # (addr->bool)) list ;
+                (* stack of environment, this and allocation info.  
+                   Updated as blocks are entered and left *)
 
      thisvalue: CExpr option ;
                 (* the value (i.e., this will always be an ECompVal
