@@ -576,7 +576,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: decl-vdecinit-start-evaluate-direct-nonclass *)
+(* RULE-ID: decl-init-start-eval-dnonclass *)
 (* A direct initialisation of a non-class object is the same as a
    copy-initialisation *)
 (!s0 ty name arg s a pth loc.
@@ -591,7 +591,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: decl-vdecinit-start-evaluate-copy *)
+(* RULE-ID: decl-init-start-eval-copy *)
 (!s0 ty name arg s a pth loc.
      vdeclare s0 ty name s /\
      (SOME (a,pth) = lookup_addr s name) /\
@@ -599,7 +599,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
              (VDecInit ty name (CopyInit arg), s0)
-             ([VDecInitA ty loc (CopyInit arg)], s))
+             ([VDecInitA ty loc (CopyInit arg)], s)
+)
 
    /\
 
@@ -610,7 +611,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      ((f = CopyInit) \/ (f = DirectInit))
    ==>
      declmng mng (VDecInitA ty loc (f exte), s0)
-                 ([VDecInitA ty loc (f exte')], s))
+                 ([VDecInitA ty loc (f exte')], s)
+)
 
    /\
 
@@ -631,7 +633,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (!s0 s v ty dty v' se a rs f.
      nonclass_conversion s0 (v,ty) (v',dty) /\
      is_null_se se /\
-     (!cnm. ~(dty = Class cnm)) /\
+     ~class_type dty /\
      (s = val2mem (s0 with initmap updated_by (UNION) rs) a v') /\
      (rs = range_set a (LENGTH v')) /\
      ((f = CopyInit) \/ (f = DirectInit))
@@ -639,7 +641,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      declmng mng (VDecInitA dty
                             (ObjPlace a)
                             (f (EX (ECompVal v ty) se)), s0)
-                 ([], s))
+                 ([], s)
+)
 
    /\
 

@@ -1026,9 +1026,9 @@ causes undefined behaviour.)
      locmap   : addr -> byte ;
                 (* memory.  Domain might also be ( void * ) words *)
 
-     stack    : (environment # CExpr option) list ;
-                (* stack of environment and this info.  Updated
-                   as blocks are entered and left *)
+     stack    : (environment # CExpr option # (addr->bool)) list ;
+                (* stack of environment, this and allocation info.  
+                   Updated as blocks are entered and left *)
 
      thisvalue: CExpr option ;
                 (* the value (i.e., this will always be an ECompVal
@@ -1773,10 +1773,11 @@ occur if statement evaluation is big-step because the hypothesis in
 the expression rule for a function call would be a statement rule that
 required the complete evaluation of the function body.)
 
-\index{FnApp@\texttt{FnApp}}
-At the base level, a function call turns an \texttt{EX} piece of
-syntax into an extended expression tagged with \texttt{ST}.
-The following rule governs (normal) function calls:
+\index{FnApp@\texttt{FnApp}} At the base level, a function call turns
+an \texttt{EX} piece of syntax into an extended expression tagged with
+\texttt{ST}.  The rule \ruleid{global-function-call} of
+Figure~\ref{fig:global-function-call} governs (normal) function calls:
+\begin{figure}[hbtp]
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!global-function-call@\texttt{global-function-call}}%
@@ -1791,7 +1792,9 @@ The following rule governs (normal) function calls:
                    (ZIP (params, args)))
    \(\Rightarrow\)
      mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se)
-         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue));
+         (s0 with <| stack updated_by 
+                       (CONS (s0.env, s0.thisvalue, 
+                              s0.allocmap));
                      thisvalue := NONE;
                      blockclasses updated_by stackenv_newscope ;
                      exprclasses updated_by stackenv_newscope ;
@@ -1800,6 +1803,9 @@ The following rule governs (normal) function calls:
 \end{alltt}
 \end{minipage}
 \end{center}
+\caption{Making a call to a global (\ie, non member) function}
+\label{fig:global-function-call}
+\end{figure}
 
 \index{return_cont@\texttt{return_cont}}%
 (For the details behind \texttt{return_cont}, and the \texttt{RVC}
@@ -1834,6 +1840,7 @@ function call is about to return, one of the rules is
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!return-rvalue@\texttt{return-rvalue}}
+\label{rule:return-rvalue}
 \begin{alltt}
 (* RULE-ID: return-rvalue *)
      is_null_se se0
@@ -2082,7 +2089,7 @@ a block is
    \(\Rightarrow\)
      mng (s, ST (Block F vds sts) c)
          (s with <| stack updated_by
-                      (CONS (s.env, s.thisvalue));
+                      (CONS (s.env, s.thisvalue, s.allocmap));
                     blockclasses updated_by
                       stackenv_newscope ;
                     exprclasses updated_by
@@ -2148,7 +2155,7 @@ statements can proceed.  The congruence rule for a block is
 \end{center}
 Note the form of \texttt{Block} required: it must have no further
 variable declarations to evaluate, and must have been entered (has its
-boolean flag set to~\texttt{T}.)
+boolean flag set to~\texttt{T}).
 
 \index{EmptyStmt@\texttt{EmptyStmt}}
 If the first statement inside a \texttt{Block} is, or becomes, an
@@ -2162,7 +2169,6 @@ evaluate, then the \texttt{EmptyStmt} can be discarded:
    \(\Rightarrow\)
      mng (s, ST (Block T [] (EmptyStmt::sts)) c)
          (s, ST (Block T [] sts) c)
-
 \end{alltt}
 \end{minipage}
 \end{center}
@@ -2182,12 +2188,239 @@ following statements to disappear:
      mng (s, ST (Block T [] (exstmt::sts)) c)
          (s, ST (Block T [] [exstmt]) c)
 \end{alltt}
-  \end{minipage}
+\end{minipage}
 \end{center}
 
+Then, when a final statement is the only thing remaining in a block,
+the block itself can exit, clearing its local stack frame in the
+environment, and propagating the final statement upwards.  This gives
+us \ruleid{block-exit}, in Figure~\ref{fig:block-exit}.
+\begin{figure}
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!block-exit@\texttt{block-exit}}
+\begin{alltt}
+(* RULE-ID: block-exit *)
+     (s.stack = (env,this,amap) :: stk') \(\land\)
+     final_stmt st c \(\land\)
+     (s.blockclasses = []::bcs) \(\land\)
+     (s.exprclasses = []::ecs)
+   \(\Rightarrow\)
+     mng (s, ST (Block T [] [st]) c)
+         (s with <| stack := stk';
+                    allocmap := amap;
+                    env := env;
+                    thisvalue := this;
+                    blockclasses := bcs;
+                    exprclasses := ecs |>,
+          ST st c)
+\end{alltt}
+\end{minipage}
+\end{center}
+\caption{Exiting a block}
+\label{fig:block-exit}
+\end{figure}
+\index{blockclasses (state field)@\texttt{blockclasses} (\texttt{state} field)}%
+By requiring that the \texttt{blockclasses} and \texttt{exprclasses}
+components of the state be empty at their heads, we require that all
+local objects have had their destructors called (for more on this, see
+Section~\ref{sec:object-lifetimes}).  If this condition is met, the
+various stacks can be popped, and the final statement lifted up a
+level.  In this way, a return statement deep within multiple blocks
+can eventually make its way to the top level, where its value can be
+passed to the continuation through rules \ruleid{return-rvalue}
+(page~\pageref{rule:return-rvalue}) or \ruleid{return-lvalue}
+(page~\pageref{rule:return-lvalue}). 
+
+\index{ST@\texttt{ST}}
+\index{EX@\texttt{EX}}
+Such a return can not happen prematurely: the two \texttt{return}
+rules both have \texttt{EX} tags in their ``result'' arguments, and
+the rule \ruleid{block-stmt-evaluate}, the only rule calling for
+statement evaluation recursively, requires its recursive call to be an
+\texttt{ST}-to-\texttt{ST} evaluation.
 
 \subsubsection{Simple Declarations}
 \label{sec:simple-declarations}
+
+This section discusses simple declaration forms, which are treated in
+a way that is similar to the treatment in my thesis.  Declarations
+involving class types are typically not simple, and are discussed in
+Sections~\ref{sec:basic-oo} (basic object orientiation)
+and~\ref{sec:object-lifetimes} (object lifetimes). There are two
+simple forms of declaration: a bare declaration of a variable, such as
+\begin{verbatim}
+   int x;
+\end{verbatim}
+or a declaration coupled with an initialisation
+\begin{verbatim}
+   int x = 3;
+\end{verbatim}
+\index{VDec@\texttt{VDec}} \index{VDecInit@\texttt{VDecInit}} These
+two different forms are represented with the constructors
+\texttt{VDec} and \texttt{VDecInit} respectively, both constructing
+values in the \texttt{var_decl} type.
+
+\index{declmng relation@\texttt{declmng} relation}%
+As already mentioned, the \cpp{} mechanisation uses an auxiliary
+relation \texttt{declmng} to do most variable declaration work.  This
+relation is defined in \HOLfile{declaration_dynamics}.  Its simplest
+rule is 
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (declaration dynamics)!decl-vdec-nonclass@\texttt{decl-vdec-nonclass}}%
+\begin{alltt}
+(* RULE-ID: decl-vdec-nonclass *)
+     vdeclare s0 ty name s \(\land\)
+     object_type ty \(\land\)
+     \(\neg\)class_type (strip_array ty)
+   \(\Rightarrow\)
+     declmng mng (VDec ty name, s0) ([], s)
+\end{alltt}
+  \end{minipage}
+\end{center}
+\index{vdeclare@\texttt{vdeclare}}
+This rule states that if one is declaring a variable of non-class type
+(and which is not an array of a class type), then it suffices to
+allocate space for it through the \texttt{vdeclare} relation, storing
+its address in the appropriate part of the state's environment, and
+also recording the type.  The empty list in the second argument to
+\texttt{declmng} signals that no further work needs to be done for
+this declaration.
+
+When a variable is to be initialised, this can occur as a direct
+initialisation:
+\begin{verbatim}
+   int x(3);
+\end{verbatim}
+or as a copy-initialiation:
+\begin{verbatim}
+   inx x = 3;
+\end{verbatim}
+\index{DirectInit0@\texttt{DirectInit0}}%
+For non-classes this syntactic difference makes no difference in
+behaviour.  The first rule is for the direct initialisation
+(\texttt{DirectInit0} form), where the transition is immediately to a
+copy-initialisation:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (declaration dynamics)!decl-init-start-eval-dnonclass@\texttt{decl-init-start-eval-dnonclass}}
+\begin{alltt}
+(* RULE-ID: decl-vdecinit-start-evaluate-direct-nonclass *)
+     ~class_type ty \(\land\)
+     vdeclare s0 ty name s \(\land\)
+     (SOME (a,pth) = lookup_addr s name) \(\land\)
+     (loc = if ref_type ty then RefPlace NONE name 
+            else ObjPlace a)
+   \(\Rightarrow\)
+     declmng mng
+             (VDecInit ty name (DirectInit0 [arg]), s0)
+             ([VDecInitA ty loc (CopyInit (EX arg base_se))], s)
+\end{alltt}
+\end{minipage}
+\end{center}
+\index{VDecInitA@\texttt{VDecInitA}}%
+\index{vdeclare@\texttt{vdeclare}}%
+The transition is to the \texttt{VDecInitA} form, which records where
+the initialisation is to be performed.  The \texttt{vdeclare} relation
+is used, as before, to allocate space for the new object, and
+subsequent steps in the evaluation of the declaration will fill this
+space in.  (In the case of a reference, \texttt{vdeclare} will not
+allocate any space, but will record a type for the new name.)
+
+\index{CopyInit@\texttt{CopyInit}}%
+The rule for the \texttt{CopyInit} form is similar: there is a
+transition to the \texttt{VDecInitA} form and a call to
+\texttt{vdeclare}. (As it happens this rule can be applied for the
+declaration and initialisation of class objects too.)
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (declaration dynamics)!decl-init-start-eval-copy@\texttt{decl-init-start-eval-copy}}%
+\begin{alltt}
+(* RULE-ID: decl-init-start-eval-copy *)
+     vdeclare s0 ty name s \(\land\)
+     (SOME (a,pth) = lookup_addr s name) \(\land\)
+     (loc = if ref_type ty then RefPlace NONE name 
+            else ObjPlace a)
+   \(\Rightarrow\)
+     declmng mng
+             (VDecInit ty name (CopyInit arg), s0)
+             ([VDecInitA ty loc (CopyInit arg)], s)
+\end{alltt}
+\end{minipage}
+\end{center}
+
+Once a \texttt{VDecInitA} form has been achieved, the initialising
+expression can be evaluated.
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (declaration dynamics)!decl-vdecinit-evaluation@\texttt{decl-vdecinit-evaluation}}%
+\begin{alltt}
+(* RULE-ID: decl-vdecinit-evaluation *)
+     mng (s0, exte) (s, exte') \(\land\)
+     ((f = CopyInit) \(\lor\) (f = DirectInit))
+   ==>
+     declmng mng (VDecInitA ty loc (f exte), s0)
+                 ([VDecInitA ty loc (f exte')], s)
+\end{alltt}
+\end{minipage}
+\end{center}
+Note that the initialisor form \texttt{f} can only be a
+\texttt{DirectInit} when initialising classes.  All non-class objects
+will be a \texttt{CopyInit} form by this point. 
+
+When initialising a non-reference, expressions that yield l-values
+must be allowed to undergo the ``l-value to r-value'' conversion:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (declaration dynamics)!decl-vdecinit-lval2rval@\texttt{decl-vdecinit-lval2rval}}%
+\begin{alltt}
+(* RULE-ID: decl-vdecinit-lval2rval *)
+     lval2rval (s0,e0,se0) (s,e,se) \(\land\)
+     \(\neg\)ref_type ty \(\land\)
+     ((f = CopyInit) \(\lor\) (f = DirectInit))
+   \(\Rightarrow\)
+     declmng mng (VDecInitA ty loc (f (EX e0 se0)), s0)
+                 ([VDecInitA ty loc (f (EX e se))], s)
+\end{alltt}
+\end{minipage}
+\end{center}
+
+\paragraph{Finishing an Initialisation}
+When a non-class, non-reference initialisation is ready, the rule
+\ruleid{decl-vdecinit-finish} of Figure~\ref{fig:decl-vdecinit-finish}
+will apply.  The value of the initialising expression is first
+converted to be of the appropriate type, and the resulting value
+(\texttt{v'}, a list of bytes), is copied into memory using the
+\texttt{val2mem}\index{val2mem@\texttt{val2mem}} relation.  Note that
+the state's \texttt{initmap} is also initialised in the
+process.  The fact that the location attached to the
+\texttt{VDecInitA} constructor is an \texttt{ObjPlace} ensures that
+the variable being initialised is not a reference.%
+\index{initmap (state field)@\texttt{initmap} (\texttt{state} field)}%
+\begin{figure}
+\begin{minipage}{\textwidth}
+\index{rule (declaration dynamics)!decl-vdecinit-finish@\texttt{decl-vdecinit-finish}}%
+\index{nonclass_conversion@\texttt{nonclass_conversion}}%
+\begin{alltt}
+(* RULE-ID: decl-vdecinit-finish *)
+     nonclass_conversion s0 (v,ty) (v',dty) \(\land\)
+     is_null_se se \(\land\)
+     ~class_type dty \(\land\)
+     (s = val2mem (s0 with initmap updated_by (UNION) rs) a v') \(\land\)
+     (rs = range_set a (LENGTH v')) \(\land\)
+     ((f = CopyInit) \(\lor\) (f = DirectInit))
+   \(\Rightarrow\)
+     declmng mng (VDecInitA dty
+                            (ObjPlace a)
+                            (f (EX (ECompVal v ty) se)), s0)
+                 ([], s)
+\end{alltt}
+\end{minipage}
+\caption{Finishing the Initialisation of a Non-class, Non-reference
+  Variable}
+\label{fig:decl-vdecinit-finish}
+\end{figure}
 
 \subsection{Exceptions}
 \label{sec:exceptions}
@@ -3283,6 +3516,7 @@ The rule for returning a reference \ruleid{return-lvalue} is similar:
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!return-lvalue@\texttt{return-lvalue}}%
+\label{rule:return-lvalue}
 \begin{alltt}
 (* RULE-ID: return-lvalue *)
      is_null_se se0
@@ -3300,7 +3534,8 @@ When a reference is declared, it must also be initialised, and the
 initialising expression must be an l-value.  But normal
 initialisations need to be able to turn l-values into r-values so
 there is an ``lvalue-to-rvalue'' rule for variable declarations that
-are accompanied by initialisations:
+are accompanied by initialisations (this rule earlier appeared in
+Section~\ref{sec:simple-declarations}):
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (declaration dynamics)!decl-vdecinit-lval2rval@\texttt{decl-vdecinit-lval2rval}}%
@@ -4067,7 +4302,7 @@ annoyance.  It's possible that the front-end of \texttt{g++} might be
 usable in this regard.
 
 
-\section{Omissions}
+\section{Omissions and Possible Fixes}
 \label{sec:omissions}
 
 The most significant omission in this semantics is a treatment of
