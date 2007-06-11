@@ -714,7 +714,8 @@ val template_phase2_fns_def = Define`
                          id
                          (MAP (\ (n,ty). (n,THE (type_inst sub ty))) pms)
                          (THE (stmt_inst sub bod)))], ps0)
-             ([], ps)
+             ([], ps) /\
+      (grds = grds0 ++ [LAST ps.accdecls])
 `;
 
 (* extract and instantiate static members of template classes *)
