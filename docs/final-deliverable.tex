@@ -28,6 +28,7 @@
 \begin{document}
 \maketitle
 \tableofcontents
+\listoffigures
 
 \section{Introduction}
 
@@ -146,6 +147,8 @@ reduces to some value $v_0$, and if the body $M_0$ reduces to $v$,
 while the bound variable $x$ is linked to $v_0$.
 
 The same rule might be presented in HOL syntax as
+\begin{center}
+\begin{minipage}{\textwidth}
 \begin{alltt}
      apeval G M (LAM x M0) \(\land\)
      apeval G N v0 \(\land\)
@@ -153,6 +156,8 @@ The same rule might be presented in HOL syntax as
    \(\Rightarrow\)
      apeval G (APP M N) v
 \end{alltt}
+\end{minipage}
+\end{center}
 The use of the conjunction and implication symbols makes the
 propositional structure of the rule explicit.  Also, the relation
 being defined is always the first symbol (\texttt{apeval} here) of the
@@ -197,17 +202,23 @@ equipped with various standard functional language operations such as
 \index{FOLDL (list operation)@\texttt{FOLDL} (list operation)}%
 \index{++ (list operation)@\texttt{++} (list operation)}%
 \index{ZIP (list operation)@\texttt{ZIP} (list operation)}%
+\index{LAST (list operation)@\texttt{LAST} (list operation)}%
 \index{MAP (list operation)@\texttt{MAP} (list operation)}%
 \index{MEM (list operation)@\texttt{MEM} (list operation)}%
+\begin{center}
+\begin{minipage}{\textwidth}
 \begin{alltt}
    ++    : 'a list -> 'a list -> 'a list
    CONS  : 'a -> 'a list -> 'a list
    EL    : num -> 'a list -> 'a
    FOLDL : ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+   LAST  : 'a list -> 'a
    MAP   : ('a -> 'b) -> 'a list -> 'b list
    MEM   : 'a -> 'a list -> bool
    ZIP   : 'a list -> 'b list -> ('a # 'b) list
 \end{alltt}
+\end{minipage}
+\end{center}
 The list append operation (\texttt{++}) is written as an infix.
 
 \paragraph{Finite Maps} The finite map is a form of function where the
@@ -544,8 +555,9 @@ the body to proceed erroneously.
      int x = 2;
    }
 \end{verbatim}
-\caption{A program demonstrating the need to have name resolution be a
-  separate phase before dynamic evaluation.}
+  \caption[A Program Requiring Name Resolution]{A program
+    demonstrating the need to have name resolution be a separate phase
+    before dynamic evaluation.}
 \label{fig:name-res-separate-phase}
 \end{figure}
 
@@ -682,8 +694,8 @@ compilation approach.
 
   template<class T> int List<T>::node_count = 0;
 \end{verbatim}
-\caption{A program demonstrating the difficulty of interpreting
-  templates.}
+  \caption[A Difficult Program for Template Interpretation]{A program
+    demonstrating the difficulty of interpreting templates.}
 \label{fig:templates-not-interpretable}
 \end{figure}
 
@@ -807,10 +819,10 @@ program.
    template <class T> class Bar { static int g(); };
    template <class T> int Bar<T>::g() { return Foo<T*>::f(); }
 \end{verbatim}
-  \caption{In Siek and Taha's model, the definition of
-    class \texttt{Foo<T>} will get instantiated to provide a definition
-    of class \texttt{Foo<T*>} when a reference to that type is seen
-    inside the definition of \texttt{Bar<T>::g}.}
+  \caption[A Template Program]{In Siek and Taha's model, the
+    definition of class \texttt{Foo<T>} will get instantiated to
+    provide a definition of class \texttt{Foo<T*>} when a reference to
+    that type is seen inside the definition of \texttt{Bar<T>::g}.}
 \label{fig:taha-prog}
 \end{figure}
 
@@ -840,12 +852,12 @@ Taha's model is too eager.
 
    int main() { return Baz<Foo>::g(); }
 \end{verbatim}
-  \caption{Siek and Taha's model's early instantiation breaks down
-    when it sees the definition of \texttt{Baz<A>::g}.  At this point,
-    it can not tell which template is being instantiated in the body.
-    By way of contrast, my model doesn't instantiate anything until it
-    sees the definition of \texttt{main}.
-    (This program is available as
+  \caption[A Template Program that Breaks Siek and Taha's Model]{Siek
+    and Taha's model's early instantiation breaks down when it sees
+    the definition of \texttt{Baz<A>::g}.  At this point, it can not
+    tell which template is being instantiated in the body.  By way of
+    contrast, my model doesn't instantiate anything until it sees the
+    definition of \texttt{main}.  (This program is available as
     \texttt{notes/siek-taha-tempvar.cpp})}
 \label{fig:taha-problem}
 \end{figure}
@@ -1048,13 +1060,13 @@ causes undefined behaviour.)
                        to a bare throw *)
    |>
 \end{verbatim}
-  \caption{The HOL type of dynamic state.  There are two environment
-    values, \texttt{genv}, and \texttt{env}.  The former is for
-    non-local, persistent identifiers, the latter for local
-    identifiers.  Because there is no such thing as a local namespace,
-    there will only be a top-level node in the \texttt{env} field
-    (which may, however point to an arbitrarily deep
-    \texttt{class_env}).}
+\caption[The HOL Type of Dynamic State]{The HOL type of dynamic state.
+  There are two environment values, \texttt{genv}, and \texttt{env}.
+  The former is for non-local, persistent identifiers, the latter for
+  local identifiers.  Because there is no such thing as a local
+  namespace, there will only be a top-level node in the \texttt{env}
+  field (which may, however point to an arbitrarily deep
+  \texttt{class_env}).}
 \label{fig:state-type}
 \end{figure}
 
@@ -1687,9 +1699,10 @@ of all possible execution paths to see if any of them result in an
 update before a reference.
 
 \index{Assign@\texttt{Assign}}%
-The rule for a completed assignment expression is:
+The rule for a completed assignment expression is presented in
+Figure~\ref{fig:assign-completes}.
+\begin{figure}[htbp]
 \begin{center}
-\label{rule:assign-completes}
 \index{rule (dynamic)!assign-completes@\texttt{assign-completes}}%
 \begin{minipage}{\textwidth}
 \begin{alltt}
@@ -1708,6 +1721,9 @@ The rule for a completed assignment expression is:
 \end{alltt}
 \end{minipage}
 \end{center}
+\caption{Rule for the Completion of an Assignment Expression}
+\label{fig:assign-completes}
+\end{figure}
 The \texttt{NONE} value that is the first argument ot \texttt{Assign}
 is where a binary operator can be installed, implementing the
 \texttt{op=} syntax (\texttt{+=}, \texttt{>>=} etc.).  The rule that
@@ -1737,9 +1753,9 @@ semantics in a small-step style should be easy.  (My
 thesis~\cite[\S7.1]{Norrish98} explains why the way I formulated
 statements in a big-step style was a mistake.) The literature contains
 many examples of how to express constructs such as \texttt{while} and
-\texttt{if} in a small-step style.  However, this is not as
-straightforward as one might think because of the need to prevent
-function bodies from interleaving.
+\texttt{if} in a small-step style.  However, in C and \cpp{} this is
+not as straightforward as one might think because of the need to
+prevent function bodies from interleaving.
 
 Imagine a program such as that in Figure~\ref{fig:two-functions}, and
 how one might evaluate the return-expression in \texttt{main}.  If one
@@ -1803,7 +1819,7 @@ Figure~\ref{fig:global-function-call} governs (normal) function calls:
 \end{alltt}
 \end{minipage}
 \end{center}
-\caption{Making a call to a global (\ie, non member) function}
+\caption{Making a Call to a Global (\ie, Non-member) Function}
 \label{fig:global-function-call}
 \end{figure}
 
@@ -3002,10 +3018,11 @@ has evaluated to an l-value.\footnote{Even when the model allows for
      return g(&d);
    }
 \end{verbatim}
-\caption{C++ code demonstrating OO-polymorphism.  The program will
-  return 4. Though it appears as if \texttt{B}'s function \texttt{f}
-  is called, the version of \texttt{f} called will actually be that
-  attached to \texttt{D1}.}
+  \caption[\cpp{} Code Demonstrating OO-Polymorphism]{\cpp{} code
+    demonstrating OO-polymorphism.  The program will return 4. Though
+    it appears as if \texttt{B}'s function \texttt{f} is called, the
+    version of \texttt{f} called will actually be that attached to
+    \texttt{D1}.}
 \label{fig:oo-example}
 \end{figure}
 
@@ -3033,7 +3050,7 @@ has evaluated to an l-value.\footnote{Even when the model allows for
 \end{alltt}
 \end{minipage}
 \end{center}
-\caption{The rule for virtual member function dispatch}
+\caption{The Rule for Virtual Member Function Dispatch}
 \label{fig:virtual-fn-member-select}
 \end{figure}
 
@@ -3254,7 +3271,8 @@ data at the start of a class.
 \subsubsection{Casting and Other Type Conversions}
 We have already seen one use of implicit conversion from one type of
 value to another, in the rule \ruleid{assign-completes}
-(p\pageref{rule:assign-completes}), where the relation
+(Figure~\ref{fig:assign-completes},
+page~\pageref{fig:assign-completes}), where the relation
 \texttt{nonclass_conversion} is used to this end.  This relation
 governs the way in which various values are allowed to be silently
 converted from one type to another.  Its definition is from the file
@@ -3295,8 +3313,9 @@ Figure~\ref{fig:nonclass-conversion}.
           (ty1 = Signed Int) \(\land\) (SOME v1 = REP_INT (Signed Int) 0) \(\land\)
           (ty2 = MPtr c ty0) \(\land\) (v2 = null_member_ptr))
 \end{alltt}
-\caption{The \texttt{nonclass_conversion} relation for implicit type
-  conversions.  Based on the standard's \S4.}
+\caption[The \texttt{nonclass_conversion} Relation]{The
+  \texttt{nonclass_conversion} relation for implicit type conversions.
+  Based on the standard's \S4.}
 \label{fig:nonclass-conversion}
 \end{figure}
 
@@ -3638,108 +3657,87 @@ for which see Figure~\ref{fig:decl-vdecinit-finish-ref}.
 \subsection{Polymorphism \& Multiple Inheritance}
 \label{sec:multiple-inheritance}
 
-As suggested in earlier deliverables, multiple inheritance has been
-modelled by following the approach described in Wasserrab \emph{et
-  al}~\cite{wasserrab-nst-OOPSLA06}.  The changes supporting this
-addition to the model are relatively minor and almost all appear in
-the theory \texttt{class_info}, where a number of new definitions
-appear.
+As already suggested, multiple inheritance has been modelled by
+following the approach described in Wasserrab~\emph{et
+  al}~\cite{wasserrab-nst-OOPSLA06}.  Most of the dynamic rules have
+already been presented, so that the modelling of multiple inheritance
+is best understood by considering the auxiliaries supporting those
+rules.  Most of these auxiliaries are defined in
+\HOLfile{class_info}. 
 
-\newcommand{\Cs}{\mathit{Cs}} \newcommand{\fld}{\mathit{fld}}
+\newcommand{\fld}{\texttt{fld}} 
+\newcommand{\Cs}{\texttt{Cs}}
 
 At the top level, the rule for calculating the function that will be
-called dynamically (\ruleid{function-member-select}) has changed
-slightly.  It now reads
-\[
-\infer{
-  \begin{array}{l}
-    \statebrack{\textsf{Ex}((\clvalue(a,\texttt{Class}\;C,\Cs))\;\mathbf{.}\;
-      \fld,\mathit{se}),\sigma} \rightarrow \\
-    \qquad\left\langle\textsf{Ex}\left(\cfvalue\left(
-        \begin{array}{l}
-          \texttt{MFn}\;(\last(\Cs'))\;\fld,\\
-          (\funtype{\mathit{argtys}}{\mathit{dynret}}),\\
-          \SOME{(\clvalue\;a\;(\texttt{Class}\;C)\;\Cs')}
-        \end{array}\right),
-      \mathit{se}\right),\sigma\right\rangle
-  \end{array}}{
-  \begin{array}{c}
-    \sigma \vdash \last(\Cs) \textrm{ has least method } \fld :
-    \funtype{\mathit{statargs}}{\mathit{statret}} \textrm{ via } Ds \\
-    \sigma \vdash (C,\Cs \,@_p\, Ds) \textrm{ selects } \fld :
-    \funtype{\mathit{dynargs}}{\mathit{dynret}} \textrm{ via } \Cs'
-  \end{array}}
-\]
-This rule describes how the call to method $\fld$ is resolved
-for an object located at address $a$, with dynamic type $C$, and where
-the static type of the object is the last element of the list $\Cs$.
-The list $\Cs$ is also a path through the class hierarchy, starting at
-the dynamic type and ending at the current static type.  (Note that an
-object's dynamic type is determined on object creation, and persists
-for an object's entire life-time.  In contrast, an object's static
-type is the type ascribed to it by a particular piece of code.
-Different pieces of code may well ``see'' the same object as having
-different types.  In this sense, an object's dynamic type is
-unchanging, but it will have a variety of static types across the text
-of a program.  Confusing, but true!)
+called dynamically is \ruleid{function-member-select}, which appears
+in Figure~\ref{fig:virtual-fn-member-select}, on
+page~\pageref{fig:virtual-fn-member-select}.  This rule describes how
+the call to method \fld{} is resolved for an object located at address
+\texttt{a}, with dynamic type \texttt{C}, and where the static type of
+the object is the last element of the list \Cs.  The list \Cs{} is
+also a path through the class hierarchy, starting at the dynamic type
+and ending at the current static type.  (Note that an object's dynamic
+type is determined on object creation, and persists for an object's
+entire life-time.  In contrast, an object's static type is the type
+ascribed to it by a particular piece of code.  Different pieces of
+code may well ``see'' the same object as having different types.  In
+this sense, an object's dynamic type is unchanging, but it will have a
+variety of static types across the text of a program.  Confusing, but
+true!)
 
 The first premise (``has-least-method'') examines the static type of
-the object for which the method will be called, $\last(\Cs)$.
+the object for which the method will be called, \texttt{LAST~\Cs}.
 Starting at that point in the hierarchy it looks upwards (\ie, towards
 base classes) for the nearest base class that provides an
 implementation of the desired method.  This base-class might be
-$\last(\Cs)$ itself, in which case the path found ($Ds$) will be
-empty.  There must also be a unique closest ancestor providing the
-desired method.  If this isn't the case, then there will have been a
-compile-time error, as the call will be statically ambiguous.
+\texttt{LAST~\Cs} itself, in which case the path found (\texttt{Ds})
+will be the singleton consisting of just \texttt{LAST~Cs}.  There must
+also be a unique closest ancestor providing the desired method.  If
+this isn't the case, then there will have been a compile-time error,
+as the call will be statically ambiguous.
 
 The second premise (``selects-via'') then determines the dynamic
 location of the desired method.  There are two cases.  The simple case
-is when there is a unique best method for the dynamic type, $C$.
+(reiterating the discussion in Section~\ref{sec:class-values}) is when
+there is a unique best method for the dynamic type, \texttt{C}.
 Imagine, for example, that there is a four-element singly-linked
-inheritance graph, from base $B_0$ down to most-derived $B_3$, with
-implementations of the method $\fld$ at $B_0$ and $B_2$.  If the
-object is actually of type $B_3$, but is statically seen as type
-$B_1$, then $C$ is $B_3$, and $\Cs$ will be $[B_3,\,B_2,\,B_1]$.  The
-first premise (``has-least-method'') determines that, starting at
-$B_1$ (the static type) there is an implementation of $\fld$ at path
-$[B_1, B_0]$.  This will be the instantiation of the rule's variable
-$Ds$.
+inheritance graph, from base \texttt{B0} down to most-derived
+\texttt{B3}, with implementations of the method \fld{} at \texttt{B0}
+and \texttt{B2}.  If the object is actually of type \texttt{B3}, but
+is statically seen as type \texttt{B1}, then \texttt{C} is
+\texttt{B3}, and $\Cs$ will be \texttt{[B3,B2,B1]}.  The first premise
+(``has-least-method'') determines that, starting at \texttt{B1} (the
+static type) there is an implementation of $\fld$ at path \texttt{[B1,
+  B0]}.  This will be the instantiation of the rule's variable
+\texttt{Ds}.
 
+\index{selects-via relation}
 The simple case for ``selects-via'' checks whether or not there is
 also a least method for the dynamic type (ignoring, for the moment,
-the path giving the static type).  Thus
-\[
-\infer{\sigma \vdash (C,\Cs) \textrm{ selects } \fld \textrm{ via } \Cs'}{\sigma \vdash C \textrm{ has least method } \fld :
-  \funtype{\mathit{argtys}}{\mathit{retty}} \ \textrm{ via } \Cs'}
-\]
-In the simple example, we will thus conclude that \[
-\sigma \vdash (B_3,[B_3,B_2,B_1,B_0]) \textrm{ selects } \fld
-\textrm{ via } [B_3,B_2]
-\]
-so that the call will be to the implementation of $\fld$ in $B_2$, and
-the \texttt{this} pointer will be adjusted so that the type and path
-information associated with its value will be $(B_3,[B_3,B_2])$ (a
-dynamic type of $B_3$, as always, and a static type of $B_2$).
+the path giving the static type).  Thus (from \HOLfile{class_info})
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+(* RULE-ID: selects-simple *)
+     s |- C has least method mname -: minfo via Cs'
+   \(\Rightarrow\)
+     s |- (C,Cs) selects mname -: minfo via Cs'
+\end{alltt}
+\end{minipage}
+\end{center}
+In the simple example, we will thus conclude that 
+\begin{verbatim}
+   s |- (B3, [B3,B2,B1,B0]) selects fld -: info via [B3,B2]
+\end{verbatim}
+so that the call will be to the implementation of $\fld$ in
+\texttt{B2}, and the \texttt{this} pointer will be adjusted so that
+the type and path information associated with its value will be
+\texttt{(B3,[B3,B2]}, \ie, a dynamic type of \texttt{B3} (as always)
+and a static type of \texttt{B2}.
 
 The same rule applies in a much more complicatd seeming situation,
 where multiple inheritance and shared base objects come into play.
-Consider the program in Figure~\ref{fig:diamond-cpp}.  When the call
-to \texttt{cref.f()} is made, the type and path associated with the
-reference will be $(D,[D,C_1])$.  Statically, the reference is a
-\texttt{C1} value, but dynamically, it's really of class
-\texttt{D}. The first premise in rule \ruleid{function-member-select}
-finds that there is a path ($\mathit{Ds}$ in the rule) which is
-appropriate for \texttt{f}.  This path is $[B]$.  The fact that the
-path does not include the derived object's name, and is just a bare
-reference to a class indicates that it is a path to a shared base.
-When such a path is the second argument of path concatenation (the
-$@_p$ operator in the second premise), the result is just the second
-argument, so that the second hypothesis in the rule becomes
-\[
-\sigma \vdash (D,[B]) \textrm{ selects } f :
-\funtype{\texttt{void}}{\texttt{int}} \textrm{ via } \Cs'
-\]
+Consider the program in Figure~\ref{fig:diamond-cpp}.  
 \begin{figure}[hbtp]
 \begin{verbatim}
 #include <iostream>
@@ -3772,17 +3770,37 @@ int main()
   return dosomething(d);
 }
 \end{verbatim}
-\caption{Multiple inheritance with shared base objects.  (This program is
-in the \texttt{notes} directory with name \texttt{diamond-multinherit.cpp}.)}
+  \caption[Multiple Inheritance with Shared Base Objects]{Multiple
+    inheritance with shared base objects.  (This program is in the
+    \texttt{notes} directory with name
+    \texttt{diamond-multinherit.cpp}.)}
 \label{fig:diamond-cpp}
 \end{figure}
+When the call to \texttt{cref.f()} is made, the type and path
+associated with the reference will be \texttt{(D,[D,C1])}.
+Statically, the reference is a \texttt{C1} value, but dynamically,
+it's really of class \texttt{D}. The first premise in rule
+\ruleid{function-member-select} finds that there is a path
+($\texttt{Ds}$ in the rule) which is appropriate for \texttt{f}.  This
+path is \texttt{[B]}.  The fact that the path does not include the
+derived object's name, and is just a bare reference to a class
+indicates that it is a path to a shared base.  When such a path is the
+second argument of path concatenation
+%
+\index{^ (path concatenation)@\texttt{\^{}} (path concatenation)}%
+%
+(the \texttt{\^{}} operator in the second premise), the result is just
+the second argument, so that the second hypothesis in the rule becomes
+\begin{verbatim}
+   s |- (D,[B]) selects f -: info via Cs'
+\end{verbatim}
 
 The first, simple, rule for ``selects-via'' resolves this.  Ignoring
-the path $[B]$, the simple rule checks whether or not there is a
-unique least path to an \texttt{f} from $D$.  There is such a path,
-and it is $[D,C_2]$.  So, the call to \texttt{cref.f()} ends up being
-a call to the \texttt{f} in class $C_2$, in an ``unrelated'' part of
-the object hierarchy.
+the path \texttt{[B]}, the simple rule checks whether or not there is
+a unique least path to an \texttt{f} from \texttt{D}.  There is such a
+path, and it is \texttt{[D,C2]}.  So, the call to \texttt{cref.f()}
+ends up being a call to the \texttt{f} in class \texttt{C2}, in an
+``unrelated'' part of the object hierarchy.
 \[
 \rule{0.2\textwidth}{.1mm}
 \]
@@ -3811,20 +3829,24 @@ dynamic type is \texttt{D}, and when the static type is
 \texttt{f} visible from the dynamic type (\texttt{D}), so the simple
 rule does not apply.  Instead, the notion of \emph{overrider} is
 introduced via the rule
-\[
-\infer{\sigma\vdash (C,\Cs) \textrm{ selects }\fld : m \textrm{ via }
-  \Cs'}{
-\begin{array}{c}
-  \forall m\;\Cs'. \;\;\neg \;\sigma \vdash C \textrm{ has least }\fld : m
-\textrm{ via } \Cs'\\
-\sigma \vdash (C,\Cs) \textrm{ has overrider } \fld : m \textrm{ via }
-\Cs'
-\end{array}}
-\]
+\index{selects-via relation}
+\index{member functions!overriders}
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+(* RULE-ID: selects-with-overrider *)
+     (\(\forall\)minfo Cs'.  
+       \(\neg\)(s |- C has least method mname -: minfo via Cs')) \(\land\)
+     s |- (C,Cs) has overrider mname -: minfo via Cs'
+   \(\Rightarrow\)
+     s |- (C,Cs) selects mname -: minfo via Cs'
+\end{alltt}
+\end{minipage}
+\end{center}
 where the static type of the value again plays a role.  In this case,
 the \texttt{f} that gets called is that in \texttt{Left2}.  For
 further details on exactly how this is defined, see either
-\texttt{class_infoScript}, or
+\HOLfile{class_info}, or
 Wasserab~\emph{et~al}~\cite{wasserrab-nst-OOPSLA06}.
 
 \begin{figure}[hbtp]
@@ -3862,8 +3884,9 @@ int main()
   return 0;
 }
 \end{verbatim}
-\caption{A lop-sided `V' inheritance hierarchy.  Available as
-  \texttt{notes/lopsided-v.cpp}.}
+  \caption[A Lop-sided `V' Inheritance Hierarchy]{A lop-sided `V'
+    inheritance hierarchy.  Available as
+    \texttt{notes/lopsided-v.cpp}.}
 \label{fig:lopsided-v}
 \end{figure}
 
@@ -4092,7 +4115,7 @@ Figure~\ref{fig:constructor-function-call}.
     \end{minipage}
   \end{center}
 
-  \caption{Making a call to a class constructor}
+  \caption{Making a Call to a Class Constructor}
 \label{fig:constructor-function-call}
 \end{figure}
 The basic rule is complicated enough, and there is more complexity
@@ -4170,8 +4193,9 @@ public:
     : B(cptr[i]), ptr(cptr), sz(strlen(cptr)) { }
 };
 \end{verbatim}
-\caption{\cpp{} constructors with \emph{mem-initializers}.  (Available
-as \texttt{notes/mem-inits.cpp}.)}
+  \caption[\cpp{} Constructors with \emph{mem-initializers}]{\cpp{}
+    Constructors with \emph{mem-initializers}.  (Available as
+    \texttt{notes/mem-inits.cpp}.)}
 \label{fig:mem-inits}
 \end{figure}
 
@@ -4206,8 +4230,10 @@ of the members (given as \texttt{Boff}, \texttt{ptroff} and
                                              [Var "cptr"])
                                       base_se))
 \end{verbatim}
-\caption{The variable declarations constructed to precede the body of
-  C's constructor (from Figure~\ref{fig:mem-inits}).}
+  \caption[Generated Variable Declarations from
+  Figure~\ref{fig:mem-inits}]{The variable declarations constructed to
+    precede the body of \texttt{C}'s constructor (from
+    Figure~\ref{fig:mem-inits}).}
 \label{fig:constructor-vdecs}
 \end{figure}
 
@@ -4292,37 +4318,8 @@ done in rule \ruleid{block-exit-destructors-to-call}:
 This is another example of evolving syntax: the block that the flow of
 control is about to leave, has this departure deferred with the
 insertion of new statements before the block's final statement.  The
-rule allowing an exit to eventually occur is \ruleid{block-exit}:
-\[
-\infer{
-  \statebrack{
-    \textsf{St}(\texttt{Block}\;\top\;[]\;[\mathit{st}], c), \sigma_0}
-  \longrightarrow
-  \statebrack{\textsf{St}(\mathit{st}, c), \sigma}
-}{
-  \begin{array}{l}
-    \sigma_0.\texttt{stack} =
-    (\mathit{stm},\mathit{tym},\mathit{vrm},\mathit{this}) ::
-    \mathit{stk}
-    \\
-    \texttt{final_stmt}\;\mathit{st}
-    \\
-    \sigma_0.\texttt{blockclasses} = [] :: \mathit{bcs}
-    \\
-    \sigma = \sigma_0 \textrm{ with } \left\langle\begin{array}{ll}
-        \texttt{stack := }\mathit{stk}; &
-        \texttt{classmap := }\mathit{stm};\\
-        \texttt{typemap := }\mathit{tym}; &
-        \texttt{varmap := }\mathit{vrm};\\
-        \texttt{thisvalue := }\mathit{this}; &
-        \texttt{blockclasses := }\mathit{bcs}
-      \end{array}\right\rangle
-  \end{array}
-}
-\]
-The predicate \texttt{final_stmt} is true of a statement if it is
-an abnormal exit form (such as \texttt{break} or \texttt{return}), or
-simply \texttt{EmptyStmt}.
+rule allowing an exit to eventually occur is \ruleid{block-exit}, for
+which see Figure~\ref{fig:block-exit} (page~\pageref{fig:block-exit}).
 
 Actually calling a destructor is straightforward because there are no
 parameters, nor anything comparable to the mem-initializers.  The
@@ -4395,19 +4392,6 @@ Other language features completely ignored are: enumerated types,
 unions, and the \texttt{goto} and \texttt{switch} statements.  Also,
 while I provide a rule for post-increment \texttt{++}, there is no
 rule for \texttt{--}.
-
-\section{Future}
-
-The final deliverable calls for sanity theorems, namespaces, run-time
-type identification and library functions.  All of these save the last
-are strightforward.  It is now not clear to me what is meant by
-``library functions''; whether actual functions are to be specified,
-or whether this is a reference to the mechanisms for linking to
-library functions (paragraph three of \S3 of the Statement of Work).
-
-\begin{center}
-\rule{0.5\textwidth}{.1mm}
-\end{center}
 
 \appendix
 \section{Sources}
