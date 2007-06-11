@@ -236,18 +236,20 @@ absence.  The %
 \texttt{THE} function reverses the action of \texttt{SOME}.  If
 applied to \texttt{NONE}, its value is unspecified.
 
-\paragraph{Finite Maps} The finite map is a form of function where the
-domain is guaranteed to be finite.  The type of finite maps from
-$\sigma$ to $\tau$ is written \texttt{:$\sigma$~|->~$\tau$}.  The HOL
-syntax for the application of a finite map \texttt{fm} to an element
-\texttt{x}, is \texttt{fm~'~x}, with an apostrophe separating
-function and argument.  (Note that the result of the application is
-unspecified if the argument is not in the map's domain.)
+\paragraph{Finite Maps}\index{finite maps} 
+The finite map is a form of function where the domain is guaranteed to
+be finite.  The type of finite maps from $\sigma$ to $\tau$ is written
+\texttt{:$\sigma$~|->~$\tau$}.  The HOL syntax for the application of
+a finite map \texttt{fm} to an element \texttt{x}, is \texttt{fm~'~x},
+with an apostrophe separating function and argument.  (Note that the
+result of the application is unspecified if the argument is not in the
+map's domain.)
 
 The empty finite map (one with no domain) is \texttt{FEMPTY}, and
 updating a map \texttt{fm} so that its value at \texttt{k} is
 \texttt{v} (ignoring whether or not \texttt{fm} may have already had a
-value for \texttt{k}), is written \texttt{fm |+ (k,v)}.
+value for \texttt{k}), is written \texttt{fm |+ (k,v)}.  The function
+\texttt{FDOM} returns the domain of a finite map.\index{FDOM@\texttt{FDOM}}
 
 \paragraph{Records}\index{records (in HOL)}
 Record literals are written as a sequence of assignment to field-names
@@ -588,6 +590,11 @@ Figure~\ref{fig:name-res-separate-phase} into
    int ::ns1::x = 2;
 \end{verbatim}
 
+\bigskip\noindent The main relation in Phase~1 is called
+\texttt{phase1}, and is defined in \HOLfile{name_resolution}.  In the
+remainder of this section, I will discuss some of the more interesting
+aspects of this phase of analysis.
+
 \subsection{The Name Resolution State}
 \label{sec:name-resol-state}
 
@@ -634,9 +641,9 @@ type \texttt{dynobj_type}:
       dStatMember | dMember | dVirtualMember | dNormalObj
 \end{verbatim}
 Note that in this context an ``object'' might actually be a function
-(and it is functions that provide the interest); elsewhere funtions
-are not considered objects because they don't occupy allocated
-memory.
+(and it is functions that provide the interest); elsewhere
+(particularly in the dynamics) functions are not considered objects
+because they don't occupy allocated memory.
 
 The \texttt{global} field of a \texttt{P1state} is a state from the
 dynamic semantics.  In Phase~1 the vast majority of the information
@@ -652,6 +659,7 @@ translated declarations.  It is this that provides the final output of
 Phase~1.
 
 \subsection{Template Names}
+\label{sec:p1-template-names}
 
 One significant issue is the resolution of names in templates.  When a
 template definition is instantiated, it is important to specify how
@@ -665,7 +673,369 @@ function names are allowed to bind to template names when the
 statically determined types of the function arguments refer to
 template parameters.  Such names have to be left alone in Phase~1.
 
+\subsection{Resolving Expressions}
 
+The first interesting phase of name resolution comes when rewriting
+expressions.  \index{phase1_expr@\texttt{phase1_expr}} This is done
+with the function \texttt{phase1_expr}, defined in
+\HOLfile{name_resolution}, and of type
+\begin{verbatim}
+   : frees_record -> P1state -> CExpr -> CExpr
+\end{verbatim}
+where the \texttt{frees_record} types records a set of template
+arguments, which names must be treated specially.  (See
+\HOLfile{frees} for more on the calculation of this notion of ``free
+variable''.)
+
+Most of the clauses of the function \texttt{phase1_expr} are
+uninteresting recursions, \eg:
+\begin{verbatim}
+   phase1_expr avds ps (COr e1 e2) = 
+     COr (phase1_expr avds ps e1) (phase1_expr avds ps e2)
+\end{verbatim}
+
+The first interesting clause is the handling of function applications,
+for which see Figure~\ref{fig:phase1expr-fnapp}.
+\begin{figure}[htbp]
+\begin{alltt}
+   phase1_expr avoids ps (FnApp e elist) =
+     let elist' = MAP (phase1_expr avoids ps) elist in
+     let e' =
+         if is_unqvar e then
+           let fnm = dest_unqvar e in
+           let atys = 
+              \(\varepsilon\)atys. listRel (expr_type ps.global RValue) elist'
+                             atys 
+           in
+             if \(\neg\)(DISJOINT 
+                     avoids 
+                     (FOLDL (\(\lambda\)a ty. a UNION tyfrees ty) \lbr\rbr atys))
+             then 
+               e 
+             else if fnm \(\in\) FDOM ps.dynobjs then 
+               phase1_expr avoids ps e 
+             else
+               let foldthis ps0 ty =
+                   let nss = 
+                     FST (ass_nspaces_classes avoids ps0 ty) in
+                   let nsl = SET_TO_LIST nss
+                   in
+                     FOLDL (\(\lambda\)ps00 ns. open_ftnode ns ps00) ps0 nsl
+               in
+               let ps' = FOLDL foldthis ps atys
+               in
+                 Var (idattach_locn 
+                        (ps'.dynobjs ' fnm)
+                        (IDConstant F [] (IDName fnm)))
+         else
+           phase1_expr avoids ps e
+     in
+       FnApp e' elist'
+\end{alltt}
+\caption{Name Resolution in Function Applications}
+\label{fig:phase1expr-fnapp}
+\end{figure}
+This is a complicated piece of code, though the structure is
+relatively straightforward.  At the top level, the function calls
+itself recursively to resolve the arguments of the function call,
+generating the value \texttt{elist'}.  It is the calculation of the
+resolved \texttt{e'} that introduces the complications.  The first
+test checks if \texttt{e} is an unqualified variable.  If not, then
+the recursion can proceed ``normally''.  If \texttt{e} is just a
+simple variable however, then the code binds \texttt{fnm} to the name
+of the variable, and \texttt{atys} to the types of the arguments.  
+
+The next test calculates the free type names of the argument types.
+If this set is overlaps with the names of any template arguments, then
+the variable must be left alone, as \emph{per}
+Section~\ref{sec:p1-template-names} above (it will be the subject of
+future work if the containing template is instantiated).  Next it is
+possible that the name is already in the \texttt{dynobjs} map, which
+records information about the names that are necessarily in scope.  If
+so, this binding for the name takes precedence, and a normal recursive
+call can occur.  (This reflects~\cite[\S3.4.2,
+paragraph~2a]{cpp-standard-iso14882}.)
+
+The final part of this clause calculates the set of associated
+namespaces and associated classes, in accordance with the language
+of~\cite[\S3.4.2, paragraph~2]{cpp-standard-iso14882}, and then looks
+for the given name in this new extended namespace.  (The function
+\texttt{open_ftnode} is used to overlay an existing \texttt{P1state}
+with the names of another namespace.)
+
+\bigskip
+\noindent
+Another interesting case is dealing with variable names, assuming that
+they have not already been caught by the function-application clause
+just discussed.  The \texttt{Var} clause is presented in
+Figure~\ref{fig:phase1expr:var}. \index{Var@\texttt{Var}}
+\begin{figure}[htbp]
+\begin{alltt}
+   phase1_expr avoids ps (Var id) =
+      case id of
+         IDConstant T sfs sf ->
+           if id_objtype ps.global id = dMember then
+             let cnm = class_part id in
+             let ps' = open_classnode avoids.tyfvs cnm ps
+             in
+               SVar (Deref This) (mk_dynobj_id ps' (IDtl id))
+           else Var id
+      || IDConstant F [] sf ->
+           (let qid = idattach_locn (ps.dynobjs ' (sfld_string sf)) id
+            in
+              (case SND (SND (SND (ps.dynobjs ' (sfld_string sf)))) of
+                  dVirtualMember -> SVar (Deref This) id
+               || dMember -> SVar (Deref This) qid
+               || dStatMember -> Var qid
+               || dNormalObj -> Var qid))
+      || IDConstant F (h::t) sf ->
+           (let s = sfld_string h in
+            let qid =
+                if s \(\in\) FDOM ps.dynclasses then
+                  idattach_locn (ps.dynclasses ' s) id
+                else
+                  IDConstant T (MAP IDName (ps.dynns ' s) ++ (h::t)) sf
+            in
+              if id_objtype ps.global qid = dMember then
+                let cnm = class_part qid in
+                let ps' = open_classnode avoids.tyfvs cnm ps
+                in
+                  SVar (Deref This) (mk_dynobj_id ps' (IDtl qid))
+              else Var qid)
+\end{alltt}
+\caption{Name Resolution for Variables}
+\label{fig:phase1expr:var}
+\end{figure}
+There are three cases depending on the form of the variable.  The
+first is when the variable is an ``absolute'' name, with a leading
+\texttt{::}.  This might still be a member reference, as in the
+following 
+\begin{verbatim}
+   class C { 
+     int x; 
+     int f() { return ::C::x; }
+   };
+\end{verbatim}
+If this possibility is ruled out, then the name can be left
+unchanged.  (If it's a static member, the name must be fine on its
+own.)
+
+The second case is when there is a single bare name, with no
+qualification.  The qualified version of the name can be produced
+immediately by consulting the \texttt{dynobjs} map, giving
+\texttt{qid}.  Then it is necessary to determine what sort of name the
+identifier is.  If it is a virtual member function, the name needs to
+be left unqualified, but attached to a \texttt{this->}.  If it is a
+normal member, then the qualified name needs to be used in the same
+way.  Finally, if it is a static member, or non-class object, the
+qualified name should be used as is.
+
+The last case is when there is a qualified name, such as
+\texttt{name1::name2}.  This is fiddly to resolve because the first
+element of the qualification may refer to a namespace or a class.  In
+either case, it is possible to resolve this (class names mask
+namespace names), generating an unambiguous \texttt{qid}.  This then
+needs to be treated just as in the first case, possibly generating a
+member reference.
+
+\subsection{Resolving Declarations: Establishing Phase 1 Names}
+The code in \texttt{phase1_expr} uses the information that has been
+stored in the Phase~1 states by earlier and higher-level traversals of
+program syntax.  In particular, when a declaration is seen, this must
+cause an adjustment of the information about names that is stored in
+the Phase~1 state.  
+
+For example, when a new global variable is declared, the
+\texttt{NewGVar} function is called to record this.  Its type is 
+\begin{verbatim}
+   : CPP_Type -> IDComp -> P1state -> P1state
+\end{verbatim}
+and its definition appears in Figure~\ref{fig:newgvar-def}.
+\begin{figure}[hbtp]
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+   NewGVar ty sfnm s =
+     let sfnm' = 
+       IDConstant T (MAP IDName s.current_nspath) sfnm in
+     let (targs,sfstr) = break_sfld sfnm in
+     let ty' = 
+       rewrite_type 
+         (FOLDL (\(\lambda\)a ta. a UNION tafrees ta) \lbr\rbr targs) 
+         s ty
+     in
+       s with <| 
+         dynobjs :=
+           s.dynobjs |+ (sfstr, (T,MAP IDName s.current_nspath,
+                                 targs, dNormalObj)) ;
+         global updated_by 
+           state_NewGVar ty s.current_nspath sfnm ;
+         accdecls := 
+           (s.accdecls ++ [Decl (VDec ty' sfnm')]) 
+       |>
+\end{alltt}
+\end{minipage}
+\end{center}
+\caption{Defining a New Global Variable in Phase 1}
+\label{fig:newgvar-def}
+\end{figure}
+The input to this procedure is a the type of the variable being
+declared, its bare name (\texttt{sfnm} here), and the Phase~1 state
+being updated.  The type is rewritten so that any of the names it
+mentions are themselves resolved, and the state's \texttt{dynobjs}
+field is updated to map the name to a full identifier, using the
+current namespace path.  (The 4-tuple has \texttt{T} as its first
+component because this is known to be a global variable; were we
+defining a local name, this component would be \texttt{F} instead.)
+
+\paragraph{Class Declarations} The most interesting behaviour at the
+level of declarations comes with classes.  Here scopes are twisted in
+order to allow member functions to refer to member names that have
+actually been declared later in the class.  For example, in
+\begin{verbatim}
+   int x;
+   class C { 
+     int f(int i) { return i + x; }
+     int x;
+   }
+\end{verbatim}
+the reference to \texttt{x} in the body of \texttt{C::f} is to
+\texttt{C::x}, not to the global \texttt{x}.  This special
+dispensation only extends as far as the bodies of member functions.
+Sub-classes and their names are not so lucky; there the rule is that
+the class declaration must come first.  If there is a conflict with an
+external type-name, this is an error.  For example, the
+following is an error: 
+\begin{verbatim}
+   struct B { int x; };
+   struct C { 
+     B b;
+     struct B { int j; };
+   };
+\end{verbatim}
+To make this correct, one should either explicitly qualify the type in
+the declaration of member \texttt{b} (one could write \texttt{::B~b;}
+to refer to the external class), or reorder so that the declaration of
+the nested class came before the definition of \texttt{b} (in which
+the field would be of the sub-class's type).
+
+This analysis is illustrated in the definition of
+\texttt{phase1_gclassdefn}, one clause of which is given in
+Figure~\ref{fig:phase1-gclassdefn}.
+\begin{figure}[htbp]
+\begin{alltt}
+   phase1_gclassdefn avds cnm (SOME ci) ps =
+     let ancs' = MAP (\(\lambda\)(id,b,p). (resolve_classid ps id, b, p))
+                     ci.ancestors in
+     let fullnm =
+           case cnm of
+              IDConstant b [] sf ->
+                 IDConstant b (MAP IDName ps.current_nspath) sf
+           || IDConstant b sfs sf -> resolve_classid ps cnm in
+     let ps0 = ps with global updated_by
+                 new_class fullnm
+                           (SOME (<| ancestors := ancs' ;
+                                     fields := [] |>, \lbr\rbr)) in
+     let ps1 = open_path avds.tyfvs T (id_sfs fullnm) ps0 in
+     let ps2 = FOLDL (\(\lambda\)s cebp.
+                        extract_class_names avds s 
+                           (T, id_sfs fullnm) cebp)
+                     ps1
+                     ci.fields in
+     let ps3 = open_path avds.tyfvs T (id_sfs fullnm) ps2 in
+     let flds' =
+         FOLDL (\(\lambda\)celist (ce,b,p).
+                  let ce' = phase1_gcentry avds ps3 cnm ce
+                  in
+                    (celist ++ [(ce',b,p)]))
+               []
+               ci.fields
+     in
+       ps3 with <| 
+         dynobjs := ps0.dynobjs ; 
+         dynclasses := ps0.dynclasses ;
+         accdecls := 
+           (ps.accdecls ++
+            [Decl (VStrDec fullnm 
+                     (SOME <| ancestors := ancs' ; 
+                              fields := flds' |>))])
+       |>
+\end{alltt}
+\caption{Name Resolution for a Global Class Declaration}
+\label{fig:phase1-gclassdefn}
+\end{figure}
+The first pass over the fields appears in the binding for value
+\texttt{ps2}.  The function called there, \texttt{extract_class_names}
+passes over the fields of the class-info value (\texttt{ci}), and adds
+the names it sees there to the state \texttt{ps1}.  The resolved
+fields are then calculated in the last \texttt{let} binding (to
+\texttt{flds'}).  Note that the state returned from the function adds
+the resolved declaration to its accumulating list of declarations
+(\texttt{accdecls}), but otherwise resets its dynamic state to that
+which held immediately after the declaration of the class
+(\texttt{ps0}). 
+
+\paragraph{Function Definitions} The final aspect of name resolutions
+worth illustating comes with the constant
+\texttt{phase1_fndefn},\index{phase1_fndefn@\texttt{phase1_fndefn}}
+which handles resolution for top-level function definitions.  This is
+another large definition, presented in Figure~\ref{fig:phase1-fndefn}.
+\begin{figure}[htbp]
+\begin{alltt}
+   phase1_fndefn avds retty fnm pms body ps =
+     let retty' = rewrite_type avds ps retty in
+     let pms' = 
+       MAP (\(\lambda\)(nm,ty). (nm, rewrite_type avds ps ty)) pms in
+     let funty = Function retty' (MAP SND pms') in
+     let (fnm',declared_ps, body_ps) =
+       case fnm of (* if the name is qualified, then there must be an
+                      existing declaration, so we don't need to alter
+                      anything in the state *)
+          IDConstant T [] sf -> ARB (* must be an error, see 8.3 p1 *)
+       || IDConstant T (sf1::sfs) sf2 ->
+             (fnm, ps, open_path avds.tyfvs T (sf1::sfs) ps)
+       || IDConstant F [] sf ->
+             (IDConstant T (MAP IDName ps.current_nspath) sf,
+              NewGVar funty sf ps,
+              NewGVar funty sf ps)
+       || IDConstant F (sf1::sfs) sf2 ->
+             let fnm' = resolve_classid ps fnm in
+             let (b,sfs,sf) = dest_id fnm'
+             in
+               (fnm', ps, open_path avds.tyfvs b sfs ps)
+     in
+     let ps' = 
+       FOLDL (\(\lambda\)ps (n,ty). 
+                  newlocal ps (IDName n) ty) body_ps pms' in
+     let body' = phase1_stmt avds ps' body
+     in
+       declared_ps with
+         accdecls := (declared_ps.accdecls ++ 
+                      [FnDefn retty' fnm' pms' body'])
+\end{alltt}
+\caption{Name Resolution for a Global Function Definition}
+\label{fig:phase1-fndefn}
+\end{figure}
+The big case-split on the form of the function name (\texttt{fnm})
+binds two different Phase~1 states.  The \texttt{declared_ps} is what
+is returned; and may reflect the fact that a new function is being
+defined.  (When the name is qualified in some way, then the function
+has already been declared (usually in a class).)  
+
+The \texttt{body_ps} is the name information that needs to be used
+when the body of the function is analysed.  For example, consider the
+following:
+\begin{verbatim}
+   namespace ns { 
+     int x; 
+     class C { int f(); int i; };
+   }
+   int ns::C::f() { return x + i; }
+\end{verbatim}
+When one comes to analyse the function \texttt{f}, both the global
+variable \texttt{ns::x}, and the member variable \texttt{C::i} are in
+scope.  This adjustment of scopes is done by the calls to
+\texttt{open_path}. 
 
 \section{Phase 2: Templates}
 
@@ -729,7 +1099,7 @@ Thus:
 \end{verbatim}
 Finally, there are four different sorts of non-type, non-template
 arguments~\cite[\S14.3.2~para~1]{cpp-standard-iso14882}:
-\begin{verbatim}[t]{cl}
+\begin{verbatim}
    TemplateValueArg =
        TNum of int
      | TObj of CPP_ID
@@ -1276,7 +1646,7 @@ Variables can also denote functions:
 (* RULE-ID: var-to-fvalue *)
      (lookup_type s vname = SOME ty) \(\land\)
      function_type ty \(\land\)
-     vname IN FDOM s.fnencode
+     vname \(\in\) FDOM s.fnencode
    \(\Rightarrow\)
      mng (s, EX (Var vname) se) (s, EX (FVal vname ty NONE) se)
 \end{alltt}
@@ -1324,7 +1694,7 @@ function is also controlled by a context:
 \index{rule (dynamic)!fcontext@\texttt{fcontext}}
 \begin{alltt}
 (* RULE-ID: fcontext *)
-     fnid IN FDOM s.fnencode \(\land\)
+     fnid \(\in\) FDOM s.fnencode \(\land\)
      (s.fnencode ' fnid = bytes) \(\land\)
      valid_fvcontext f
    \(\Rightarrow\)
@@ -1556,7 +1926,7 @@ Figure~\ref{fig:deref-rules}.
 
 (* RULE-ID: deref-fnptr *)
 (* 5.3.1 p1 - pointer to a function type *)
-     v IN FDOM s.fndecode
+     v \(\in\) FDOM s.fndecode
    \(\Rightarrow\)
      mng (s, EX (Deref
                   (ECompVal v
@@ -2051,8 +2421,8 @@ presented in Section~\ref{sec:statements-blocks} below.
 \index{rule (dynamic)!trap-stmt-evaluation@\texttt{trap-stmt-evaluation}}%
 \index{rule (dynamic)!trap-break-catches@\texttt{trap-break-catches}}%
 \index{rule (dynamic)!trap-continue-catches@\texttt{trap-continue-catches}}%
-\index{rule (dynamic)!trap-continue-passes-break@\texttt{trap-continue-passes-break}}%
-\index{rule (dynamic)!trap-break-passes-continue@\texttt{trap-break-passes-continue}}%
+\index{rule (dynamic)!trap-continue-pass-break@\texttt{trap-continue-pass-break}}%
+\index{rule (dynamic)!trap-break-pass-continue@\texttt{trap-break-pass-continue}}%
 \index{rule (dynamic)!trap-emptystmt-passes@\texttt{trap-emptystmt-passes}}%
 \index{rule (dynamic)!trap-ret-passes@\texttt{trap-ret-passes}}%
 \begin{alltt}
@@ -3371,7 +3741,7 @@ Figure~\ref{fig:nonclass-conversion}.
       (\(\exists\)ty0 base derived p fld.
           (ty1 = MPtr base ty0) \(\land\) (ty2 = MPtr derived ty0) \(\land\)
           (s,\lbr\rbr) |- path derived to base unique \(\land\)
-          (derived, p) IN rsubobjs (s,\lbr\rbr) \(\land\)
+          (derived, p) \(\in\) rsubobjs (s,\lbr\rbr) \(\land\)
              (* rsubobjs ensures base is not virtual *)
           (LAST p = base) \(\land\)
           (v2 = v1) \(\land\)
@@ -4535,13 +4905,25 @@ I believe the most significant dynamic omission is the failure to
 support class r-values.  The model also omits \texttt{delete},
 placement-\texttt{new}, and some of the constraints on what may or may
 not be done with constructors (for example, that
-in\cite[\S12.1,~para~15]{cpp-standard-iso14882}).
+in\cite[\S12.1,~para~15]{cpp-standard-iso14882}).  
+
+Class r-values would clearly be modelled almost as l-values, using the
+\texttt{LVal}\index{LVal@\texttt{LVal}} constructor.  The greatest
+complexity would come in having them returned from functions.  This
+would require (potentially anonymous) space to be allocated for them
+at the calling level, allowing copy constructors to be called to
+install the returned value into the appropriate spot.  The
+\texttt{exprclasses}%
+\index{exprclasses (state field)@\texttt{exprclasses} (\texttt{state} field)}%
+field of the state is designed to record such anonymously allocated
+objects so that they can be appropriate destroyed when the enclosing
+expression has finished its termination.
 
 Other language features completely ignored (mainly on the grounds that
-they are of less interest) are: enumerated types, unions, bit-field
-members and the \texttt{goto} and \texttt{switch} statements.  Also,
-for example, while I provide a rule for post-increment \texttt{++},
-there is no rule for \texttt{--}.
+they are of less interest) are: enumerated types, \texttt{typedef}
+declarations, unions, bit-field members and the \texttt{goto} and
+\texttt{switch} statements.  Also, for example, while I provide a rule
+for post-increment \texttt{++}, there is no rule for \texttt{--}.
 
 \appendix
 \section{Sources}
