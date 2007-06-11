@@ -107,7 +107,8 @@ The final phase of the semantics is execution, or ``dynamics''.  In
 this phase, top-level declarations are executed, resulting in the
 dynamic initialisation of variables, which can in turn result in the
 execution of source-code.  The exact order of evaluation of external
-declarations is allowed to vary (see \S3.6.2), and may or may not
+declarations is allowed to vary
+(see~\cite[\S3.6.2]{cpp-standard-iso14882}), and may or may not
 precede the execution of a program's \texttt{main} function.  The
 rules governing dynamic behaviour specify what is to occur when
 execution does occur, but do not specify how various executions are
@@ -220,6 +221,20 @@ equipped with various standard functional language operations such as
 \end{minipage}
 \end{center}
 The list append operation (\texttt{++}) is written as an infix.
+
+\paragraph{Options} The option type has two constructors
+\index{NONE (option constructor)@\texttt{NONE} (option constructor)}%
+\index{SOME (option constructor)@\texttt{SOME} (option constructor)}%
+\begin{verbatim}
+   NONE : 'a option
+   SOME : 'a -> 'a option
+\end{verbatim}
+allowing one to encode a type that represents all of the values of an
+existing type, and an extra value, usually representing failure or
+absence.  The %
+\index{THE (HOL function)@\texttt{THE} (HOL function)}%
+\texttt{THE} function reverses the action of \texttt{SOME}.  If
+applied to \texttt{NONE}, its value is unspecified.
 
 \paragraph{Finite Maps} The finite map is a form of function where the
 domain is guaranteed to be finite.  The type of finite maps from
@@ -1203,6 +1218,21 @@ number is pushed into a different sized space:
      mng (s, EX (Cchar n) se) (s, EX (ECompVal bl BChar) se)
 \end{alltt}
 
+\index{This@\texttt{This}} Though not really a literal, the special
+\cpp{} expression form \texttt{this} also has a simple rule:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!this@\texttt{this}}
+\begin{alltt}
+(* RULE-ID: this *)
+     T
+   \(\Rightarrow\)
+     mng (s, EX This se) (s, EX (THE s.thisvalue) se)
+\end{alltt}
+\end{minipage}
+\end{center}
+
+
 \paragraph{Variables} Looking up object variables becomes a little
 complicated in the presence of references and object orientation.
 \index{Var@\texttt{Var}}%
@@ -1797,7 +1827,6 @@ Figure~\ref{fig:global-function-call} governs (normal) function calls:
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!global-function-call@\texttt{global-function-call}}%
-\label{rule:global-function-call}
 \begin{alltt}
 (* RULE-ID: global-function-call *)
      find_best_fnmatch s0 fnid (MAP valuetype args)
@@ -2489,9 +2518,7 @@ expect (rule \ruleid{throw-expr-evaluation})
 
 When a \texttt{throw}'s expression has been completely evaluated, we
 have something that can then propagate upwards through the abstract
-syntax of statements.  Because of the way the rules for loops and
-\texttt{if}-statements work, their sub-statements are never executed
-while still sub-statements.
+syntax of statements.
 
 We already have a rule specifying how \texttt{throw}-statements traverse
 \texttt{Block} values: \ruleid{block-interrupted}, repeated here: 
@@ -3180,6 +3207,48 @@ dynamic type of the object stays the same, but the static type is
 adjusted to reflect the class where the function being called is
 defined.
 
+\paragraph{Calling a Member Function}
+Once the name of the function to be called has been found, the step of
+actually entering the body of the function can be taken.  This is
+described in rule \ruleid{member-function-call}, presented in
+Figure~\ref{fig:member-function-call}. 
+\begin{figure}[htbp]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!member-function-call@\texttt{member-function-call}}%
+\begin{alltt}
+(* RULE-ID: member-function-call *)
+     find_best_fnmatch s0 fnid (MAP valuetype args) 
+                       rtype params body \(\land\)
+     (pdecls = MAP (\(\lambda\)((n,ty),a). VDecInit ty
+                                     (Base n)
+                                     (CopyInit (EX a base_se)))
+                   (ZIP (params, args))) \(\land\)
+     (SOME this = ptr_encode s0 a (Class cname) p)
+   \(\Rightarrow\)
+     mng (s0, EX (FnApp_sqpt (FVal fnid ftype 
+                                   (SOME (LVal a (Class cname) p)))
+                             args) se0)
+         (s0 with <| stack updated_by 
+                       (CONS (s0.env, s0.thisvalue, s0.allocmap));
+                     thisvalue := 
+                       SOME (ECompVal this (Ptr (Class cname)));
+                     blockclasses updated_by stackenv_newscope ;
+                     exprclasses updated_by stackenv_newscope ;
+                     env := empty_env
+                  |>,
+          ST (Block T pdecls [body]) (return_cont se0 rtype))
+\end{alltt}
+\end{minipage}
+\end{center}
+\caption{Making a Member Function Call}
+\label{fig:member-function-call}
+\end{figure}
+This rule is basically the same as that for normal function calls (see
+\ruleid{global-function-call} in
+Figure~\ref{fig:global-function-call}), except that the value of the
+\texttt{this} pointer has to be established.\index{This@\texttt{This}}
+
 \paragraph{Field Selection}
 Field selection is also based on the notion of being able to find the
 most-derived declaration of the given field in the ancestor hierarchy.
@@ -3514,8 +3583,8 @@ accompanies every statement evaluation.
 
 \index{return_cont@\texttt{return_cont}}%
 The rules for function calls (see, for example
-\ruleid{global-function-call} on
-page~\pageref{rule:global-function-call}) construct the continuation
+\ruleid{global-function-call} in Figure~\ref{fig:global-function-call}
+(page~\pageref{fig:global-function-call})) construct the continuation
 with a call to \texttt{return_cont}.  The continuation type is defined
 in \HOLfile{statements}:
 \begin{verbatim}
@@ -4328,6 +4397,83 @@ body of a destructor is entered is handled by the fact that the
 sub-object information is entered into the \texttt{blockclasses} stack
 ahead of the final encompassing object.
 
+\paragraph{Using the Heap}
+Classes, and other types, can be allocated on the heap with the
+\texttt{new} operator.  For non-classes the rule is
+\ruleid{new-nonclass}, in Figure~\ref{fig:new-nonclass}. 
+\begin{figure}[htbp]
+\begin{center}
+  \begin{minipage}{\textwidth}
+\index{rule (dynamic)!new-nonclass@\texttt{new-nonclass}}
+\index{New@\texttt{New}}
+\begin{alltt}
+(* RULE-ID: new-nonclass *)
+     \(\neg\)class_type (strip_array ty) \(\land\)
+     malloc s0 ty a \(\land\)
+     (result_ty = case strip_const ty of
+                     Array bty n -> bty
+                  || somety -> ty) \(\land\)
+     sizeof T (sizeofmap s0) ty sz \(\land\)
+     (s = s0 with <| 
+            hallocmap updated_by (UNION) (range_set a sz) ;
+            constmap := if const_type ty then
+                          s0.constmap UNION range_set a sz
+                        else s0.constmap DIFF range_set a sz
+          |>) \(\land\)
+     (SOME ptrval = ptr_encode s0 a result_ty [])
+   \(\Rightarrow\)
+     mng (s0, EX (New ty NONE) se)
+         (s, EX (ECompVal ptrval (Ptr result_ty)) se)
+\end{alltt}
+\end{minipage}
+\end{center}
+\caption{Allocating a Non-Class Object on the Heap with \texttt{new}}
+\label{fig:new-nonclass}
+\end{figure}
+When the address is found for the new object (using the
+\texttt{malloc} auxiliary), the allocation is recorded in the state's
+\texttt{hallocmap} field, rather than the \texttt{allocmap}, which is
+used for local objects.  The \texttt{hallocmap} is not affected by
+moving in and out of blocks.
+
+When a class is to be allocated, a constructor must be called.  This
+is reflected in the rule of Figure~\ref{fig:new-simple-class}.   The
+hypotheses are very similar to the non-class rule, but the conclusion
+differs because the class's constructor must be called before the
+pointer to the object can be returned.  
+\begin{figure}[htbp]
+\begin{center}
+\index{rule (dynamic)!new-simple-class@\texttt{new-simple-class}}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+(* RULE-ID: new-simple-class *)
+(* The T F parameters to the ConstructorFVal constructor indicate
+    1. the object produced is most-derived, and
+    2. it is not a sub-object (neither base, nor member) of some 
+       other object
+*)
+     (Class cnm = strip_const ty) \(\land\)
+     malloc s0 ty a \(\land\)
+     sizeof T (sizeofmap s0) ty sz \(\land\)
+     (s = s0 with <| 
+             hallocmap updated_by (UNION) (range_set a sz) ;
+             constmap := if const_type ty then
+                           s0.constmap UNION range_set a sz
+                         else s0.constmap DIFF range_set a sz
+          |>) \(\land\)
+     (SOME ptrval = ptr_encode s0 a ty [cnm])
+   \(\Rightarrow\)
+     mng (s0, EX (New ty (SOME args)) se)
+         (s, EX (CommaSep (FnApp (ConstructorFVal T F a cnm) args)
+                          (ECompVal ptrval (Ptr ty)))
+                se)
+\end{alltt}
+\end{minipage}
+\end{center}
+\caption{Allocating a Class Object on the Heap}
+\label{fig:new-simple-class}
+\end{figure}
+
 \section{Validation}
 \label{sec:validation}
 
@@ -4367,14 +4513,14 @@ calls to functions over particular types, in particular namespaces and
 classes.
 
 Two other large omissions in the realm of statics are \texttt{const},
-and protection statuses.  In general, the \texttt{const}-ness of an
-expression influences the selection of particular functions to call
-(more name resolution), and can prevent certain expressions from being
-written at all.  These latter constraints are an important part of the
-practice of programming with \cpp{}, but again, are checked by the
-compiler.  The semantics does model the fact that it is undefined
-behaviour to update memory that has been declared as \texttt{const}.
-
+and protection statuses (including \texttt{friend} functions).  In
+general, the \texttt{const}-ness of an expression influences the
+selection of particular functions to call (more name resolution), and
+can prevent certain expressions from being written at all.  These
+latter constraints are an important part of the practice of
+programming with \cpp{}, but again, are checked by the compiler.  The
+semantics does model the fact that it is undefined behaviour to update
+memory that has been declared as \texttt{const}.
 
 Protection statuses (\ie, the designation of certain fields or base
 classes as being \texttt{public}, \texttt{protected} or
@@ -4386,12 +4532,16 @@ these omissions are justified given the commission to prefer treatment
 of dynamics rather than static issues.
 
 I believe the most significant dynamic omission is the failure to
-support class r-values.
+support class r-values.  The model also omits \texttt{delete},
+placement-\texttt{new}, and some of the constraints on what may or may
+not be done with constructors (for example, that
+in\cite[\S12.1,~para~15]{cpp-standard-iso14882}).
 
-Other language features completely ignored are: enumerated types,
-unions, and the \texttt{goto} and \texttt{switch} statements.  Also,
-while I provide a rule for post-increment \texttt{++}, there is no
-rule for \texttt{--}.
+Other language features completely ignored (mainly on the grounds that
+they are of less interest) are: enumerated types, unions, bit-field
+members and the \texttt{goto} and \texttt{switch} statements.  Also,
+for example, while I provide a rule for post-increment \texttt{++},
+there is no rule for \texttt{--}.
 
 \appendix
 \section{Sources}
