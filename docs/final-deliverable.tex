@@ -1175,7 +1175,7 @@ constants, though it is clear what they would look like.
 \begin{alltt}
 (* RULE-ID: number-literal *)
      (REP_INT (Signed Int) n = SOME bl)
-   ==>
+   \(\Rightarrow\)
      mng (s, EX (Cnum n) se)
          (s, EX (ECompVal bl (Signed Int)) se)
 \end{alltt}
@@ -1432,7 +1432,7 @@ evaluated.
 \begin{alltt}
 (* RULE-ID: comma-progresses *)
      final_value (EX e1 se)
-   ==>
+   \(\Rightarrow\)
      mng (s0, EX (CommaSep e1 e2) se)
          (s0, EX (RValreq e2) base_se)
 \end{alltt}
@@ -2184,7 +2184,7 @@ following statements to disappear:
      final_stmt exstmt c \(\land\)
      \(\neg\)(exstmt = EmptyStmt) \(\land\)
      \(\neg\)(sts = [])
-   ==>
+   \(\Rightarrow\)
      mng (s, ST (Block T [] (exstmt::sts)) c)
          (s, ST (Block T [] [exstmt]) c)
 \end{alltt}
@@ -2232,13 +2232,12 @@ passed to the continuation through rules \ruleid{return-rvalue}
 (page~\pageref{rule:return-rvalue}) or \ruleid{return-lvalue}
 (page~\pageref{rule:return-lvalue}). 
 
-\index{ST@\texttt{ST}}
-\index{EX@\texttt{EX}}
-Such a return can not happen prematurely: the two \texttt{return}
-rules both have \texttt{EX} tags in their ``result'' arguments, and
-the rule \ruleid{block-stmt-evaluate}, the only rule calling for
-statement evaluation recursively, requires its recursive call to be an
-\texttt{ST}-to-\texttt{ST} evaluation.
+\index{ST@\texttt{ST}} \index{EX@\texttt{EX}} Such a return can not
+happen prematurely: the two \texttt{return} rules both have
+\texttt{EX} tags in their ``result'' arguments, and the rule
+\ruleid{block-stmt-evaluate}, as well as all the other rules calling
+for statement evaluation recursively, requires its recursive call to
+be an \texttt{ST}-to-\texttt{ST} evaluation.
 
 \subsubsection{Simple Declarations}
 \label{sec:simple-declarations}
@@ -2359,7 +2358,7 @@ expression can be evaluated.
 (* RULE-ID: decl-vdecinit-evaluation *)
      mng (s0, exte) (s, exte') \(\land\)
      ((f = CopyInit) \(\lor\) (f = DirectInit))
-   ==>
+   \(\Rightarrow\)
      declmng mng (VDecInitA ty loc (f exte), s0)
                  ([VDecInitA ty loc (f exte')], s)
 \end{alltt}
@@ -2424,6 +2423,7 @@ the variable being initialised is not a reference.%
 
 \subsection{Exceptions}
 \label{sec:exceptions}
+\newcommand{\ethrow}{\texttt{EThrow}}
 
 Exceptions are modelled in a way similar to the treatment of
 \texttt{return}, \texttt{break} and \texttt{continue}.  One difference
@@ -2432,138 +2432,148 @@ only propagates up as far as a function call (within an expression).
 In contrast, an exception will continue to propagate up through the
 call-stack until it hits a suitable handler.
 
-\newcommand{\ethrow}{\texttt{throw}\ensuremath{_e}}
-This much allows a preliminary sketch of the behaviour.  The
-\texttt{throw} form is actually an expression, but we set things up so
-that there is a statement-level version of \texttt{throw} as well, and
-it will be this that propagates through statement syntax.  The
-expression syntax is written \ethrow{}, and the rule
-\ruleid{expression-throw-some} describes the behaviour when the
-\texttt{throw} has an argument:
-\[
-\infer{
-  \statebrack{\textsf{Ex}(\ethrow(e)), \sigma}
-  \to
-  \statebrack{\textsf{St}(\texttt{throw}(e),c), \sigma}}{}
-\]
-The variable $c$ represents the continuation that would normally
-convert the result of the statement into a value to be inserted into a
-containing expression tree.  Because \texttt{throw} values can't ever
-turn into values until they initialise a handler, this $c$ can be
-anything at all.
+\index{EThrow@\texttt{EThrow}} \index{Throw@\texttt{Throw}} This much
+allows a preliminary sketch of the behaviour.  The \texttt{throw} form
+is actually an expression (\texttt{EThrow}), but we set things up so
+that there is a statement-level version of \texttt{throw} as well
+(\texttt{Throw}), and it will be this that propagates through
+statement syntax.  The rule \ruleid{expression-throw-some} describes
+the behaviour when \texttt{EThrow} has an argument:
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!expression-throw-some@\texttt{expression-throw-some}}%
+\begin{alltt}
+(* RULE-ID: expression-throw-some *)
+     T
+   \(\Rightarrow\)
+     mng (s, EX (EThrow (SOME e)) se)
+         (s, ST (Throw (SOME (EX e se))) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+The variable \texttt{c} represents the continuation that would
+normally convert the result of the statement into a value to be
+inserted into a containing expression tree.  Because thrown
+values can't ever turn into values until they initialise a handler,
+this $c$ can be anything at all.
 
-At the statement level, the \texttt{throw} form takes an extended
+At the statement level, the \texttt{Throw} form takes an extended
 expression as an argument.  This evaluates its argument as one might
 expect (rule \ruleid{throw-expr-evaluation})
-\[
-\infer{\statebrack{\texttt{throw}\;e_0,\sigma_0}\stmtarrow\statebrack{\texttt{throw}\;e,\sigma}}{\statebrack{e_0,\sigma_0}\to\statebrack{e,\sigma}}
-\]
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+(* RULE-ID: throw-expr-evaluation *)
+     mng (s0, RVR e0) (s, RVR e)
+   \(\Rightarrow\)
+     mng (s0, ST (Throw (SOME e0)) c) (s, ST (Throw (SOME e)) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+
 When a \texttt{throw}'s expression has been completely evaluated, we
 have something that can then propagate upwards through the abstract
 syntax of statements.  Because of the way the rules for loops and
 \texttt{if}-statements work, their sub-statements are never executed
 while still sub-statements.
 
-We start by specifying how \texttt{throw}-statements traverse
-\texttt{Block} values.  This propagation uses the rule
-\ruleid{block-interrupted}:
-\[
-\infer{
-  \statebrack{
-    \mathbf{\{} \;[\,] \;(s\!::\!\mathit{sts})\,\mathbf{\}},
-    \sigma
-  }
-  \stmtarrow
-  \statebrack{\mathbf{\{} \;[\,]\; [s]\mathbf{\}},\sigma}}{
-  \textsf{final\_stmt}(s) & s \neq \textsf{EmptyStmt} & \mathit{sts}
-  \neq [\,]}
-\]
-That this is a block rule is indicated by the
-$\mathbf{\{\,\}}$-delimiters.  The first argument inside the block on
-both sides of the arrow is an empty list of declarations.  The
-predicate \textsf{final\_stmt} is true of \texttt{throw} and
+We already have a rule specifying how \texttt{throw}-statements traverse
+\texttt{Block} values: \ruleid{block-interrupted}, repeated here: 
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!block-interrupted@\texttt{block-interrupted}}
+\begin{alltt}
+(* RULE-ID: block-interrupted *)
+     final_stmt exstmt c \(\land\)
+     \(\neg\)(exstmt = EmptyStmt) \(\land\)
+     \(\neg\)(sts = [])
+   \(\Rightarrow\)
+     mng (s, ST (Block T [] (exstmt::sts)) c)
+         (s, ST (Block T [] [exstmt]) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+The predicate \texttt{final_stmt} is true of \texttt{throw} and
 \texttt{return} statements with fully evaluated arguments, as well as
 of \texttt{break}, \texttt{continue} and the \textsf{EmptyStmt} form.
 The latter doesn't cause an interruption, so is excluded by the second
 hypothesis to the rule.  The final hypothesis ensures that there isn't
-an infinite loop on this rule.
-
-A \naive{} version of the rule for exiting a block
-(\ruleid{block-exit}) is
-\[
-\infer{
-  \statebrack{\mathbf{\{}\;[\,]\;[s]\;\mathbf{\}},\sigma}
-  \stmtarrow
-  \statebrack{s,\sigma}
-}{
-  \textsf{final\_stmt}(s)
-}
-\]
-If a block has a final statement as its only statement, then that
-statement can be propagated out to the top-level of the abstract
-syntax. We will return to this rule when we come to worry about the
-interaction of exceptions and object lifetimes.
+an infinite loop on this rule.  The same predicate is used in the rule
+for exiting a block (\ruleid{block-exit}, page~\pageref{fig:block-exit}).
 
 There is also rule \ruleid{trap-exn-passes} for exception statements
 escaping the \texttt{Trap} form (which is used for handling
 \texttt{continue} and \texttt{break}):
-\[
-\infer{
-  \statebrack{
-    \textsf{St}(\texttt{Trap}\;\mathit{tt}\;\mathit{exn}, c), \sigma
-  }
-  \to
-  \statebrack{\textsf{St}(\mathit{exn},c), \sigma}
-}{\textsf{is\_exnval}(\textsf{St}(\mathit{exn},c))}
-\]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!trap-exn-passes@\texttt{trap-exn-passes}}%
+\begin{alltt}
+(* RULE-ID: trap-exn-passes *)
+     exception_stmt exn
+   \(\Rightarrow\)
+     mng (s, ST (Trap tt exn) c) (s, ST exn c)
+\end{alltt}
+\end{minipage}
+\end{center}
 
 \medskip
 Because exceptions arise from expressions, the statement level rules
 need to acknowledge this possibility.  Thus, this rule for
 \texttt{if} (\ruleid{if-exception}):
-\[
-\infer{
-  \statebrack{\textsf{St}(\texttt{if}\;G\;t\;e, c), \sigma}
-  \to
-  \statebrack{\textsf{mk\_exn}(G,c),\sigma}
-}{
-  \textsf{is\_exnval(G)}
-}
-\]
-where $\textsf{is\_exnval}(G)$ is true if $G$ is of the form
-$\textsf{St}(\texttt{throw}(e), c_0)$, and $e$ has been fully
-evaluated.  The function \textsf{mk\_exn} takes an exception value and
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!if-exception@\texttt{if-exception}}%
+\index{CIf@\texttt{CIf}}%
+\begin{alltt}
+(* RULE-ID: if-exception *)
+     is_exnval guard
+   \(\Rightarrow\)
+     mng (s, ST (CIf guard thenstmt elsestmt) c)
+         (s, mk_exn guard c)
+\end{alltt}
+\end{minipage}
+\end{center}
+where the definition of \texttt{is_exnval} is (from
+\HOLfile{statements})\index{is_exnval@\texttt{is_exnval}}
+\begin{alltt}
+   (is_exnval (ST (Throw (SOME e)) c) = final_value e) \(\land\)
+   (is_exnval _ = F)
+\end{alltt}
+The function \texttt{mk_exn} takes an exception value and
 replaces its continuation information with something appropriate for
-the level of the containing statement.  In this example, $c_0$ will be
-replaced by $c$.  There is a similar rule for the standalone
-expression and \texttt{return} forms, as well as for the
+the level of the containing statement: \index{mk_exn@\texttt{mk_exn}}
+\begin{verbatim}
+   mk_exn (ST (Throw (SOME e)) c0) c = ST (Throw (SOME e)) c
+\end{verbatim}
+
+Of course, exceptions can arise in all the other expressions that
+appear within statement forms, so there are similar rules for the
+standalone expression and \texttt{return} forms, as well as for the
 statement-level \texttt{throw} form itself.  (The rule
-\ruleid{expression-throw-some} turns a \ethrow{} into a \texttt{throw}
-statement immediately, without evaluating the argument.  When the
-argument \emph{is} evaluated, it may itself cause an exception.)
+\ruleid{expression-throw-some} turns an \texttt{EThrow} into a
+\texttt{Throw} statement immediately, without evaluating the argument.
+When the argument \emph{is} evaluated, it may itself cause an
+exception.)
 
 Because exceptions can arise in variable declarations, there is also a
 rule for handling these.  This is \ruleid{block-declmng-exception}:
-\[
-\infer{
-  \statebrack{
-    \textsf{St}(\mathbf{\{}\,(d\!::\!\mathit{ds})\;sts\,\mathbf{\}}, c),
-    \sigma_0
-  }
-  \to
-  \statebrack{
-    \textsf{St}(\mathbf{\{}\,[\,]\;[\texttt{throw}(\mathit{ex})]\,\mathbf{\}}, c),
-    \sigma
-  }
-}{
-  \statebrack{d,\sigma_0}\to_d
-  \statebrack{[\texttt{VDecInitA}\;\tau\;\mathit{loc}\;e], \sigma}
-  &
-  e = \textsf{St}(\texttt{throw}(\mathit{ex}), c')
-}
-\]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!block-declmng-exception@\texttt{block-declmng-exception}}%
+\begin{alltt}
+(* RULE-ID: block-declmng-exception *)
+     ((f = CopyInit) \(\lor\) (f = DirectInit)) \(\land\)
+     declmng mng (d0, s0) ([VDecInitA ty loc (f e)], s) \(\land\)
+     is_exnval e \(\land\)
+     (e = ST (Throw (SOME ex)) c')
+   \(\Rightarrow\)
+     mng (s0, ST (Block T (d0 :: vds) sts) c)
+         (s, ST (Block T [] [Throw (SOME ex)]) c)
+\end{alltt}
+\end{minipage}
+\end{center}
 Again, note how the continuation initially associated with the
-exception ($c'$) is ignored.
+exception (\texttt{c'}) is ignored.
 
 
 \subsubsection{Handling Exceptions}
@@ -2593,63 +2603,58 @@ declarations (in \texttt{statementsScript}):
    exn_pdecl = (string option # CPP_Type) option
 
    stmt = ...
-        | Catch of stmt => (exn_pdecl # stmt) list
+        | Catch of CStmt => (exn_pdecl # CStmt) list
 \end{alltt}
-In what is to come, I will write $*$ to correspond to the ``null''
-value in option types, and use $\lfloor x\rfloor$ to make it explicit
-that $x$ is in an option type.
 
 \bigskip
 \noindent
 Statements can evaluate as usual under a \texttt{Catch}
 \ruleid{catch-stmt-evaluation}:
-\[
-\infer{
-  \statebrack{\textsf{St}(\texttt{Catch}\;s\;\mathit{hnds}, c),
-    \sigma_0}
-  \to
-  \statebrack{\textsf{St}(\texttt{Catch}\;s'\;\mathit{hnds}, c),
-    \sigma}
-}{
-  \statebrack{\textsf{St}(s,c),\sigma_0}\to
-  \statebrack{\textsf{St}(s',c),\sigma}
-}
-\]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!catch-stmt-evaluation@\texttt{catch-stmt-evaluation}}%
+\index{Catch@\texttt{Catch}}%
+\begin{alltt}
+(* RULE-ID: catch-stmt-evaluation *)
+     mng (s0, ST st c) (s, ST st' c)
+   ==>
+     mng (s0, ST (Catch st hnds) c) (s, ST (Catch st' hnds) c)
+\end{alltt}
+\end{minipage}
+\end{center}
 Non-exception statements pass through \texttt{Catch} statements,
 ignoring the handlers \ruleid{catch-normal-stmt-passes}:
-\[
-\infer{
-  \statebrack{
-    \textsf{St}(\texttt{Catch}\;s\;\mathit{hnds}, c),
-    \sigma
-  }
-  \to
-  \statebrack{\textsf{St}(s,c), \sigma}
-}{
-  \textsf{final\_stmt}(s) &
-  \lnot\textsf{is\_exnval}(\textsf{St}(s,c))
-}
-\]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!catch-normal-stmt-passes@\texttt{catch-normal-stmt-passes}}%
+\begin{alltt}
+(* RULE-ID: catch-normal-stmt-passes *)
+     final_stmt st c \(\land\)
+     \(\neg\)exception_stmt st
+   \(\Rightarrow\)
+     mng (s0, ST (Catch st hnds) c) (s0, ST st c)
+\end{alltt}
+\end{minipage}
+\end{center}
 
 There are three rules governing how handlers interact with thrown
 exceptions.  The first describes the behaviour when the handler
 parameter is given as ``\texttt{...}'' \ruleid{catch-all}:
-\[
-\infer{
-  \begin{array}{l}
-    \statebrack{
-      \textsf{St}(\texttt{Catch}\;(\texttt{throw}(e))\;((*,
-      \mathit{hnd})::\mathit{hnds}), c), \sigma
-    }
-    \to\\[1ex]
-    \quad \statebrack{
-      \textsf{St}(\mathbf{\{}\,[\,]\;[\mathit{hnd};\,\textsf{ClearExn}]\,\mathbf{\}}, c),
-      \sigma[\textsf{current\_exns}\,:=\,e::\textsf{current\_exns}\,]
-    }
-  \end{array}
-}{
-}
-\]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!catch-all@\texttt{catch-all}}%
+\begin{alltt}
+(* RULE-ID: catch-all *)
+     (exn = SOME (EX e base_se))
+   \(\Rightarrow\)
+     mng (s0, ST (Catch (Throw exn) ((NONE, hnd_body) :: rest)) c)
+         (s0 with current_exns updated_by (CONS e),
+          ST (Block F [] [hnd_body; ClearExn]) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+\index{current_exns (state field)@\texttt{current_exns} (\texttt{state} field)}%
+\index{ClearExn@\texttt{ClearExn}}%
 This rule introduces two new features, the \textsf{current\_exns}
 field of the program state, and the \textsf{ClearExn} statement-form.
 Both are present to support the ability of programs to use
@@ -2661,82 +2666,78 @@ Otherwise, the behaviour is clear: if the top handler has
 the other handlers are discarded).
 
 When the top handler has an explicitly-typed parameter, the handler is
-only entered if the type of the thrown value matches
-\ruleid{catch-specific-type-matches}:
-\[
-\infer{
-  \begin{array}{l}
-    \statebrack{
-      \textsf{St}(\texttt{Catch}\;
-                    (\texttt{throw}(e))\;
-                    ((\lfloor(\mathit{pnm?},\tau)\rfloor, \mathit{hnd})::
-                     \mathit{hnds}),c),
-      \sigma
-    }
-    \to\\[.5ex]
-    \quad \left\langle
-      \begin{array}{l}
-        \textsf{St}(
-           \mathbf{\{}\,[\textsf{VDecInit}\;\tau\;\mathit{pnm}\;
-                                            (\textsf{CopyInit}\;e)]\;
-                        [\mathit{hnd};\,\textsf{ClearExn}]\,\mathbf{\}}, c),\\
-        \sigma[\textsf{current\_exns}\,:=\,e::\textsf{current\_exns}\,]
-      \end{array}\right\rangle
-  \end{array}
-}{
-  \begin{array}{c}
-  \mathit{pnm} = (\textsf{case}\;\mathit{pnm?}\;\textsf{of}\;*\to \texttt{" no name "}
-  \;\;|\;\; \lfloor x \rfloor \to x)\\[.5ex]
-  \textsf{exn\_param\_matches}\;\sigma\;\tau\;(\textsf{typeof}(e))
-  \end{array}
-}
-\]
+only entered if the type of the thrown value matches: 
+\ruleid{catch-specific-type-matches} in
+Figure~\ref{fig:catch-specific-type-matches}. 
+\begin{figure}[htbp]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!catch-specific-type-matches@\texttt{catch-specific-type-matches}}%
+\begin{alltt}
+(* RULE-ID: catch-specific-type-matches *)
+     (exn = SOME (EX e base_se)) \(\land\)
+     exception_parameter_match s0 pty (value_type e) \(\land\)
+     (pname = case pnameopt of SOME s -> Base s
+                            || NONE -> (Base " no name "))
+   \(\Rightarrow\)
+     mng (s0, ST (Catch 
+                   (Throw exn)
+                   ((SOME(pnameopt, pty), hnd_body) :: rest)) 
+                 c)
+         (s0 with current_exns updated_by (CONS e),
+          ST (Block F [VDecInit pty pname
+                                    (CopyInit (EX e base_se))]
+                      [hnd_body; ClearExn]) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+\caption{Catching a Typed Exception}
+\label{fig:catch-specific-type-matches}
+\end{figure}
+
 The string \texttt{" no name "} is chosen arbitrarily as the name of
 the invisible temporary if the handler has just a type as its
 parameter and no associated name.  This name is chosen so as to not
 mask any existing names in scope (no legal \cpp{} program can have
 variable names that include spaces).
 
-If the declared type $\tau$ matches the type of the exception value,
-then the exception value copy-initialises the parameter, and the
-handler body is executed.  The constant \textsf{exn\_param\_matches}
-checks the match, embodying the rules in \S15.3, paragraph 3.  If
-there is no match, then the remaining handlers have to be tried
+If the declared type \texttt{pty} matches the type of the exception
+value, then the exception value copy-initialises the parameter, and
+the handler body is executed.  The constant
+\texttt{exception_parameter_match} checks the match, embodying the
+rules in~\cite[\S15.3, paragraph 3]{cpp-standard-iso14882}.  If there
+is no match, then the remaining handlers have to be tried
 \ruleid{catch-specific-type-nomatch}:
-\[
-\infer{
-  \begin{array}{c}
-    \statebrack{
-      \textsf{St}(\texttt{Catch}\;
-                    (\texttt{throw}(e))\;
-                    ((\lfloor(\mathit{pnm?},\tau)\rfloor, \mathit{hnd})::
-                     \mathit{hnds}), c),
-      \sigma
-    }\\
-    \to\\
-    \quad\statebrack{
-      \textsf{St}(\texttt{Catch}\;(\texttt{throw}(e))\;\mathit{hnds},c),
-      \sigma
-    }
-  \end{array}
-}{
-  \lnot\,\textsf{exn\_param\_matches}\;\sigma\;\tau\;(\textsf{typeof}(e))
-}
-\]
+\begin{center}
+  \begin{minipage}{\textwidth}
+\index{rule (dynamic)!catch-specific-type-nomatch@\texttt{catch-specific-type-nomatch}}%
+\begin{alltt}
+(* RULE-ID: catch-specific-type-nomatch *)
+     (exn = SOME (EX e base_se)) \(\land\)
+     \(\neg\)exception_parameter_match s0 pty (value_type e)
+   \(\Rightarrow\)
+     mng (s0, ST (Catch 
+                    (Throw exn)
+                    ((SOME(pnameopt, pty), hnd_body) :: rest)) 
+                 c)
+         (s0, ST (Catch (Throw exn) rest) c)
+\end{alltt}
+  \end{minipage}
+\end{center}
 If no handlers, remain, the exception propagates further
 \ruleid{catch-stmt-empty-hnds} (generalised to allow any statements to
 pass through):
-\[
-\infer{
-  \statebrack{
-    \textsf{St}(\texttt{Catch}\;s\;[\,], c),
-    \sigma
-  }
-  \to
-  \statebrack{\textsf{St}(s, c), \sigma}
-}{\rule{0mm}{2ex}}
-\]
-
+\begin{center}
+  \begin{minipage}{\textwidth}
+\index{rule (dynamic)!catch-stmt-empty-hnds@\texttt{catch-stmt-empty-hnds}}%
+\begin{alltt}
+(* RULE-ID: catch-stmt-empty-hnds *)
+     T
+   \(\Rightarrow\)
+     mng (s0, ST (Catch st []) c) (s0, ST st c)
+\end{alltt}
+  \end{minipage}
+\end{center}
 
 \subsubsection{Using \texttt{throw} with No Argument}
 \label{sec:throw-none}
@@ -2745,57 +2746,80 @@ If flow of control is within an exception handler, or within a
 function body that has been called from such, then it is permissible
 to use the expression \texttt{throw} without any arguments to cause
 the current exception to be rethrown.  This requires the model to
-track what the current handled exception is.  More, the
-standard requires the state to track the notion of ``most recently
-caught'' exception~(\S15.1, paragraph 7), which requires the state to
-track a stack of exceptions that have been caught.
+track what the current handled exception is.  More, the standard
+requires the state to track the notion of ``most recently caught''
+exception~\cite[\S15.1, paragraph 7]{cpp-standard-iso14882}), which
+requires the state to track a stack of exceptions that have been
+caught.
 
 The expression version \ethrow{} is converted to the statement form as
 soon as it is encountered \ruleid{expression-throw-none}:
-\[
-\infer{\statebrack{\textsf{Ex}(\ethrow(*),\mathit{se}), \sigma}
-  \to
-  \statebrack{\textsf{St}(\texttt{throw}(*),c), \sigma}
-}{}
-\] (The choice of $c$ is again irrelevant.)
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!expression-throw-none@\texttt{expression-throw-none}}%
+\begin{alltt}
+(* RULE-ID: expression-throw-none *)
+     T
+   \(\Rightarrow\)
+     mng (s, EX (EThrow NONE) se) (s, ST (Throw NONE) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+(The choice of $c$ is again irrelevant.)
 
-There are then two rules for the statement $\texttt{throw}(*)$.  If
-there is a current exception, all is well
+There are then two rules for the statement form \texttt{Throw~NONE}.
+If there is a current exception, all is well
 \ruleid{bare-throw-succeeds}:
-\[
-\infer{
-  \statebrack{\textsf{St}(\texttt{throw}(*), c), \sigma}
-  \to
-  \statebrack{\textsf{St}(\texttt{throw}(e), c),
-    \sigma[\textsf{current\_exns} := \mathit{es}]}
-}{
-  \sigma.\textsf{current\_exns} = e :: \mathit{es}
-}
-\]
-Otherwise, the program must call the \texttt{std::terminate} function
-\[
-\infer{
-  \statebrack{\textsf{St}(\texttt{throw}(*), c), \sigma}
-  \to
-  \statebrack{\textsf{St}(\texttt{std::terminate}(), c),\sigma}
-}{
-  \sigma.\textsf{current\_exn} = [\,]
-}
-\]
+\begin{center}
+  \begin{minipage}{\textwidth}
+\index{rule (dynamic)!bare-throw-succeeds@\texttt{bare-throw-succeeds}}%
+\index{current_exns (state field)@\texttt{current_exns} (\texttt{state} field)}%
+\begin{alltt}
+(* RULE-ID: bare-throw-succeeds *)
+     (s0.current_exns = e::es)
+   \(\Rightarrow\)
+     mng (s0, ST (Throw NONE) c)
+         (s0 with current_exns := es,
+          ST (Throw (SOME (EX e base_se))) c)
+\end{alltt}
+\end{minipage}
+\end{center}
+Otherwise, the program must call the \texttt{::std::terminate} function
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!bare-throw-fails@\texttt{bare-throw-fails}}%
+\begin{alltt}
+(* RULE-ID: bare-throw-fails *)
+     (s0.current_exns = [])
+   \(\Rightarrow\)
+     mng (s0, ST (Throw NONE) ct)
+         (s0, ST (Standalone (EX callterminate base_se)) ct)
+\end{alltt}
+\end{minipage}
+\end{center}
+where the special expression \texttt{callterminate} is defined to be 
+\begin{verbatim}
+   FnApp (Var (IDConstant T [IDName "std"] 
+                          (IDName "terminate"))) 
+         []
+\end{verbatim}
 
+\index{ClearExn@\texttt{ClearExn}}%
 Above, the rules for handlers also use a statement-form
-\textsf{ClearExn}.  This special value has the following rule
+\texttt{ClearExn}.  This special value has the following rule
 \ruleid{clear-exn}:
-\[
-\infer{
-\statebrack{\textsf{St}(\textsf{ClearExn},c), \sigma}
-\to
-\statebrack{\textsf{St}(\textsf{EmptyStmt},c),
-  \sigma[\textsf{current\_exns}:=\mathit{es}]}
-}{
-  \sigma.\textsf{current\_exns} = e::es
-}
-\]
+\begin{center}
+\begin{minipage}{\textwidth}
+\index{rule (dynamic)!clear-exn@\texttt{clear-exn}}
+\begin{alltt}
+(* RULE-ID: clear-exn *)
+     (s0.current_exns = e::es)
+   \(\Rightarrow\)
+     mng (s0, ST ClearExn c)
+         (s0 with current_exns := es, ST EmptyStmt c)
+\end{alltt}
+\end{minipage}
+\end{center}
 This ensures that when a handler finishes the most recently caught
 exception is no longer recorded as such.  If a handler rethrows the
 current exception, or throws a fresh exception of its own, and this
@@ -2811,6 +2835,8 @@ This is not modelled in the dynamic semantics as it can be emulated
 with a compile-time rewriting of the program.  If a function
 \texttt{f} is specified to only raise exceptions X and Y, then it can
 be rewritten to be
+\begin{center}
+\begin{minipage}{\textwidth}
 \begin{verbatim}
    f(args)
    {
@@ -2822,6 +2848,8 @@ be rewritten to be
      catch (...) { std::unexpected(); }
    }
 \end{verbatim}
+\end{minipage}
+\end{center}
 
 \subsubsection{Exceptions and Object Lifetimes}
 
@@ -3009,6 +3037,7 @@ has evaluated to an l-value.\footnote{Even when the model allows for
 \label{fig:virtual-fn-member-select}
 \end{figure}
 
+\index{vtables}
 In our model, the l-value's address will be the same as the address of
 its most-derived class.  In other words, the \texttt{a} of the rule
 will be the same as the address of the object \texttt{d}.  This is not
@@ -3090,19 +3119,21 @@ qualified with the name of the class where the field actually
 resides.
 
 \index{class_part@\texttt{class_part}}%
-In the rule, the first hypothesis is strictly redundant given this
-pre-processing: we know that the field will occur in the class that is
-at the end of the path \texttt{Ds}, and that this final element will
-be equal to the class-part of the identifier.  The second hypothesis
-reinforces this: the deduced path from \texttt{LAST~Ds} (which equals
-\texttt{class_part~fldid})to the host class for the given field is the
-singleton \texttt{[LAST~Ds]}.  Because the member is static (witness
-the \texttt{T} as argument 2 of the 4-tuple returned by
-\texttt{least-method}), the final function value does not include a
-class component.
+Strictly, in this rule, the first hypothesis is redundant because of
+this pre-processing: we know that the field will occur in the class
+that is at the end of the path \texttt{Ds}, and that this final
+element will be equal to the class-part of the identifier.  The second
+hypothesis reinforces this: the deduced path from \texttt{LAST~Ds}
+(which equals \texttt{class_part~fldid}) to the host class for the
+given field is the singleton \texttt{[LAST~Ds]}.  Because the member
+is static (witness the \texttt{T} as argument 2 of the 4-tuple
+returned by \texttt{least-method}), the final function value does not
+include a class component.
 
 \index{member functions!non-static}
-The rule for normal, non-static  member functions is:
+The rule for normal, non-static  member functions is given in
+Figure~\ref{fig:nstatic-fn-member-select}. 
+\begin{figure}
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!nstatic-fn-member-select@\texttt{nstatic-fn-member-select}}%
@@ -3122,6 +3153,9 @@ The rule for normal, non-static  member functions is:
 \end{alltt}
 \end{minipage}
 \end{center}
+\caption{Selecting a Non-static Member Function}
+\label{fig:nstatic-fn-member-select}
+\end{figure}
 This is very similar to the rule for static functions, but this time
 the identity of the class for which the function is being called is
 important, and recorded in the third argument to \texttt{FVal}.  The
@@ -3148,7 +3182,9 @@ sub-objects are laid out.  (Recall, moreover, that in the presence of
 a virtual base-class, an object that is not most-derived may be split
 over distinct parts of memory.)
 
-The rule for finding the offset of a non-static data member is
+The rule for finding the offset of a non-static data member is given
+in Figure~\ref{fig:nstatic-data-field-select}.
+\begin{figure}
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!nstatic-data-field-select@\texttt{nstatic-data-field-select}}%
@@ -3172,13 +3208,16 @@ The rule for finding the offset of a non-static data member is
 \end{alltt}
 \end{minipage}
 \end{center}
+\caption{Calculating the Offset of a Non-static Data Member}
+\label{fig:nstatic-data-field-select}
+\end{figure}
 Recall that static analysis done by Phase~1 will have turned all data
 field references into fully-qualified identifiers.  That means the
 dynamics already knows exactly which sub-class holds the desired
 field.  In the rule, that sub-class is \texttt{cnm2}.  The first
 hypothesis confirms that there is indeed a path from the static type
 of the l-value to that sub-class (which might be itself, of course).
-The second hypothesis then extracts both the type of the field and
+The second hypothesis then both extracts the type of the field and
 confirms that it is not static.
 
 The rule also determines whether or not the sub-class is actually the
@@ -3199,16 +3238,18 @@ list consisting of the class name if \texttt{ty} is a class type, and
 the empty list otherwise.
 
 
+\index{vtables}%
 \paragraph{What of vtables?}
-The use of paths does away with the need for vtables.  On the other
-hand, we wouldn't want to specify the model in such a way as to
-preclude this perfectly reasonable implementation strategy.  In
-particular, vtables will be catered for just as in the standard, by
-maintaining that it is only in POD (``plain old data'') types where
-one can rely on the address of the first field being the same as the
-address of the containing \texttt{struct}.  The calculation of sizes
-must also be under-specified to allow for the presence of extra,
-user-invisible data at the start of a class.
+The use of paths \emph{\`a la} Wasserrab~\emph{et al.} does away with
+the need for vtables.  On the other hand, we wouldn't want to specify
+the model in such a way as to preclude this perfectly reasonable
+implementation strategy.  In particular, vtables will be catered for
+just as in the standard, by maintaining that it is only in POD
+(``plain old data'') types where one can rely on the address of the
+first field being the same as the address of the containing
+\texttt{struct}.  The calculation of sizes must also be
+under-specified to allow for the presence of extra, user-invisible
+data at the start of a class.
 
 \subsubsection{Casting and Other Type Conversions}
 We have already seen one use of implicit conversion from one type of
@@ -3284,7 +3325,10 @@ constructed.
 
 In the other direction (back down a class hierarchy), dynamic casts
 can fail, and require the source type to be polymorphic (\ie, the
-source class should have at least one virtual function).
+source class should have at least one virtual function).  The rule
+governing this behaviour appears in
+Figure~\ref{fig:dyncast-base-other-ref}. 
+\begin{figure}[htbp]
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!dyncast-base-other-ref@\texttt{dyncast-base-other-ref}}%
@@ -3307,6 +3351,9 @@ source class should have at least one virtual function).
 \end{alltt}
 \end{minipage}
 \end{center}
+\caption{Performing a Polymorphic \texttt{dynamic_cast}}
+\label{fig:dyncast-base-other-ref}
+\end{figure}
 Note how the dynamic type of the l-value does not change: it remains
 as \texttt{src_dynty}.  Instead the accompanying path value adjusts:
 shifting from a path that leads up as far as \texttt{LAST~p} (the
