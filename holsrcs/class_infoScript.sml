@@ -438,18 +438,22 @@ val _ = add_rule {block_style = (AroundEachPhrase, (PP.CONSISTENT, 0)),
                                  BreakSpace(1,0), TOK "via", BreakSpace(1,0)],
                   term_name = "selects_via"}
 val (selects_via_rules,selects_via_ind,selects_via_cases) = Hol_reln`
-   (!s C mname minfo Cs Cs'.
+(* RULE-ID: selects-simple *)
+(!s C mname minfo Cs Cs'.
      s |- C has least method mname -: minfo via Cs'
    ==>
-     s |- (C,Cs) selects mname -: minfo via Cs')
+     s |- (C,Cs) selects mname -: minfo via Cs'
+)
 
    /\
 
-   (!s mname minfo C Cs Cs'.
+(* RULE-ID: selects-with-overrider *)
+(!s mname minfo C Cs Cs'.
      (!minfo Cs'. ~ (s |- C has least method mname -: minfo via Cs')) /\
      s |- (C,Cs) has overrider mname -: minfo via Cs'
    ==>
-     s |- (C,Cs) selects mname -: minfo via Cs')
+     s |- (C,Cs) selects mname -: minfo via Cs'
+)
 `
 
 (* s |- static_ty casts dynamic_value0 to dynamic_value1 *)
