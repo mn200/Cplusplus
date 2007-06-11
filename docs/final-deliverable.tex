@@ -4881,7 +4881,43 @@ reflexivity and anti-symmetry of name instantiation in
 
 The file \HOLfile{concrete_tests} includes more sanity theorems, but
 of a particular form: exploring the behaviour of the model when
-applied to conrete examples.
+applied to concrete examples.  The last test (\texttt{t6}) is name
+resolution on the following, small program, featuring a nested class.
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+    int x;
+    int f()
+    {
+      struct s {
+        int g() { return x; }
+        int x;
+      };
+      s val;
+      val.x = x;
+      return val.g();
+    }
+\end{verbatim}
+\end{minipage}
+\end{center}
+The test confirms that the body of the function \texttt{f} is
+interpreted as if it were
+\begin{center}
+  \begin{minipage}{\textwidth}
+\begin{verbatim}
+    int f()
+    {
+      struct s {
+        int g() { return s::x; }
+        int x;
+      };
+      s val;
+      val.s::x = ::x;
+      return val.s::g();
+    }
+\end{verbatim}
+  \end{minipage}
+\end{center}
 
 
 \section{Omissions and Possible Fixes}
