@@ -656,19 +656,20 @@ val let_thms = prove(
     (LET f8 T = f8 T) /\ (LET f8 F = f8 F) /\
     (LET f9 dNormalObj = f9 dNormalObj) /\
     (LET f9 dMember = f9 dMember) /\
-    (LET f10    <|allocmap := am; hallocmap := hm; fnmap := fnm;
-                  fnencode := fem; fndecode := fdm;
+    (LET f10    <|allocmap := am; hallocmap := hm; initmap := im; 
+                  fnmap := fnm; fnencode := fem; fndecode := fdm;
                  genv := genv ;
-                 env := env; initmap := im; stack := stk; thisvalue := this;
+                 env := env; stack := stk; thisvalue := this;
                  blockclasses := bcs; exprclasses := ecs|> =
        let am0 = am in let hm0 = hm in let fnm0 = fnm in let fem0 = fem in
        let fdm0 = fdm in
        let genv0 = genv in let env0 = env in let im0 = im in let stk0 = stk in
        let this0 = this in let bcs0 = bcs in let ecs0 = ecs in
-         f10  <|allocmap := am0; hallocmap := hm0; fnmap := fnm0;
+         f10  <|allocmap := am0; hallocmap := hm0; initmap := im0; 
+                fnmap := fnm0;
                   fnencode := fem0; fndecode := fdm0;
                  genv := genv0 ;
-                 env := env0; initmap := im0; stack := stk0;
+                 env := env0; stack := stk0;
                  thisvalue := this0;
                  blockclasses := bcs0; exprclasses := ecs0|>) /\
     (LET f11 NONE = f11 NONE) /\
@@ -691,11 +692,17 @@ val let_thms = prove(
     (LET f20 (<| typemap := tm; tempmap := tm'; valmap := vm |>) =
          f20 <| typemap := tm; tempmap := tm'; valmap := vm |>) /\
     (LET f21 (Ret e) = f21 (Ret e)) /\
+    (LET f21 (Standalone e) = f21 (Standalone e)) /\
+    (LET f21 (Block b vds sts) = 
+         let b0 = b in let vds0 = vds in let sts0 = sts in 
+           f21 (Block b0 vds0 sts0)) /\
     (LET f22 (VStrDec id ci) =
        let id0 = id in let ci0 = ci in f22 (VStrDec id0 ci0)) /\
     (LET f22 (VDec ty id) =
        let id0 = id in let ty0 = ty in f22 (VDec ty0 id0)) /\
-    (LET f23 (Var id) = let id0 = id in f23 (Var id0))
+    (LET f23 (Var id) = let id0 = id in f23 (Var id0)) /\
+    (LET f24 (SVar exp id) = let exp0 = exp in 
+                             let id0 = id in f24 (SVar exp0 id0))
 ``,
   SRW_TAC [][LET_THM]);
 val _ = augment_srw_ss [rewrites [let_thms]]
@@ -726,7 +733,10 @@ val setfn_1 = prove(``{(x,v)} ' x = v``,
 val _ = augment_srw_ss [rewrites [pGSPEC_F, pGSPEC_SING, pGSPEC_U,
                                   pred_setTheory.INSERT_UNION_EQ,
                                   okfield_def, RTC_REFL, fieldname_def,
-                                  fieldtype_def, FLOOKUP_DEF, setfn_1]]
+                                  fieldtype_def, FLOOKUP_DEF, setfn_1,
+                                  FAPPLY_FUPDATE_THM, expr_type_rewrites, 
+                                  mk_dynobj_id_def
+                       ]]
 
 
 val t6_2_1 = let
@@ -824,7 +834,7 @@ val t6_2_1 = let
   val _ = print "15 ";
   val th16 = SIMP_RULE (srw_ss()) [Cong LET_CONG, newlocal_def] th15
   val _ = print "16 ";
-  val th17 = SIMP_RULE (srw_ss()) [Cong LET_CONG, expr_type_rewrites,
+  val th17 = SIMP_RULE (srw_ss()) [Cong LET_CONG, 
                                    lookup_type_def, lift_lookup_def,
                                    elookup_type_def] th16
   val _ = print "17 ";
