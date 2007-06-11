@@ -1172,7 +1172,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
        object
 *)
 (!cnm s0 se s ty a sz args ptrval.
-     (Class cnm = strip_const ty) /\ malloc s0 ty a /\
+     (Class cnm = strip_const ty) /\ 
+     malloc s0 ty a /\
      sizeof T (sizeofmap s0) ty sz /\
      (s = s0 with <| hallocmap updated_by (UNION) (range_set a sz) ;
                      constmap := if const_type ty then
@@ -1544,7 +1545,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: trap-continue-passes-break *)
+(* RULE-ID: trap-continue-pass-break *)
 (!c s.
      T
    ==>
@@ -1553,7 +1554,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: trap-break-passes-continue *)
+(* RULE-ID: trap-break-pass-continue *)
 (!c s.
      T
    ==>

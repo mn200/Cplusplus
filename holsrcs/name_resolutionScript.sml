@@ -66,8 +66,6 @@ val id_objtype_def = Define`
 
 
 
-(* the "others" field stores 'objects' (functions and variables), as well
-   as namespace names *)
 val _ = Hol_datatype`
   P1state = <|
     current_nspath : string list ;
@@ -1008,7 +1006,7 @@ val phase1_stmt_defn = Defn.Hol_defn "phase1_stmt" `
      let ps3 = open_path avds.tyfvs F (id_sfs cnm) ps2 in
      let flds' =
        FOLDL (\ celist (ce,b,p).
-                let ce' = phase1_centry avds ps cnm ce
+                let ce' = phase1_centry avds ps3 cnm ce
                 in
                   celist ++ [(ce',b,p)])
              []
@@ -1256,7 +1254,7 @@ val phase1_gclassdefn_def = Define`
      let ps3 = open_path avds.tyfvs T (id_sfs fullnm) ps2 in
      let flds' =
          FOLDL (\ celist (ce,b,p).
-                  let ce' = phase1_gcentry avds ps cnm ce
+                  let ce' = phase1_gcentry avds ps3 cnm ce
                   in
                     (celist ++ [(ce',b,p)]))
                []
