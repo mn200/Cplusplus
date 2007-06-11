@@ -32,11 +32,11 @@
 
 \section{Introduction}
 
-This document attempts to present the substance of the mechanised
-\cpp{} semantics that is developed in the accompanying HOL source
-files (see Appendix~\ref{sec:sources}).  Those files sum to over
-12$\,$000 lines; this document tries to cover both the important parts
-in detail, and to describe the less important parts at a high level.
+This document presents the substance of the mechanised \cpp{}
+semantics that is developed in the accompanying HOL source files (see
+Appendix~\ref{sec:sources}).  Those files sum to over 12$\,$000 lines;
+this document tries to cover both the important parts in detail, and
+to describe the less important parts at a high level.
 
 The HOL mechanisation itself is necessarily the only \emph{formal}
 part of the deliverable.  This document quotes from the sources
@@ -87,9 +87,8 @@ names wherever they occur.  Note that the result is no longer valid
 \cpp{} (it is illegal to use the explicit qualification in names being
 defined), but the next phase of understanding does not expect valid
 \cpp{} in any case.  In the presence of hierarchical namespaces, and
-class namespaces inheriting from bases, this phase of work is not
-entirely trivial.  It is described in some detail in
-Section~\ref{sec:phase1}.
+class namespaces inheriting from bases, Phase~1 is not entirely
+trivial.  It is described in some detail in Section~\ref{sec:phase1}.
 
 The second phase of the semantics is to deal with templates.  Template
 resolution takes a translation unit with most of its name resolved,
@@ -335,9 +334,7 @@ types:
 \index{IDComp@\texttt{IDComp}}
 \index{IDConstant@\texttt{IDConstant}}
 \begin{verbatim}
-   CPP_ID = IDConstant of bool => IDComp list => IDComp
-
-   ;
+   CPP_ID = IDConstant of bool => IDComp list => IDComp ;
 
    IDComp = IDTempCall of string => TemplateArg list
           | IDName of string
@@ -607,7 +604,8 @@ program of Figure~\ref{fig:name-res-separate-phase}, the global
 \texttt{x} is visible when \texttt{::ns1::f} is defined, but there is
 no \texttt{x} in the namespace \texttt{::ns1}, at least at that stage.
 
-The HOL definition (see \HOLfile{name_resolution}):
+The HOL definition of the Phase~1 state is (see
+\HOLfile{name_resolution}):
 \begin{verbatim}
    P1state = <|
      current_nspath : string list ;
@@ -663,10 +661,10 @@ Phase~1.
 
 One significant issue is the resolution of names in templates.  When a
 template definition is instantiated, it is important to specify how
-the names occuring in the template bind.  Typically, such names might
-bind to global names that are in scope at the point of the template's
-definition, or to member functions associated with the template
-argument.
+the names occuring in the template are bound.  Typically, such names
+might bind to global names that are in scope at the point of the
+template's definition, or to member functions associated with the
+template argument.
 
 The rule is actually fairly straightforward, at least in principle:
 function names are allowed to bind to template names when the
@@ -746,7 +744,7 @@ simple variable however, then the code binds \texttt{fnm} to the name
 of the variable, and \texttt{atys} to the types of the arguments.  
 
 The next test calculates the free type names of the argument types.
-If this set is overlaps with the names of any template arguments, then
+If this set overlaps with the names of any template arguments, then
 the variable must be left alone, as \emph{per}
 Section~\ref{sec:p1-template-names} above (it will be the subject of
 future work if the containing template is instantiated).  Next it is
@@ -1052,13 +1050,13 @@ template parameters that are themselves references to templates
 One might imagine that it be possible to treat templates at
 ``run-time'', as if one had written a one-pass \cpp{} interpreter.
 However, the example in Figure~\ref{fig:templates-not-interpretable}
-demonstrates that such a goal is impossible, that one would have to
-write a two pass interpreter at the very least.  Any reference to the
-figure's \texttt{List} template, perhaps within a function that was
-called at a great stack depth, causes the need to statically
-initialise the global \texttt{node\_count} before the program even
-begins.  A \naive{} interpreter that attempts to execute the program
-source as it sees it, will come unstuck.
+demonstrates that such a goal is impossible, or at least that one
+would have to write a two pass interpreter at the very least.  Any
+reference to the figure's \texttt{List} template, perhaps within a
+function that was called at a great stack depth, causes the need to
+statically initialise the global \texttt{node\_count} before the
+program even begins.  A \naive{} interpreter that attempts to execute
+the program source as it sees it, will come unstuck.
 
 As the interpreter sees the template declarations above, it does
 nothing.  Then it performs its global declarations, and jumps into
@@ -1084,10 +1082,8 @@ compilation approach.
 \label{fig:templates-not-interpretable}
 \end{figure}
 
-
-
-Finally, we need to specify the possible sorts of arguments that can
-be passed to templates.  The Standard is quite explicit
+We need to specify the possible sorts of arguments that can be passed
+to templates.  The Standard is quite explicit
 here~\cite[\S14.3~para~1]{cpp-standard-iso14882}, there are three
 sorts of arguments: types, templates, and ``non-type, non-template''
 arguments (meaning references to objects with linkage, or numbers).
@@ -1113,24 +1109,6 @@ arguments~\cite[\S14.3.2~para~1]{cpp-standard-iso14882}:
 This presentation is slightly simplified because the standard also
 allows arithmetic on these arguments, where this is appropriate
 (between \texttt{TNum} and \texttt{TVAVar} parameters).
-
-This is a complicated type, and it does assume that some previous
-phase of analysis has determined which references are to class types,
-and which are to namespaces.  In this way, something like
-\texttt{x::y::z} can be split up to include namespaces within a
-\texttt{TopName} component, and sub-fields or sub-classes within
-\texttt{IDFld} structuring.
-
-Similarly, a string such as \texttt{x::t<int>} is ambiguous without
-some static analysis being performed to determine whether \texttt{x}
-is a namespace or a class.  If \texttt{x} is a class, then \texttt{t}
-must be a template member function, but if it is a namespace, then
-\texttt{t} might be either a class template or a function template.
-
-Further note that there can be at most two template calls within an
-identifier.  If there are two, then the outermost is a class template,
-and the second will occur last, and will be a template member
-function.
 
 \subsection{Instantiation and Matching}
 
@@ -1174,6 +1152,7 @@ partial order over types, such that $\tau_1 \leq \tau_2$ when $\tau_2$
 is a more specialised/instantiated version of $\tau_1$.  As in Siek
 and Taha~\cite{DBLP:conf/ecoop/SiekT06}, we can prove reflexivity,
 transitivity, and antisymmetry (up to renaming of free variables).
+(These are sanity results, requiring substantial proof.)
 
 Given the partial order, it is straightforward to find the best match
 amongst a set of template definitions for a given template call.
@@ -1239,8 +1218,9 @@ Taha's model is too eager.
 \end{verbatim}
   \caption[A Template Program that Breaks Siek and Taha's Model]{Siek
     and Taha's model's early instantiation breaks down when it sees
-    the definition of \texttt{Baz<A>::g}.  At this point, it can not
-    tell which template is being instantiated in the body.  By way of
+    the definition of \texttt{Baz<A>::g}, and the call to
+    \texttt{A<int>} in particular.  At this point, it can not tell
+    which template is being instantiated in the body.  By way of
     contrast, my model doesn't instantiate anything until it sees the
     definition of \texttt{main}.  (This program is available as
     \texttt{notes/siek-taha-tempvar.cpp})}
@@ -1249,130 +1229,157 @@ Taha's model is too eager.
 
 My model only performs instantiations when there is a ground instance
 to drive the instantiation.  Otherwise, it is similar to what is
-presented in Siek and Taha.  In particular, it is important to avoid
+presented in Siek and Taha.  In particular, it is crucial to avoid
 instantiating member functions unless they are called for.
 
-The model in the \texttt{templates} script is based around a working
-state of four components: Templates, Residuals, Needs and
-Declarations.  The Templates are those declarations encountered so far
-which are of templates.  The Residuals are those ``resolved''
-declarations that have either been encountered, or which have been
-instantiated from Templates, and are thus ``ground'' or variable-free.
-A resolved declaration is one that has had all of its dependencies
-appropriately instantiated, or at least recorded.  The Needs are those
-declarations that have been required for a resolution, and for which
-there have been template declarations, but no definitions.  Needs can
-be functions (class-members, including constructors and destructors,
-or normal top-level functions), and static data members of classes.
-Finally, the Declarations are the declarations that still need to be
-processed, coupled with a number specifying how much work has been
-done to the declaration so far (all declarations start at level 0).
+The model in \HOLfile{templates} script is based around a working
+state of two components: a Phase~1 state, and a sequence of ground
+declarations.  In addition, the template relations take a sequence of
+template declarations, the ``patterns''.  These patterns do not change
+as template instantiation is performed, whereas the other components
+do.  Thus, the general forms of the relations' definition is
+\begin{verbatim}
+   template_relation pats (ps0,grds0) (ps,grds) = ...
+\end{verbatim}
 
-The Declarations component of the instantation state can grow as well
-as shrink, and it is this that can cause compilation to fail to
-terminate.
+Template instantiation only begins when all of the program's
+declarations have been analysed in Phase~1.  This means that the
+process begins with a complete Phase~1 state, and with all of the
+translation unit's definitions ``to hand''.  This is only real
+difference between the model here and Siek \& Taha's.  Their core
+relation is presented in their Figure~6, and consists of 4 rules,
+including one that checks when instantiation can finish.  It is their
+last rule, \textsc{(C-Fun)} that represents a problem: when their
+system encounters a member function definition, it analyses it there
+and then.
 
-Values in the Declarations component can be declarations or
-definitions, and can be of classes, variables and functions.  The
-behaviour on encountering declarations of ground entities is rather
-involved, and detailed in Table~\ref{tab:ground-decls}.  The basic
-idea is that any ground definition can cause the instantiation of
-templates.  Such instantiations are always governed by the requirement
-that the best match is found.  Successful instantiations are stored in
-the Residuals component, so duplicate work is avoided.
+In contrast, my model only performs Phase~1 analysis on such
+functions.  All template work is deferred until the end of Phase~1.
+Further, template work requires that all class definitions have member
+function definitions stripped from them and turned into separate
+top-level definitions.  This is not a difficult operation to perform.
+At this point, my model repeatedly performs the equivalent of Siek and
+Taha's rule \textsc{(C-InstFun)}.
 
-Instantiations are done in two phases.  First any template classes
-required are instantiated.  This instantiation can in turn prompt
-further instantiation because a template class can have template
-members, or template ancestors.  if the required types can be
-instantiated without causing an infinite loop, the original definition
-will eventually return to the top of the Declarations list, but at
-Level 1.  This time, the definition is scanned to see if it depends on
-any functions or static variables.   These references may or may not
-have definitions (though they will all at least have declarations).
-Those with definitions are instantiated and put onto the list of
-Declarations.  Those without end up in Needs.
+The top-level definition (from \HOLfile{templates}) is
+\begin{verbatim}
+   template_analysis pats =
+     TC ((template_phase2_destructors pats RUNION
+          template_phase2_constructors pats RUNION
+          template_phase2_statmems pats RUNION
+          template_phase2_fns pats) O
+         TC (template_phase1 pats))
+\end{verbatim}
+where \texttt{TC} is transitive closure, \texttt{RUNION} is relation
+union, and \texttt{O} is relation composition. 
 
-When a template declaration is encountered, this is put straight into
-the Templates component.  When a template definition is encountered,
-this may resolve an outstanding Need, so it is checked against all
-current Needs.  Those that can instantiate against the new Template
-definition are put onto the Declarations list.
+The first phase is \texttt{template_phase1}, which is instantiates any
+needed template classes:
+\begin{alltt}
+   template_phase1 pats (ps0, grds0) (ps, grds) =
+     \(\exists\)id id' sub ci0.
+       id \(\in\) used_ttypes pats grds0 \(\land\)
+       id \(\not\in\) declared_types grds0 \(\land\)
+       (\(\forall\)sub_id. sub_id is_sub_tid id \(\Rightarrow\)
+                 sub_id IN declared_types grds0) \(\land\)
+       best_class_match pats id sub (id', ci0) \(\land\)
+       phase1 ([P1Decl 
+                  (Decl 
+                     (VStrDec id 
+                        (cinfo_inst sub (THE ci0))))], ps0)
+              ([], ps) \(\land\)
+       (grds = grds0 ++ [LAST ps.accdecls])
+\end{alltt}
+This rule first looks for a type name \texttt{id} that is both
+referred to in the ground input declarations (\texttt{grds0}), and
+which is not declared there.  It then checks that all identifiers that
+are a proper prefix of \texttt{id} \emph{are} declared.\footnote{Thus,
+  a reference to something like \texttt{C<int>::D<char>} will result
+  in the instantiation of \texttt{C<int>} first.} Then, the relation
+\texttt{best_class_match} scans the template declarations, and returns
+the best (most specific) match.  In fact, it returns both the
+instantiation required to turn the template ID (\texttt{id'}) into the
+desired ID (\texttt{id}) and the template class declaration, which is
+\texttt{ci0}.
 
-\begin{table}
-\hspace{-3em}
-\begin{tabular}{lp{0.32\textwidth}p{0.32\textwidth}p{0.32\textwidth}}
-  & \multicolumn{1}{c}{\textbf{Function}} &
-  \multicolumn{1}{c}{\textbf{Class}} &
-  \multicolumn{1}{c}{\textbf{Variable}} \\
-  \textbf{Decl.}
-  &
-  \small \textbf{L0:}
-  Add declarations of any referred to template types
-  to the list of Declarations still to be processed.
-  &
-  % Class
-  \small \textbf{L0:}
-  If not already in Residuals, and a template application, find best
-  instantiation for this type and add its instantiated definition
-  (less any member function definitions) to
-  list of Declarations still to be processed.
-  &
-  \small \textbf{L0:} Declarations can only be of non-template variables
-  (template variables are declared inside class definitions).  Add to
-  Residuals and continue.
-  \\ \\
-  \textbf{Defn.}
-  &
-  % Function 0
-  \small\textbf{L0:} If not already present in Residuals, extract any
-  template
-  types, and put declarations of
-  these into Declarations, ahead of this function definition at
-  Level~1.
-  &
-  % Class 0
-  \small \textbf{L0:} Extract any template types from the data-member
-  definitions, and put Level~0 declarations for these into
-  Declarations, followed by this declaration at Level~1.
-  &
-  % Variable 0
-  \small \textbf{L0:} Add any referenced template types to
-  declarations at Level~0 (such types may occur in the initialising
-  expression for the variable), followed by the same declaration at
-  Level~1.
-  \\[1ex]
-  &
-  % Function 1
-  \small \textbf{L1:} Extract any function and static
-  variable references, and
-  add those with definitions (once instantiated with best match)  to
-  Declarations at Level 0.  Those
-  functions or static variables without definitions are added to
-  Needs.
-  &
-  % Class 1
-  \small \textbf{L1:}
-  Required types have been dealt with: now check for definitions of
-  any static data members.  Those not present are added to Needs.
-  Best matched members are added to Declarations at Level~0.
-  &
-  % Variable 1
-  \small \textbf{L1:} Check initialising expression for references to
-  template functions, or other static variables.  Add instantiated
-  definitions (for those with definitions) to
-  Declarations list at Level~0.  Add others to Needs.
-\end{tabular}
-\caption{Behaviour of program instantiation on ground declarations}
-\label{tab:ground-decls}
-\end{table}
+The penultimate conjunct of the definition instantiates the
+class-info, and performs a Phase~1 analysis of it.  The resulting
+class declaration can be appended to the list of ground declarations. 
 
-\paragraph{Caveat} Unlike Siek and Taha's model, there hasn't been any
-validation of my model of program instantiation, whether by the proof
-of theorems, or by simulation of concrete examples.
+The second phase of template analysis looks to instantiate member
+functions (including constructors and destructors),  as well static
+member objects.  The pattern is similar for each constant.  The following is
+the rule for member functions.
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+   template_phase2_fns pats (ps0, grds0) (ps, grds) =
+     \(\exists\)id id' sub retty pms bod.
+       id \(\in\) used_tfns pats grds0 \(\land\)
+       id \(\not\in\) defined_fns grds0 \(\land\)
+       (\(\forall\)sub_id. sub_id is_sub_tid id \(\Rightarrow\)
+                 sub_id \(\in\) declared_types grds0) \(\land\)
+       best_function_match pats id sub 
+                           (id', (retty, pms, bod)) \(\land\)
+       phase1 ([P1Decl 
+                  (FnDefn
+                     (THE (type_inst sub retty))
+                     id
+                     (MAP (\(\lambda\)(n,ty). 
+                             (n,THE (type_inst sub ty))) 
+                          pms)
+                     (THE (stmt_inst sub bod)))], ps0)
+              ([], ps) \(\land\)
+       (grds = grds0 ++ [LAST ps.accdecls])
+\end{alltt}
+\end{minipage}
+\end{center}
+The basic pattern of this rule is similar to that of
+\texttt{template_phase1}.  First, an identifier \texttt{id} is found
+that is both referred to among the ground declarations, and which is
+not ground itself.  If a matching function can be found, then this is
+instantiated, and passed to the Phase~1 analysis to have its names
+resolved.  It is at this point that names we avoided in
+Figure~\ref{fig:phase1expr-fnapp}~(page~\pageref{fig:phase1expr-fnapp}),
+will get their chance to find resolution in appropriate namespaces,
+because arguments that had been templates will now be concrete, ground
+types.
 
+Note that this rule also handles template instantiation for function
+templates that are not associated with a class, though it is an
+incomplete picture because the \texttt{best_function_match} relation
+does not consider other ground functions, and so doesn't deal with
+overloading resolution. 
 
-
+The definition of \texttt{best_function_match} appears in
+Figure~\ref{fig:best-function-match}.  A lot of the ``heavy lifting''
+in this definition of the behaviour of templates comes from the
+operations of matching and instantiation.  This is the strength of
+Siek and Taha's approach.  In this definition, the best match is one
+that finds a \texttt{sub} that does indeed instantiate the pattern
+\texttt{id'} to the desired \texttt{id} (instantiating only the
+variables that are identified as template parameters).  The second
+half of the definition requires that the match be ``best'' by
+requiring that all other contenders be instantiable to it.
+\begin{figure}[htbp]
+\begin{alltt}
+   best_function_match Temps id sub (id', (retty,pms,bod)) =
+     (\(\exists\)targs.
+         (cppID_inst sub id' = SOME id) \(\land\)
+         MEM (TemplateDef targs (FnDefn retty id' pms bod)) 
+             Temps \(\land\)
+         sub only_changes targsfrees targs) \(\land\)
+     \(\forall\)id2 retty2 pms2 bod2 sub2 targs.
+         MEM (TemplateDef targs (FnDefn retty2 id2 pms2 bod2)) 
+             Temps \(\land\)
+         sub2 only_changes targsfrees targs \(\land\)
+         (cppID_inst sub2 id2 = SOME id) \(\Rightarrow\)
+         \(\exists\)sub'. (cppID_inst sub' id2 = SOME id') \(\land\)
+                sub' only_changes targsfrees targs
+\end{alltt}
+\caption{Finding the Best Function Instantiation}
+\label{fig:best-function-match}
+\end{figure}
 
 
 \section{Phase 3: Dynamics}
@@ -2003,8 +2010,9 @@ Functions and data members are not declared in quite the same way
 within a class (because the functions may be accompanied by their
 implementations), which explains the disjunctive hypothesis above.
 The function \texttt{encode_offset} takes a class and field-name and
-returns the encoding of this offset as a list of bytes.  It is that is
-will be written into memory if the offset is stored in a variable.
+returns the encoding of this offset as a list of bytes.  It is this
+that will be written into memory if the offset is stored in a
+variable.
 
 \bigskip\noindent
 Once one has a pointer-to-member value, one can dereference it, as
@@ -4854,12 +4862,26 @@ behave as one might expect.  This work builds on the ideas
 in~\cite{netsem:popl2006}, allowing symbolic exploration of a semantic
 definition that features non-deterministic branching.  For the moment,
 the code only handles a sequence of external declarations not
-requiring any expression evaluation, which is very minimalist.
+requiring any expression evaluation, which is very minimalist.  More
+in this vein would require a significant investment of work, though it
+would be an appealing one as it might allow the semantics to pass a
+test suite.
 
 This tool requires some sort of parser for \cpp{} source code, as
 having to write out abstract syntax trees by hand is a major
 annoyance.  It's possible that the front-end of \texttt{g++} might be
 usable in this regard.
+
+Throughout the sources, there are a number of sanity theorems.  These
+are identified by ML comments of the form \texttt{(*~SANITY~*)}.
+There is one slightly more substantial result in the theory
+\HOLfile{sanity}, but its proof pales beside those of transitivity,
+reflexivity and anti-symmetry of name instantiation in
+\HOLfile{instantiation}.
+
+The file \HOLfile{concrete_tests} includes more sanity theorems, but
+of a particular form: exploring the behaviour of the model when
+applied to conrete examples.
 
 
 \section{Omissions and Possible Fixes}
