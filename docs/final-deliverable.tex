@@ -91,7 +91,7 @@ class namespaces inheriting from bases, Phase~1 is not entirely
 trivial.  It is described in some detail in Section~\ref{sec:phase1}.
 
 The second phase of the semantics is to deal with templates.  Template
-resolution takes a translation unit with most of its name resolved,
+resolution takes a translation unit with most of its names resolved,
 and where the unit consists of ``ground'' (non-template) and template
 declarations or definitions.  The ground definitions may refer to
 various template classes or functions.  If so, the appropriate
@@ -235,7 +235,7 @@ absence.  The %
 \texttt{THE} function reverses the action of \texttt{SOME}.  If
 applied to \texttt{NONE}, its value is unspecified.
 
-\paragraph{Finite Maps}\index{finite maps} 
+\paragraph{Finite Maps}\index{finite maps}
 The finite map is a form of function where the domain is guaranteed to
 be finite.  The type of finite maps from $\sigma$ to $\tau$ is written
 \texttt{:$\sigma$~|->~$\tau$}.  The HOL syntax for the application of
@@ -688,7 +688,7 @@ variable''.)
 Most of the clauses of the function \texttt{phase1_expr} are
 uninteresting recursions, \eg:
 \begin{verbatim}
-   phase1_expr avds ps (COr e1 e2) = 
+   phase1_expr avds ps (COr e1 e2) =
      COr (phase1_expr avds ps e1) (phase1_expr avds ps e2)
 \end{verbatim}
 
@@ -701,20 +701,20 @@ for which see Figure~\ref{fig:phase1expr-fnapp}.
      let e' =
          if is_unqvar e then
            let fnm = dest_unqvar e in
-           let atys = 
+           let atys =
               \(\varepsilon\)atys. listRel (expr_type ps.global RValue) elist'
-                             atys 
+                             atys
            in
-             if \(\neg\)(DISJOINT 
-                     avoids 
+             if \(\neg\)(DISJOINT
+                     avoids
                      (FOLDL (\(\lambda\)a ty. a UNION tyfrees ty) \lbr\rbr atys))
-             then 
-               e 
-             else if fnm \(\in\) FDOM ps.dynobjs then 
-               phase1_expr avoids ps e 
+             then
+               e
+             else if fnm \(\in\) FDOM ps.dynobjs then
+               phase1_expr avoids ps e
              else
                let foldthis ps0 ty =
-                   let nss = 
+                   let nss =
                      FST (ass_nspaces_classes avoids ps0 ty) in
                    let nsl = SET_TO_LIST nss
                    in
@@ -722,7 +722,7 @@ for which see Figure~\ref{fig:phase1expr-fnapp}.
                in
                let ps' = FOLDL foldthis ps atys
                in
-                 Var (idattach_locn 
+                 Var (idattach_locn
                         (ps'.dynobjs ' fnm)
                         (IDConstant F [] (IDName fnm)))
          else
@@ -741,7 +741,7 @@ resolved \texttt{e'} that introduces the complications.  The first
 test checks if \texttt{e} is an unqualified variable.  If not, then
 the recursion can proceed ``normally''.  If \texttt{e} is just a
 simple variable however, then the code binds \texttt{fnm} to the name
-of the variable, and \texttt{atys} to the types of the arguments.  
+of the variable, and \texttt{atys} to the types of the arguments.
 
 The next test calculates the free type names of the argument types.
 If this set overlaps with the names of any template arguments, then
@@ -807,10 +807,10 @@ Figure~\ref{fig:phase1expr:var}. \index{Var@\texttt{Var}}
 There are three cases depending on the form of the variable.  The
 first is when the variable is an ``absolute'' name, with a leading
 \texttt{::}.  This might still be a member reference, as in the
-following 
+following
 \begin{verbatim}
-   class C { 
-     int x; 
+   class C {
+     int x;
      int f() { return ::C::x; }
    };
 \end{verbatim}
@@ -841,10 +841,10 @@ The code in \texttt{phase1_expr} uses the information that has been
 stored in the Phase~1 states by earlier and higher-level traversals of
 program syntax.  In particular, when a declaration is seen, this must
 cause an adjustment of the information about names that is stored in
-the Phase~1 state.  
+the Phase~1 state.
 
 For example, when a new global variable is declared, the
-\texttt{NewGVar} function is called to record this.  Its type is 
+\texttt{NewGVar} function is called to record this.  Its type is
 \begin{verbatim}
    : CPP_Type -> IDComp -> P1state -> P1state
 \end{verbatim}
@@ -854,22 +854,22 @@ and its definition appears in Figure~\ref{fig:newgvar-def}.
 \begin{minipage}{\textwidth}
 \begin{alltt}
    NewGVar ty sfnm s =
-     let sfnm' = 
+     let sfnm' =
        IDConstant T (MAP IDName s.current_nspath) sfnm in
      let (targs,sfstr) = break_sfld sfnm in
-     let ty' = 
-       rewrite_type 
-         (FOLDL (\(\lambda\)a ta. a UNION tafrees ta) \lbr\rbr targs) 
+     let ty' =
+       rewrite_type
+         (FOLDL (\(\lambda\)a ta. a UNION tafrees ta) \lbr\rbr targs)
          s ty
      in
-       s with <| 
+       s with <|
          dynobjs :=
            s.dynobjs |+ (sfstr, (T,MAP IDName s.current_nspath,
                                  targs, dNormalObj)) ;
-         global updated_by 
+         global updated_by
            state_NewGVar ty s.current_nspath sfnm ;
-         accdecls := 
-           (s.accdecls ++ [Decl (VDec ty' sfnm')]) 
+         accdecls :=
+           (s.accdecls ++ [Decl (VDec ty' sfnm')])
        |>
 \end{alltt}
 \end{minipage}
@@ -892,7 +892,7 @@ order to allow member functions to refer to member names that have
 actually been declared later in the class.  For example, in
 \begin{verbatim}
    int x;
-   class C { 
+   class C {
      int f(int i) { return i + x; }
      int x;
    }
@@ -903,10 +903,10 @@ dispensation only extends as far as the bodies of member functions.
 Sub-classes and their names are not so lucky; there the rule is that
 the class declaration must come first.  If there is a conflict with an
 external type-name, this is an error.  For example, the
-following is an error: 
+following is an error:
 \begin{verbatim}
    struct B { int x; };
-   struct C { 
+   struct C {
      B b;
      struct B { int j; };
    };
@@ -936,7 +936,7 @@ Figure~\ref{fig:phase1-gclassdefn}.
                                      fields := [] |>, \lbr\rbr)) in
      let ps1 = open_path avds.tyfvs T (id_sfs fullnm) ps0 in
      let ps2 = FOLDL (\(\lambda\)s cebp.
-                        extract_class_names avds s 
+                        extract_class_names avds s
                            (T, id_sfs fullnm) cebp)
                      ps1
                      ci.fields in
@@ -949,13 +949,13 @@ Figure~\ref{fig:phase1-gclassdefn}.
                []
                ci.fields
      in
-       ps3 with <| 
-         dynobjs := ps0.dynobjs ; 
+       ps3 with <|
+         dynobjs := ps0.dynobjs ;
          dynclasses := ps0.dynclasses ;
-         accdecls := 
+         accdecls :=
            (ps.accdecls ++
-            [Decl (VStrDec fullnm 
-                     (SOME <| ancestors := ancs' ; 
+            [Decl (VStrDec fullnm
+                     (SOME <| ancestors := ancs' ;
                               fields := flds' |>))])
        |>
 \end{alltt}
@@ -971,7 +971,7 @@ fields are then calculated in the last \texttt{let} binding (to
 the resolved declaration to its accumulating list of declarations
 (\texttt{accdecls}), but otherwise resets its dynamic state to that
 which held immediately after the declaration of the class
-(\texttt{ps0}). 
+(\texttt{ps0}).
 
 \paragraph{Function Definitions} The final aspect of name resolutions
 worth illustating comes with the constant
@@ -982,7 +982,7 @@ another large definition, presented in Figure~\ref{fig:phase1-fndefn}.
 \begin{alltt}
    phase1_fndefn avds retty fnm pms body ps =
      let retty' = rewrite_type avds ps retty in
-     let pms' = 
+     let pms' =
        MAP (\(\lambda\)(nm,ty). (nm, rewrite_type avds ps ty)) pms in
      let funty = Function retty' (MAP SND pms') in
      let (fnm',declared_ps, body_ps) =
@@ -1002,13 +1002,13 @@ another large definition, presented in Figure~\ref{fig:phase1-fndefn}.
              in
                (fnm', ps, open_path avds.tyfvs b sfs ps)
      in
-     let ps' = 
-       FOLDL (\(\lambda\)ps (n,ty). 
+     let ps' =
+       FOLDL (\(\lambda\)ps (n,ty).
                   newlocal ps (IDName n) ty) body_ps pms' in
      let body' = phase1_stmt avds ps' body
      in
        declared_ps with
-         accdecls := (declared_ps.accdecls ++ 
+         accdecls := (declared_ps.accdecls ++
                       [FnDefn retty' fnm' pms' body'])
 \end{alltt}
 \caption{Name Resolution for a Global Function Definition}
@@ -1018,14 +1018,14 @@ The big case-split on the form of the function name (\texttt{fnm})
 binds two different Phase~1 states.  The \texttt{declared_ps} is what
 is returned; and may reflect the fact that a new function is being
 defined.  (When the name is qualified in some way, then the function
-has already been declared (usually in a class).)  
+has already been declared (usually in a class).)
 
 The \texttt{body_ps} is the name information that needs to be used
 when the body of the function is analysed.  For example, consider the
 following:
 \begin{verbatim}
-   namespace ns { 
-     int x; 
+   namespace ns {
+     int x;
      class C { int f(); int i; };
    }
    int ns::C::f() { return x + i; }
@@ -1033,7 +1033,7 @@ following:
 When one comes to analyse the function \texttt{f}, both the global
 variable \texttt{ns::x}, and the member variable \texttt{C::i} are in
 scope.  This adjustment of scopes is done by the calls to
-\texttt{open_path}. 
+\texttt{open_path}.
 
 \section{Phase 2: Templates}
 
@@ -1076,6 +1076,12 @@ compilation approach.
   };
 
   template<class T> int List<T>::node_count = 0;
+
+  int main(void)
+  {
+    List<int> mylist;
+    ...
+  }
 \end{verbatim}
   \caption[A Difficult Program for Template Interpretation]{A program
     demonstrating the difficulty of interpreting templates.}
@@ -1271,10 +1277,12 @@ The top-level definition (from \HOLfile{templates}) is
          TC (template_phase1 pats))
 \end{verbatim}
 where \texttt{TC} is transitive closure, \texttt{RUNION} is relation
-union, and \texttt{O} is relation composition. 
+union, and \texttt{O} is relation composition.
 
 The first phase is \texttt{template_phase1}, which is instantiates any
 needed template classes:
+\begin{center}
+\begin{minipage}{\textwidth}
 \begin{alltt}
    template_phase1 pats (ps0, grds0) (ps, grds) =
      \(\exists\)id id' sub ci0.
@@ -1283,13 +1291,15 @@ needed template classes:
        (\(\forall\)sub_id. sub_id is_sub_tid id \(\Rightarrow\)
                  sub_id IN declared_types grds0) \(\land\)
        best_class_match pats id sub (id', ci0) \(\land\)
-       phase1 ([P1Decl 
-                  (Decl 
-                     (VStrDec id 
+       phase1 ([P1Decl
+                  (Decl
+                     (VStrDec id
                         (cinfo_inst sub (THE ci0))))], ps0)
               ([], ps) \(\land\)
        (grds = grds0 ++ [LAST ps.accdecls])
 \end{alltt}
+\end{minipage}
+\end{center}
 This rule first looks for a type name \texttt{id} that is both
 referred to in the ground input declarations (\texttt{grds0}), and
 which is not declared there.  It then checks that all identifiers that
@@ -1304,7 +1314,7 @@ desired ID (\texttt{id}) and the template class declaration, which is
 
 The penultimate conjunct of the definition instantiates the
 class-info, and performs a Phase~1 analysis of it.  The resulting
-class declaration can be appended to the list of ground declarations. 
+class declaration can be appended to the list of ground declarations.
 
 The second phase of template analysis looks to instantiate member
 functions (including constructors and destructors),  as well static
@@ -1319,14 +1329,14 @@ the rule for member functions.
        id \(\not\in\) defined_fns grds0 \(\land\)
        (\(\forall\)sub_id. sub_id is_sub_tid id \(\Rightarrow\)
                  sub_id \(\in\) declared_types grds0) \(\land\)
-       best_function_match pats id sub 
+       best_function_match pats id sub
                            (id', (retty, pms, bod)) \(\land\)
-       phase1 ([P1Decl 
+       phase1 ([P1Decl
                   (FnDefn
                      (THE (type_inst sub retty))
                      id
-                     (MAP (\(\lambda\)(n,ty). 
-                             (n,THE (type_inst sub ty))) 
+                     (MAP (\(\lambda\)(n,ty).
+                             (n,THE (type_inst sub ty)))
                           pms)
                      (THE (stmt_inst sub bod)))], ps0)
               ([], ps) \(\land\)
@@ -1349,7 +1359,7 @@ Note that this rule also handles template instantiation for function
 templates that are not associated with a class, though it is an
 incomplete picture because the \texttt{best_function_match} relation
 does not consider other ground functions, and so doesn't deal with
-overloading resolution. 
+overloading resolution.
 
 The definition of \texttt{best_function_match} appears in
 Figure~\ref{fig:best-function-match}.  A lot of the ``heavy lifting''
@@ -1366,11 +1376,11 @@ requiring that all other contenders be instantiable to it.
    best_function_match Temps id sub (id', (retty,pms,bod)) =
      (\(\exists\)targs.
          (cppID_inst sub id' = SOME id) \(\land\)
-         MEM (TemplateDef targs (FnDefn retty id' pms bod)) 
+         MEM (TemplateDef targs (FnDefn retty id' pms bod))
              Temps \(\land\)
          sub only_changes targsfrees targs) \(\land\)
      \(\forall\)id2 retty2 pms2 bod2 sub2 targs.
-         MEM (TemplateDef targs (FnDefn retty2 id2 pms2 bod2)) 
+         MEM (TemplateDef targs (FnDefn retty2 id2 pms2 bod2))
              Temps \(\land\)
          sub2 only_changes targsfrees targs \(\land\)
          (cppID_inst sub2 id2 = SOME id) \(\Rightarrow\)
@@ -1431,7 +1441,7 @@ causes undefined behaviour.)
                 (* memory.  Domain might also be ( void * ) words *)
 
      stack    : (environment # CExpr option # (addr->bool)) list ;
-                (* stack of environment, this and allocation info.  
+                (* stack of environment, this and allocation info.
                    Updated as blocks are entered and left *)
 
      thisvalue: CExpr option ;
@@ -1970,7 +1980,9 @@ member, then a normal pointer is generated, as can be seen from the
 type attached to the \texttt{ECompVal} in the conclusion of the rule.
 (There is a similar rule for taking the address of a static member
 function.)
+\begin{center}
 \index{rule (dynamic)!mem-addr-static-nonfn@\texttt{mem-addr-static-nonfn}}%
+\begin{minipage}{\textwidth}
 \begin{alltt}
 (* RULE-ID: mem-addr-static-nonfn *)
 (* 5.3.1 p2 *)
@@ -1984,6 +1996,8 @@ function.)
      mng (s, EX (MemAddr cname fldname) se)
          (s, EX (ECompVal ptrval (Ptr ty)) se)
 \end{alltt}
+\end{minipage}
+\end{center}
 \index{cinfo@\texttt{cinfo}}
 The function \texttt{cinfo} takes a state and a class-name and returns
 the information about that class in the form of a record, one of whose
@@ -2215,8 +2229,8 @@ Figure~\ref{fig:global-function-call} governs (normal) function calls:
                    (ZIP (params, args)))
    \(\Rightarrow\)
      mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se)
-         (s0 with <| stack updated_by 
-                       (CONS (s0.env, s0.thisvalue, 
+         (s0 with <| stack updated_by
+                       (CONS (s0.env, s0.thisvalue,
                               s0.allocmap));
                      thisvalue := NONE;
                      blockclasses updated_by stackenv_newscope ;
@@ -2653,7 +2667,7 @@ level.  In this way, a return statement deep within multiple blocks
 can eventually make its way to the top level, where its value can be
 passed to the continuation through rules \ruleid{return-rvalue}
 (page~\pageref{rule:return-rvalue}) or \ruleid{return-lvalue}
-(page~\pageref{rule:return-lvalue}). 
+(page~\pageref{rule:return-lvalue}).
 
 \index{ST@\texttt{ST}} \index{EX@\texttt{EX}} Such a return can not
 happen prematurely: the two \texttt{return} rules both have
@@ -2687,7 +2701,7 @@ values in the \texttt{var_decl} type.
 As already mentioned, the \cpp{} mechanisation uses an auxiliary
 relation \texttt{declmng} to do most variable declaration work.  This
 relation is defined in \HOLfile{declaration_dynamics}.  Its simplest
-rule is 
+rule is
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (declaration dynamics)!decl-vdec-nonclass@\texttt{decl-vdec-nonclass}}%
@@ -2732,7 +2746,7 @@ copy-initialisation:
      ~class_type ty \(\land\)
      vdeclare s0 ty name s \(\land\)
      (SOME (a,pth) = lookup_addr s name) \(\land\)
-     (loc = if ref_type ty then RefPlace NONE name 
+     (loc = if ref_type ty then RefPlace NONE name
             else ObjPlace a)
    \(\Rightarrow\)
      declmng mng
@@ -2762,7 +2776,7 @@ declaration and initialisation of class objects too.)
 (* RULE-ID: decl-init-start-eval-copy *)
      vdeclare s0 ty name s \(\land\)
      (SOME (a,pth) = lookup_addr s name) \(\land\)
-     (loc = if ref_type ty then RefPlace NONE name 
+     (loc = if ref_type ty then RefPlace NONE name
             else ObjPlace a)
    \(\Rightarrow\)
      declmng mng
@@ -2789,7 +2803,7 @@ expression can be evaluated.
 \end{center}
 Note that the initialisor form \texttt{f} can only be a
 \texttt{DirectInit} when initialising classes.  All non-class objects
-will be a \texttt{CopyInit} form by this point. 
+will be a \texttt{CopyInit} form by this point.
 
 When initialising a non-reference, expressions that yield l-values
 must be allowed to undergo the ``l-value to r-value'' conversion:
@@ -2899,7 +2913,7 @@ have something that can then propagate upwards through the abstract
 syntax of statements.
 
 We already have a rule specifying how \texttt{throw}-statements traverse
-\texttt{Block} values: \ruleid{block-interrupted}, repeated here: 
+\texttt{Block} values: \ruleid{block-interrupted}, repeated here:
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!block-interrupted@\texttt{block-interrupted}}
@@ -3087,9 +3101,9 @@ Otherwise, the behaviour is clear: if the top handler has
 the other handlers are discarded).
 
 When the top handler has an explicitly-typed parameter, the handler is
-only entered if the type of the thrown value matches: 
+only entered if the type of the thrown value matches:
 \ruleid{catch-specific-type-matches} in
-Figure~\ref{fig:catch-specific-type-matches}. 
+Figure~\ref{fig:catch-specific-type-matches}.
 \begin{figure}[htbp]
 \begin{center}
 \begin{minipage}{\textwidth}
@@ -3101,9 +3115,9 @@ Figure~\ref{fig:catch-specific-type-matches}.
      (pname = case pnameopt of SOME s -> Base s
                             || NONE -> (Base " no name "))
    \(\Rightarrow\)
-     mng (s0, ST (Catch 
+     mng (s0, ST (Catch
                    (Throw exn)
-                   ((SOME(pnameopt, pty), hnd_body) :: rest)) 
+                   ((SOME(pnameopt, pty), hnd_body) :: rest))
                  c)
          (s0 with current_exns updated_by (CONS e),
           ST (Block F [VDecInit pty pname
@@ -3137,9 +3151,9 @@ is no match, then the remaining handlers have to be tried
      (exn = SOME (EX e base_se)) \(\land\)
      \(\neg\)exception_parameter_match s0 pty (value_type e)
    \(\Rightarrow\)
-     mng (s0, ST (Catch 
+     mng (s0, ST (Catch
                     (Throw exn)
-                    ((SOME(pnameopt, pty), hnd_body) :: rest)) 
+                    ((SOME(pnameopt, pty), hnd_body) :: rest))
                  c)
          (s0, ST (Catch (Throw exn) rest) c)
 \end{alltt}
@@ -3218,10 +3232,10 @@ Otherwise, the program must call the \texttt{::std::terminate} function
 \end{alltt}
 \end{minipage}
 \end{center}
-where the special expression \texttt{callterminate} is defined to be 
+where the special expression \texttt{callterminate} is defined to be
 \begin{verbatim}
-   FnApp (Var (IDConstant T [IDName "std"] 
-                          (IDName "terminate"))) 
+   FnApp (Var (IDConstant T [IDName "std"]
+                          (IDName "terminate")))
          []
 \end{verbatim}
 
@@ -3506,12 +3520,12 @@ of the fact that the fieldname is unqualified: it is of the form
 \texttt{IDConstant~F~[]~(IDName~fld)}
 \]
 Name resolution will ensure that non-virtual members all have
-qualified fields.
+qualified names.
 
 \paragraph{Other Sorts of Member Function}
 
 There are two other sorts of member functions in \cpp{}: static
-members functions, and normal functions.  Each sort has its own rule
+member functions, and normal functions.  Each sort has its own rule
 in the semantics.
 \index{member functions!static}
 First, the rule for static member functions:
@@ -3554,7 +3568,7 @@ include a class component.
 
 \index{member functions!non-static}
 The rule for normal, non-static  member functions is given in
-Figure~\ref{fig:nstatic-fn-member-select}. 
+Figure~\ref{fig:nstatic-fn-member-select}.
 \begin{figure}
 \begin{center}
 \begin{minipage}{\textwidth}
@@ -3589,14 +3603,14 @@ defined.
 Once the name of the function to be called has been found, the step of
 actually entering the body of the function can be taken.  This is
 described in rule \ruleid{member-function-call}, presented in
-Figure~\ref{fig:member-function-call}. 
+Figure~\ref{fig:member-function-call}.
 \begin{figure}[htbp]
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!member-function-call@\texttt{member-function-call}}%
 \begin{alltt}
 (* RULE-ID: member-function-call *)
-     find_best_fnmatch s0 fnid (MAP valuetype args) 
+     find_best_fnmatch s0 fnid (MAP valuetype args)
                        rtype params body \(\land\)
      (pdecls = MAP (\(\lambda\)((n,ty),a). VDecInit ty
                                      (Base n)
@@ -3604,12 +3618,12 @@ Figure~\ref{fig:member-function-call}.
                    (ZIP (params, args))) \(\land\)
      (SOME this = ptr_encode s0 a (Class cname) p)
    \(\Rightarrow\)
-     mng (s0, EX (FnApp_sqpt (FVal fnid ftype 
+     mng (s0, EX (FnApp_sqpt (FVal fnid ftype
                                    (SOME (LVal a (Class cname) p)))
                              args) se0)
-         (s0 with <| stack updated_by 
+         (s0 with <| stack updated_by
                        (CONS (s0.env, s0.thisvalue, s0.allocmap));
-                     thisvalue := 
+                     thisvalue :=
                        SOME (ECompVal this (Ptr (Class cname)));
                      blockclasses updated_by stackenv_newscope ;
                      exprclasses updated_by stackenv_newscope ;
@@ -3638,7 +3652,7 @@ selected fields, so that they can become well-formed l-values.  In
 turn, this relies on knowing how a class is laid out in memory.
 
 The standard \emph{does} require that fields belonging to a particular
-class type be laid out in the order in which they appear\footnote{The
+class type be laid out in the order in which they appear.\footnote{The
   order is actually required to hold as long as they have the members
   have the same access-specifiers, but the model doesn't handle
   accessibility.}  But there is no specification of how base
@@ -3772,6 +3786,8 @@ The most important of \cpp{}'s explicit casts is the
 manoeuvering around a class hierarchy.  First up-casts to unambiguous bases
 are permitted (this is the rule for references; there are parallel
 rules for the dynamic casting of pointers):
+\begin{center}
+\begin{minipage}{\textwidth}
 \index{rule (dynamic)!dyncast-derived-base-ref@\texttt{dyncast-derived-base-ref}}%
 \begin{alltt}
 (* RULE-ID: dyncast-derived-base-ref *)
@@ -3783,6 +3799,8 @@ rules for the dynamic casting of pointers):
      mng (s, EX (DynCast (Ref dty) (LVal a (Class scnm) p)) se)
          (s, EX (LVal a (Class scnm) (p ^ p')) se)
 \end{alltt}
+\end{minipage}
+\end{center}
 The second hypothesis is strictly redundant in the dynamics; along
 with the base's accessibility, this will be checked before the
 dynamics gets a chance to execute.  The third hypothesis is where the
@@ -3793,7 +3811,7 @@ In the other direction (back down a class hierarchy), dynamic casts
 can fail, and require the source type to be polymorphic (\ie, the
 source class should have at least one virtual function).  The rule
 governing this behaviour appears in
-Figure~\ref{fig:dyncast-base-other-ref}. 
+Figure~\ref{fig:dyncast-base-other-ref}.
 \begin{figure}[htbp]
 \begin{center}
 \begin{minipage}{\textwidth}
@@ -4110,9 +4128,9 @@ following the approach described in Wasserrab~\emph{et
 already been presented, so that the modelling of multiple inheritance
 is best understood by considering the auxiliaries supporting those
 rules.  Most of these auxiliaries are defined in
-\HOLfile{class_info}. 
+\HOLfile{class_info}.
 
-\newcommand{\fld}{\texttt{fld}} 
+\newcommand{\fld}{\texttt{fld}}
 \newcommand{\Cs}{\texttt{Cs}}
 
 At the top level, the rule for calculating the function that will be
@@ -4172,7 +4190,7 @@ the path giving the static type).  Thus (from \HOLfile{class_info})
 \end{alltt}
 \end{minipage}
 \end{center}
-In the simple example, we will thus conclude that 
+In the simple example, we will thus conclude that
 \begin{verbatim}
    s |- (B3, [B3,B2,B1,B0]) selects fld -: info via [B3,B2]
 \end{verbatim}
@@ -4184,7 +4202,7 @@ and a static type of \texttt{B2}.
 
 The same rule applies in a much more complicatd seeming situation,
 where multiple inheritance and shared base objects come into play.
-Consider the program in Figure~\ref{fig:diamond-cpp}.  
+Consider the program in Figure~\ref{fig:diamond-cpp}.
 \begin{figure}[hbtp]
 \begin{verbatim}
 #include <iostream>
@@ -4282,7 +4300,7 @@ introduced via the rule
 \begin{minipage}{\textwidth}
 \begin{alltt}
 (* RULE-ID: selects-with-overrider *)
-     (\(\forall\)minfo Cs'.  
+     (\(\forall\)minfo Cs'.
        \(\neg\)(s |- C has least method mname -: minfo via Cs')) \(\land\)
      s |- (C,Cs) has overrider mname -: minfo via Cs'
    \(\Rightarrow\)
@@ -4353,11 +4371,12 @@ modelled by having
 so too do calls to \cpp{} constructors create new programs ``in
 place''.  The advantage of this approach is that there is less need
 for relatively complicated state to be recorded in yet more fields in
-the big record type \texttt{state} (see Figure~\ref{fig:state-type}).
-Instead, programs can unfold into more elaborate forms directly.  The
-disadvantage of this approach is that the original syntax may not
-support enough forms, requiring new special syntax to be created, or
-for existing forms to be extended with new parameters.
+the big record type \texttt{state} (see Figure~\ref{fig:state-type} on
+page~\pageref{fig:state-type}).  Instead, programs can unfold into
+more elaborate forms directly.  The disadvantage of this approach is
+that the original syntax may not support enough forms, requiring new
+special syntax to be created, or for existing forms to be extended
+with new parameters.
 
 \index{Block@\texttt{Block}}
 The existing handling of block-statements is an example of this latter
@@ -4617,10 +4636,10 @@ constructor body is even entered, the parameters \texttt{cptr} and
 \texttt{i} need to be declared and initialised with actual values.
 Subsequently, all of \texttt{C}'s immediate bases (just \texttt{B} in
 this case) need to be constructed, followed by its members
-(\texttt{ptr} and \texttt{sz}).  Note that while the paramters need to
-have space allocated for them, the bases and members do not (because
-the space for the entire object was allocated at the \texttt{VDecInit}
-stage).
+(\texttt{ptr} and \texttt{sz}).  Note that while the parameters need
+to have space allocated for them, the bases and members do not
+(because the space for the entire object was allocated at the
+\texttt{VDecInit} stage).
 
 \begin{figure}[htbp]
 \begin{verbatim}
@@ -4778,7 +4797,7 @@ ahead of the final encompassing object.
 \paragraph{Using the Heap}
 Classes, and other types, can be allocated on the heap with the
 \texttt{new} operator.  For non-classes the rule is
-\ruleid{new-nonclass}, in Figure~\ref{fig:new-nonclass}. 
+\ruleid{new-nonclass}, in Figure~\ref{fig:new-nonclass}.
 \begin{figure}[htbp]
 \begin{center}
   \begin{minipage}{\textwidth}
@@ -4792,7 +4811,7 @@ Classes, and other types, can be allocated on the heap with the
                      Array bty n -> bty
                   || somety -> ty) \(\land\)
      sizeof T (sizeofmap s0) ty sz \(\land\)
-     (s = s0 with <| 
+     (s = s0 with <|
             hallocmap updated_by (UNION) (range_set a sz) ;
             constmap := if const_type ty then
                           s0.constmap UNION range_set a sz
@@ -4818,7 +4837,7 @@ When a class is to be allocated, a constructor must be called.  This
 is reflected in the rule of Figure~\ref{fig:new-simple-class}.   The
 hypotheses are very similar to the non-class rule, but the conclusion
 differs because the class's constructor must be called before the
-pointer to the object can be returned.  
+pointer to the object can be returned.
 \begin{figure}[htbp]
 \begin{center}
 \index{rule (dynamic)!new-simple-class@\texttt{new-simple-class}}
@@ -4827,13 +4846,13 @@ pointer to the object can be returned.
 (* RULE-ID: new-simple-class *)
 (* The T F parameters to the ConstructorFVal constructor indicate
     1. the object produced is most-derived, and
-    2. it is not a sub-object (neither base, nor member) of some 
+    2. it is not a sub-object (neither base, nor member) of some
        other object
 *)
      (Class cnm = strip_const ty) \(\land\)
      malloc s0 ty a \(\land\)
      sizeof T (sizeofmap s0) ty sz \(\land\)
-     (s = s0 with <| 
+     (s = s0 with <|
              hallocmap updated_by (UNION) (range_set a sz) ;
              constmap := if const_type ty then
                            s0.constmap UNION range_set a sz
@@ -4882,7 +4901,7 @@ reflexivity and anti-symmetry of name instantiation in
 The file \HOLfile{concrete_tests} includes more sanity theorems, but
 of a particular form: exploring the behaviour of the model when
 applied to concrete examples.  The last test (\texttt{t6}) is name
-resolution on the following, small program, featuring a nested class.
+resolution on the following, small program, featuring a local class.
 \begin{center}
 \begin{minipage}{\textwidth}
 \begin{verbatim}
@@ -4963,7 +4982,7 @@ I believe the most significant dynamic omission is the failure to
 support class r-values.  The model also omits \texttt{delete},
 placement-\texttt{new}, and some of the constraints on what may or may
 not be done with constructors (for example, that
-in\cite[\S12.1,~para~15]{cpp-standard-iso14882}).  
+in\cite[\S12.1,~para~15]{cpp-standard-iso14882}).
 
 Class r-values would clearly be modelled almost as l-values, using the
 \texttt{LVal}\index{LVal@\texttt{LVal}} constructor.  The greatest
