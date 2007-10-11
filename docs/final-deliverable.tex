@@ -1036,8 +1036,8 @@ scope.  This adjustment of scopes is done by the calls to
 \texttt{open_path}.
 
 \section{Phase 2: Templates}
-
 \label{sec:templates}
+\index{templates|(}
 
 In this section, I describe how the semantics models templates.  I
 have been inspired by Siek and Taha~\cite{DBLP:conf/ecoop/SiekT06},
@@ -1360,6 +1360,7 @@ templates that are not associated with a class, though it is an
 incomplete picture because the \texttt{best_function_match} relation
 does not consider other ground functions, and so doesn't deal with
 overloading resolution.
+\index{overloading}
 
 The definition of \texttt{best_function_match} appears in
 Figure~\ref{fig:best-function-match}.  A lot of the ``heavy lifting''
@@ -1391,6 +1392,7 @@ requiring that all other contenders be instantiable to it.
 \label{fig:best-function-match}
 \end{figure}
 
+\index{templates|)}
 
 \section{Phase 3: Dynamics}
 \label{sec:phase3}
@@ -1755,6 +1757,7 @@ depend on an auxiliary relation \texttt{binop_meaning}, which is
 defined in \HOLfile{operators}.  Being a relation, it allows for
 nondeterminism and failure.
 
+\index{overloading}
 Were the model to cope with operator overloading correctly, these
 rules would remain unchanged.  Operator overloading would be resolved
 in Phases~1 and~2, allowing uses of overloaded operators to be
@@ -4121,6 +4124,7 @@ for which see Figure~\ref{fig:decl-vdecinit-finish-ref}.
 
 \subsection{Polymorphism \& Multiple Inheritance}
 \label{sec:multiple-inheritance}
+\index{multiple inheritance|(}
 
 As already suggested, multiple inheritance has been modelled by
 following the approach described in Wasserrab~\emph{et
@@ -4354,7 +4358,7 @@ int main()
     \texttt{notes/lopsided-v.cpp}.}
 \label{fig:lopsided-v}
 \end{figure}
-
+\index{multiple inheritance|)}
 \subsection{Object Lifetimes}
 \label{sec:object-lifetimes}
 
@@ -4942,6 +4946,7 @@ interpreted as if it were
 \section{Omissions and Possible Fixes}
 \label{sec:omissions}
 
+\index{overloading}
 The most significant omission in this semantics is a treatment of
 overloading.  This is a complicated feature of the language, but one
 that is purely syntactic, and one that is checked and resolved
