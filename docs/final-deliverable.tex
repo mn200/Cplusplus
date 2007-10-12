@@ -5017,15 +5017,15 @@ turn contains four directories
 \begin{itemize}
 \item \texttt{holsrcs}, containing the HOL source files of the
   mechanisation.  These files will build with the version of HOL4
-  present in the CVS repository at SourceForge, with timestamp
-  \texttt{2007-05-30 00:00Z}.  See Section~\ref{sec:getting-hol}
-  below for instructions on how this version of HOL can be retrieved,
-  and how the deliverable's HOL source files can then be built and
+  present in the Subversion repository at SourceForge, with date
+  \texttt{2007-10-13}.  See Section~\ref{sec:getting-hol} below
+  for instructions on how this version of HOL can be retrieved, and
+  how the deliverable's HOL source files can then be built and
   checked.
 \item \texttt{talks}, containing the \LaTeX{} source and a PDF for the
   talk presented at the DARP meeting in Newcastle in April 2006.  The
-  source assumes that the \texttt{latex-beamer} and \texttt{PSTricks}
-  packages are available.
+  source assumes that the \LaTeX{} packages \texttt{latex-beamer} and
+  \texttt{PSTricks} are available.
 \item \texttt{docs}, containing \LaTeX{} sources and a PDF version of
   this document, as well as sources for the notes on the earlier
   deliverables (nos.~1--4).
@@ -5039,48 +5039,27 @@ turn contains four directories
 
 \paragraph{Getting HOL From SourceForge}
 
-To get a particular, dated, version of the HOL4 sources from the CVS
-repository, one must first issue the command
-
-{\small
-\begin{verbatim}
-   cvs -d:pserver:anonymous@hol.cvs.sourceforge.net:/cvsroot/hol login
-\end{verbatim}
-}
-
-When prompted for a password, just press \texttt{Enter} to send a null
-response.  The check-out of source code from SourceForge can now
-proceed.  The source code fits into 60MB.  Issue the command
-
-{\small
+To get a particular, dated, version of the HOL4 sources from the
+Subversion~(\texttt{svn}) repository, one must issue the command
 \begin{alltt}
-   cvs \textit{repository-spec} co -D \textit{date} hol98
+   svn co -r \textit{date-spec} https://hol.svn.sf.net/svnroot/hol/HOL
 \end{alltt}
-}
-
-\noindent where \textit{\ttfamily repository-spec} is the string
-
-{\small
-\begin{alltt}
-   -d:pserver:anonymous@hol.cvs.sourceforge.net:/cvsroot/hol
-\end{alltt}
-}
-
-\noindent (also used in the \texttt{login} command), and where
-\textit{\ttfamily date} is the desired date, best specified as an
-ISO~8601 string enclosed in double-quotes.  For example,
-\texttt{"2007-05-30 00:00Z"}.
+where \textit{\ttfamily date-spec} is the desired date (best specified
+as an ISO~8601 string) enclosed in braces.  The whole should in turn
+be enclosed in quotes in order to avoid having the braces confuse the
+command-line shell.  For example, \texttt{"\{2007-10-13\}"}.  When the
+\texttt{svn} command is issued, the source code is downloaded from
+SourceForge and put into a directory called \texttt{HOL}.  The source
+code (and all the accompanying \texttt{svn} meta-data) fits into
+200MB.
 
 Once a copy of the sources have been downloaded, further commands can
-be used to update this copy to correspond to different dates.  As long
-as such commands are issued from within the \texttt{hol98} directory,
-the repository specification can be omitted.  The update command is
-
-{\small
+be used to update this copy to correspond to different dates.  The
+commands need to be issued from within the \texttt{HOL} directory.
+The update command is
 \begin{alltt}
-   cvs update -d -D \textit{date}
+   svn update -r \textit{date-spec}
 \end{alltt}
-}
 
 \paragraph{Installing HOL} Once the sources have been downloaded, the
 installation instructions from the page at
@@ -5090,8 +5069,9 @@ required.
 
 \paragraph{Building Deliverable Sources}
 When HOL4 has been installed, the \texttt{Holmake} program (found in
-the \texttt{hol98/bin} directory) can be run in the \texttt{holsrcs}
-directory to create and check the logical theories.
+the \texttt{HOL/bin} directory) can be run in the \texttt{holsrcs}
+directory of the \cpp{} deliverable to create and check the logical
+theories.
 
 
 \bibliographystyle{plain}
