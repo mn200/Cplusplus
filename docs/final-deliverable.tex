@@ -20,13 +20,17 @@
 \newcommand{\HOLfile}[1]{HOL:\texttt{#1}}
 
 \title{A Formal Semantics for \cpp}
-\author{Michael Norrish\\{\small \texttt{Michael.Norrish@nicta.com.au}}}
+\author{Michael Norrish\thanks{
+  This work has been performed under funding from QinetiQ's Systems
+  Assurance Group under the UK MOD Output 3a research project entitled
+  \emph{Robust Languages}.}\\{\small \texttt{Michael.Norrish@nicta.com.au}}}
 \date{}
 
 \makeindex
 
 \begin{document}
 \maketitle
+
 \tableofcontents
 \listoffigures
 
@@ -47,129 +51,19 @@ the prose and not the rule.  The rule has been type-checked, and in
 some cases, will have also been validated to some extent.  (See
 Section~\ref{sec:validation} for more on validation.)
 
-This document supercedes all previous deliverables.
+In addition to the ISO~Standard itself~\cite{cpp-standard-iso14882},
+the report draws on a number of other sources.  The annotated
+bibliography in the appendix describes all of these.
 
-\subsection{Phases of Understanding}
+\vspace{1ex}
+\noindent This document supercedes all previous deliverables.
 
-When we attempt to understand the meaning of a \cpp{} source file (or
-``translation unit'' to use the standardese), this task is best broken
-down into three phases.
+\subsection{Reading  HOL Source Code}
 
-When we begin, we have a sequence of parsed \emph{external
-  declarations} (see the Standard's formal grammar in its Annex A:
-Grammar Summary).  Throughout this semantics, we assume that this
-sequence is well-formed syntactically, that some trusted compiler has
-already checked the sources for syntactic errors of the sort compilers
-can detect.  For example, this means that we assume that there are no
-variables left undeclared, and that all the various expressions are
-well-typed.  This is a not inconsiderable simplification of the basic
-task, but it does seem fair to claim that such analysis is not as
-interesting a problem.  This abstract syntax, as consumed and
-manipulated by the semantic model, is described in
-Section~\ref{sec:basic-types} below.
-
-The first phase of understanding, or of ascribing meaning, is to do
-what I refer to as ``name resolution''.  In this phase, bare names are
-resolved into fully-qualified names wherever possible.  For example,
-this phase turns a program such as
-\begin{verbatim}
-   int x;
-   int f(int i) { return i + x; }
-\end{verbatim}
-into
-\begin{verbatim}
-   int ::x;
-   int ::f(int i) { return i + ::x; }
-\end{verbatim}
-where the names declared in the top, global namespace (\texttt{x} and
-\texttt{f}) have been replaced with unambiguous versions of their
-names wherever they occur.  Note that the result is no longer valid
-\cpp{} (it is illegal to use the explicit qualification in names being
-defined), but the next phase of understanding does not expect valid
-\cpp{} in any case.  In the presence of hierarchical namespaces, and
-class namespaces inheriting from bases, Phase~1 is not entirely
-trivial.  It is described in some detail in Section~\ref{sec:phase1}.
-
-The second phase of the semantics is to deal with templates.  Template
-resolution takes a translation unit with most of its names resolved,
-and where the unit consists of ``ground'' (non-template) and template
-declarations or definitions.  The ground definitions may refer to
-various template classes or functions.  If so, the appropriate
-template instantiations need to be made, producing fresh ground
-declarations.  These new declarations need to first have their names
-resolved (requiring a nested ``call'' to Phase~1), and may in turn
-require more template instantiations.  In fact, template instantiation
-may never terminate.  Templates are further described in
-Section~\ref{sec:templates}.
-
-The final phase of the semantics is execution, or ``dynamics''.  In
-this phase, top-level declarations are executed, resulting in the
-dynamic initialisation of variables, which can in turn result in the
-execution of source-code.  The exact order of evaluation of external
-declarations is allowed to vary
-(see~\cite[\S3.6.2]{cpp-standard-iso14882}), and may or may not
-precede the execution of a program's \texttt{main} function.  The
-rules governing dynamic behaviour specify what is to occur when
-execution does occur, but do not specify how various executions are
-knitted together.  All of the model's dynamic rules are presented in
-Section~\ref{sec:phase3}.
-
-\subsection{How to Read HOL Extracts}
-
-There are two main forms of definition used in HOL, definition of
-functions specified equationally, and inductive definition of
-relations.  The former look similar to definitions in functional
-programming languages, with features such as pattern-matching and
-recursion common.  For example, the following is the definition of a
-factorial function
-\begin{alltt}
-   (FACT 0 = 1) \(\land\)
-   (FACT (SUC n) = SUC n * FACT n)
-\end{alltt}
-The individual equations are separated by conjunction symbols because
-the text of the definition becomes the statement of the theorem
-characterising the behaviour of the new constant.  (If the recursion
-is not well-founded, or if there is some other error in the quoted
-text, then HOL does not allow the definition to proceed, and no
-theorem is produced.)
-
-Inductive relations allow the definition of systems of rules, common
-in the definitions of operational semantics.  For example, one might
-write a big-step rule for applicative order reduction in the
-$\lambda$-calculus as
-\[
-\infer{\Gamma \vdash M\,N\;\Downarrow \;v}{\Gamma \vdash M \;\Downarrow\; (\lambda x. M_0) &
-  \Gamma \vdash N \;\Downarrow\;v_0 & (x\mapsto v_0),\Gamma \vdash M_0 \;\Downarrow\; v}
-\]
-This should be read as stating that an application $M\,N$ reduces to a
-value $v$ if $M$ reduces to an abstraction ($\lambda x. M_0$), if $N$
-reduces to some value $v_0$, and if the body $M_0$ reduces to $v$,
-while the bound variable $x$ is linked to $v_0$.
-
-The same rule might be presented in HOL syntax as
-\begin{center}
-\begin{minipage}{\textwidth}
-\begin{alltt}
-     apeval G M (LAM x M0) \(\land\)
-     apeval G N v0 \(\land\)
-     apeval ((x,v0) :: G) M0 v
-   \(\Rightarrow\)
-     apeval G (APP M N) v
-\end{alltt}
-\end{minipage}
-\end{center}
-The use of the conjunction and implication symbols makes the
-propositional structure of the rule explicit.  Also, the relation
-being defined is always the first symbol (\texttt{apeval} here) of the
-conclusion.
-
-Note also how the \texttt{apeval} constant of this example is applied
-to its three arguments in ``curried'' $\lambda$-calculus or
-functional-programming style.  This is in contrast with ``standard''
-mathematical style, where functions are typically applied to arguments
-in parentheses separated by commas, as in $f(x,y,z)$.  Such tuples do
-also appear in the model, but sequences of function or predicate
-arguments are often just separated by whitespace, as above.
+This report contains a large number of extracts from the HOL source
+code found in the \texttt{holsrcs} directory of the deliverable.
+HOL's Description manual~\cite{HOLdescription} has full details for
+the following, which is a brief summary of HOL syntax and semantics.
 
 Where quotations are made from underlying HOL sources, the origin of
 the quotation will be identified using the form \HOLfile{thyname}.
@@ -183,7 +77,21 @@ signature in the file
    holsrcs/thynameTheory.sig
 \end{alltt}
 
+
 \subsubsection{HOL Syntax}
+
+HOL is a powerful logical language, equipped with the usual features
+of predicate logic (quantifiers such as $\forall$ and propositional
+connectives such as $\lor$ and $\Rightarrow$), as well as a rich,
+typed term language.
+
+\paragraph{Numbers} HOL has three different numeric types: natural
+numbers~(\texttt{num}), integers~(\texttt{int}) and real
+numbers~(\texttt{real}).  The latter are not used in the C++
+formalisation.  All types support the standard arithmetic operators,
+such as addition~(\texttt{+}), subtraction~(\texttt{-}) and
+multiplication~(\texttt{*}).  In addition, HOL supports types of
+fixed-width memory ``words''.
 
 \paragraph{Pairs} The type of pairs of $\sigma$s and $\tau$s is
 written \texttt{$\sigma$~\#~$\tau$}.  Pair values are written inside
@@ -192,12 +100,23 @@ parentheses, with components separated by commas, \eg, \texttt{(1,4)}.
 component of a tuple, and \index{SND@\texttt{SND}}\texttt{SND} returns
 the second.
 
-\paragraph{Lists} Lists can either be empty (\texttt{[]}) or the
-result of ``cons''-ing an element onto the front of an
-existing list.  The list consisting of element \texttt{h} followed by
-list \texttt{t} is written \texttt{h::t}. The type of lists comes
-equipped with various standard functional language operations such as
-\index{EL (list operation)@\texttt{EL} (list operation)}%
+\paragraph{Lists} The type of lists of elements drawn from a type
+$\alpha$ is written $\alpha\;\texttt{list}$. Lists can either be empty
+(\texttt{[]}) or the result of ``cons''-ing an element onto the front
+of an existing list.  The list consisting of element \texttt{h}
+followed by list \texttt{t} is written \texttt{h::t}. A literal list
+of a fixed number of elements can also be written between square
+brackets, with successive elements separated by semi-colons.  Thus,
+\begin{alltt}
+   [1; 2; 3]
+\end{alltt}
+is an alternative to writing
+\begin{alltt}
+   1 :: 2 :: 3 :: []
+\end{alltt}
+Lists come equipped with various standard functional language
+operations such as \index{EL (list operation)@\texttt{EL} (list
+  operation)}%
 \index{CONS (list operation)@\texttt{CONS} (list operation)}%
 \index{FOLDL (list operation)@\texttt{FOLDL} (list operation)}%
 \index{++ (list operation)@\texttt{++} (list operation)}%
@@ -274,13 +193,198 @@ allows a function to be applied to the old value of the field.  So,
 is a record value everywhere the same as \texttt{rec}, except that its
 \texttt{fld6} is true, and its \texttt{fld2} is one bigger.
 
-\section{Basic Types}
+\subsubsection{Definitions in HOL}\index{HOL definitions|(}
+There are three main forms of definition used in HOL: definition of
+new algebraic types, definition of functions specified equationally,
+and inductive definition of relations.
+
+\paragraph{Defining Types}
+Algebraic types naturally correspond to the syntax of formal
+languages.  They are defined in a style that resembles
+\texttt{datatype} declarations in functional languages such as Haskell
+or SML.  For example, the definition of the type for a small language
+of arithmetic expressions might be:
+\begin{alltt}
+   ArithExp = Number of int
+            | Variable of string
+            | Plus of ArithExp # ArithExp
+            | Times of ArithExp # ArithExp
+            | FnCall of string # ArithExp list
+\end{alltt}
+In HOL's data type definitions, the string to the left of the
+\texttt{=} (\texttt{ArithExp} here) is the name of the new type.
+After the equals sign, there is then a list of different possible
+forms for the values inhabiting the type.  In the example, we assert
+that expressions come in five different forms.  Each form is
+optionally accompanied by data (following the \texttt{of} keyword).
+If the arithmetic expression is an addition, for example, then it
+consists of (recursively) two arithmetic expressions representing the
+left and right arguments (the \texttt{\#} symbol is the type operator
+for Cartesian products).
+
+As a result of a definition like the above, the new type is
+established, and five new constants (known as the new type's
+``constructors'') are defined, with types
+\begin{alltt}
+   Number   : int -> ArithExp
+   Variable : string -> ArithExp
+   Plus     : ArithExp # ArithExp -> ArithExp
+   Times    : ArithExp # ArithExp -> ArithExp
+   FnCall   : string # ArithExp list -> ArithExp
+\end{alltt}
+Thus, the new type \texttt{ArithExp} is inhabited by values such as
+\texttt{Number~5}, \texttt{Variable~"i"}, and more complicatedly:
+\begin{alltt}
+   Plus (Number "3", FnCall ("sin", [Variable "pi"]))
+\end{alltt}
+
+\vspace{1ex}
+\noindent Finally, in order to support the common, ``curried'' style of
+functional programming, one can define multiple arguments to
+constructors by separating them with the special symbol
+\texttt{=>}. If one were to write
+\begin{alltt}
+   SimpExp = Number of int
+           | Plus of SimpExp => SimpExp
+\end{alltt}
+the new type \texttt{SimpExp}'s second constructor \texttt{Plus} would
+have type
+\begin{alltt}
+   SimpExp -> SimpExp -> SimpExp
+\end{alltt}
+So, rather than taking its two arguments as a pair (as in the first
+\texttt{ArithExp} example above), the \texttt{Plus} constructor for
+\texttt{SimpExp} takes its two arguments one after the other.
+
+\paragraph{Defining Functions}
+In HOL, definitions of functions look similar to function definitions
+in functional programming languages, with features such as
+pattern-matching and recursion common.  For example, the following is
+the definition of a factorial function
+\begin{alltt}
+   (FACT 0 = 1) \(\land\)
+   (FACT (SUC n) = SUC n * FACT n)
+\end{alltt}
+The individual equations are separated by conjunction symbols because
+the text of the definition becomes the statement of the theorem
+characterising the behaviour of the new constant.  (If the recursion
+is not well-founded, or if there is some other error in the quoted
+text, then HOL does not allow the definition to proceed, and no
+theorem is produced.)
+
+\paragraph{Defining Relations} Inductive relations allow the
+definition of systems of rules, common in the definitions of
+operational semantics.  For example, one might write a big-step rule
+for applicative order reduction in the $\lambda$-calculus as
+\[
+\infer{\Gamma \vdash M\,N\;\Downarrow \;v}{\Gamma \vdash M \;\Downarrow\; (\lambda x. M_0) &
+  \Gamma \vdash N \;\Downarrow\;v_0 & (x\mapsto v_0),\Gamma \vdash M_0 \;\Downarrow\; v}
+\]
+This should be read as stating that an application $M\,N$ reduces to a
+value $v$ if $M$ reduces to an abstraction ($\lambda x. M_0$), if $N$
+reduces to some value $v_0$, and if the body $M_0$ reduces to $v$,
+while the bound variable $x$ is linked to $v_0$.
+
+The same rule might be presented in HOL syntax as
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+     apeval G M (LAM x M0) \(\land\)
+     apeval G N v0 \(\land\)
+     apeval ((x,v0) :: G) M0 v
+   \(\Rightarrow\)
+     apeval G (APP M N) v
+\end{alltt}
+\end{minipage}
+\end{center}
+The use of the conjunction and implication symbols makes the
+propositional structure of the rule explicit.  Also, the relation
+being defined is always the first symbol (\texttt{apeval} here) of the
+conclusion.
+
+Note also how the \texttt{apeval} constant of this example is applied
+to its three arguments in ``curried'' $\lambda$-calculus or
+functional-programming style.  This is in contrast with ``standard''
+mathematical style, where functions are typically applied to arguments
+in parentheses separated by commas, as in $f(x,y,z)$.  Such tuples do
+also appear in the model, but sequences of function or predicate
+arguments are often just separated by whitespace, as above.
+
+\index{HOL definitions|)}
+
+
+\subsection{Understanding \cpp in Three Phases}
+
+When we attempt to understand the meaning of a \cpp{} source file (or
+``translation unit'' to use the standardese), this task is best broken
+down into three phases.
+
+When we begin, we have a sequence of parsed \emph{external
+  declarations} (see the Standard's formal grammar in its Annex A:
+Grammar Summary).  Throughout this semantics, we assume that this
+sequence is well-formed syntactically, that some trusted compiler has
+already checked the sources for syntactic errors of the sort compilers
+can detect.  For example, this means that we assume that there are no
+variables left undeclared, and that all the various expressions are
+well-typed.  This is a not inconsiderable simplification of the basic
+task, but it does seem fair to claim that such analysis is not as
+interesting a problem.  This abstract syntax, as consumed and
+manipulated by the semantic model, is described in
+Section~\ref{sec:basic-types} below.
+
+The first phase of understanding, or of ascribing meaning, is to do
+what I refer to as ``name resolution''.  In this phase, bare names are
+resolved into fully-qualified names wherever possible.  For example,
+this phase turns a program such as
+\begin{verbatim}
+   int x;
+   int f(int i) { return i + x; }
+\end{verbatim}
+into
+\begin{verbatim}
+   int ::x;
+   int ::f(int i) { return i + ::x; }
+\end{verbatim}
+where the names declared in the top, global namespace (\texttt{x} and
+\texttt{f}) have been replaced with unambiguous versions of their
+names wherever they occur.  Note that the result is no longer valid
+\cpp{} (it is illegal to use the explicit qualification in names being
+defined), but the next phase of understanding does not expect valid
+\cpp{} in any case.  In the presence of hierarchical namespaces, and
+class namespaces inheriting from bases, Phase~1 is not entirely
+trivial.  It is described in some detail in Section~\ref{sec:phase1}.
+
+The second phase of the semantics is to deal with templates.  The
+input to template resolution is a translation unit with most of its
+names resolved, and where the translation unit consists of both
+``ground'' (non-template) declarations or definitions, and template
+declarations or definitions.  The ground definitions may refer to
+various template classes or functions.  If so, the appropriate
+template instantiations need to be made, producing fresh ground
+declarations.  These new declarations need to first have their names
+resolved (requiring a nested ``call'' to Phase~1), and may in turn
+require more template instantiations.  In fact, template instantiation
+may never terminate.  Templates are further described in
+Section~\ref{sec:templates}.
+
+The final phase of the semantics is execution, or ``dynamics''.  In
+this phase, top-level declarations are executed, resulting in the
+dynamic initialisation of variables, which can in turn result in the
+execution of source-code.  The exact order of evaluation of external
+declarations is allowed to vary
+(see~\cite[\S3.6.2]{cpp-standard-iso14882}), and may or may not
+precede the execution of a program's \texttt{main} function.  The
+rules governing dynamic behaviour specify what is to occur when
+execution does occur, but do not specify how various executions are
+knitted together.  All of the model's dynamic rules are presented in
+Section~\ref{sec:phase3}.
+
+\section{\cpp's Basic Types}
 \label{sec:basic-types}
 
 The most fundamental types in the semantics are those expressing the
-basic abstract syntax of \cpp{}.  These are declared in a BNF-like
-way.  For example, the declaration of \cpp{} types is (from
-\HOLfile{types})
+basic abstract syntax of \cpp{}.  The declaration of \cpp{} types is
+(from \HOLfile{types})
 \begin{verbatim}
    CPP_Type =
      Void |
@@ -302,7 +406,7 @@ way.  For example, the declaration of \cpp{} types is (from
 \end{verbatim}
 This definition allows recursion: for example, a \cpp{} type can be a
 pointer to another \cpp{} type (using the \texttt{Ptr}
-``constructor'').  In this simple prefix notation, the type of an
+constructor).  In this simple prefix notation, the type of an
 ``array of ten pointers to \texttt{int}'', is written
 \begin{verbatim}
    Array (Ptr (Signed Int)) 10
@@ -1787,7 +1891,7 @@ rewritten to the function calls that they really are.
                              (ECompVal v2 type2)) se)
          (s, EX (ECompVal res restype) se)
 \end{alltt}
-\caption{Rules for the standard binary operators}
+\caption{Rules for the Standard Binary Operators}
 \label{fig:capbinary-rules}
 \end{figure}
 
@@ -1813,7 +1917,7 @@ in Figure~\ref{fig:capunary-rules}.
      mng (s0, EX (CApUnary f (ECompVal ival t)) se0)
          (s0, EX UndefinedExpr se0)
 \end{alltt}
-\caption{Rules for the standard unary operators}
+\caption{Rules for the Standard Unary Operators}
 \label{fig:capunary-rules}
 \end{figure}
 
@@ -1956,7 +2060,7 @@ Figure~\ref{fig:deref-rules}.
                       (Function retty argtys)
                       NONE) se)
 \end{alltt}
-\caption{Rules for ``C-style'' dereferencing of pointers}
+\caption{Rules for ``C-style'' Dereferencing of Pointers}
 \label{fig:deref-rules}
 \end{figure}
 
@@ -2856,7 +2960,8 @@ the variable being initialised is not a reference.%
                  ([], s)
 \end{alltt}
 \end{minipage}
-\caption{Finishing the Initialisation of a Non-class, Non-reference
+\caption[Finishing Initialisation of a Non-class, Non-reference
+  Variable]{Completing the Initialisation of a Non-class, Non-reference
   Variable}
 \label{fig:decl-vdecinit-finish}
 \end{figure}
@@ -4610,7 +4715,7 @@ functional programming auxiliaries \texttt{MAP} and \texttt{ZIP}.
 Parameter passing is just like variable declaration\footnote{This does
   away with the \textsf{Cholera} approach which had a number of
   auxiliary relations effectively duplicating what occurred in
-  variable declaration}, and so the model's existing treatment of
+  variable declaration.}, and so the model's existing treatment of
 declarations can be re-used to set up the binding between formal names
 and actual values.  Note that the expressions that initialise the
 parameters have already been fully evaluated, so that there will be no
@@ -4700,7 +4805,7 @@ of the members (given as \texttt{Boff}, \texttt{ptroff} and
                                              [Var "cptr"])
                                       base_se))
 \end{verbatim}
-  \caption[Generated Variable Declarations from
+  \caption[Variable Declarations Generated from
   Figure~\ref{fig:mem-inits}]{The variable declarations constructed to
     precede the body of \texttt{C}'s constructor (from
     Figure~\ref{fig:mem-inits}).}
@@ -5008,7 +5113,7 @@ declarations, unions, bit-field members and the \texttt{goto} and
 for post-increment \texttt{++}, there is no rule for \texttt{--}.
 
 \appendix
-\section{Sources}
+\section{Mechanised Sources}
 \label{sec:sources}
 
 The deliverable consists of a compressed \texttt{tar}-file, that when
@@ -5073,8 +5178,8 @@ the \texttt{HOL/bin} directory) can be run in the \texttt{holsrcs}
 directory of the \cpp{} deliverable to create and check the logical
 theories.
 
-
-\bibliographystyle{plain}
+\newpage
+\bibliographystyle{plain-annote}
 \bibliography{deliverables}
 
 \printindex

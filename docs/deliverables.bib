@@ -6,7 +6,21 @@
              and applications},
   publisher={ACM Press},
   year=2006,
-  note = {Available from \url{http://isabelle.in.tum.de/~nipkow/pubs/oopsla06.html}}
+  note = {Available from \url{http://isabelle.in.tum.de/~nipkow/pubs/oopsla06.html}},
+  annote =
+
+   "This article describes an elegant method of modelling multiple
+                  inheritance in C++, without having to explicitly
+                  describe the construction of vtables.  Instead,
+                  references to objects are accompanied by \emph{paths},
+                  allowing one to simultaneously identify the static
+                  and dynamic type of an object.\\[1ex]
+
+    The article very carefully lays out the way polymorphic names
+                  (those associated with \texttt{virtual} functions)
+                  are resolved at run-time, referring to objects'
+                  dynamic and static types.  "
+
 }
 
 @inproceedings{netsem:popl2006,
@@ -23,13 +37,19 @@
  doi = {http://doi.acm.org/10.1145/1111037.1111043},
  publisher = {ACM Press},
  address = {New York, NY, USA},
+annote = "This article is relevant to C++ only inasmuch as it suggests
+                  a technique that might allow reasonably efficient
+                  evaluation of a branching, non-deterministic
+                  operational semantics."
  }
 
 @Manual{cpp-standard-iso14882,
   title =        {Programming Languages---C++},
   key =          {ISO/IEC 14882},
   year =         2003,
-  note =         {ISO/IEC 14882:2003(E)}
+  note =         {ISO/IEC 14882:2003(E)},
+  annote =       "The canonical reference for all of the semantics,
+                  this is the latest official ISO standard."
 }
 
 @inproceedings{DBLP:conf/ecoop/SiekT06,
@@ -41,7 +61,9 @@
   pages     = {304-327},
   ee        = {http://dx.doi.org/10.1007/11785477_19},
   crossref  = {DBLP:conf/ecoop/2006},
-  bibsource = {DBLP, http://dblp.uni-trier.de}
+  bibsource = {DBLP, http://dblp.uni-trier.de},
+  annote =    "A elegant, though somewhat simplistic, presentation of
+                  template instantiation in C++."
 }
 
 @proceedings{DBLP:conf/ecoop/2006,
@@ -63,7 +85,15 @@
   school =       {Computer Laboratory, University of Cambridge},
   year =         1998,
   note =         {Also published as Technical Report 453, available from \url{ht
-tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}}
+tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}},
+  annote =       "The starting point for the C++ mechanisation.  This
+                  semantics for C has an awkward treatment of
+                  statements, attempting to give statements a big-step
+                  semantics at the same time as expressions are
+                  evaluated in a small-step style.  The thesis's
+                  treatment of the sequence point rule allowing
+                  references to variables that are to be updated is
+                  also rather complicated."
 }
 
 @Misc{Feather2000,
@@ -72,5 +102,21 @@ tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}}
   howpublished = {ISO Standards Document JTC1/SC22/WG14 N925},
   month =     {September},
   year =      2000,
-  note =      {Available at \url{http://www.open-std.org/jtc1/sc22/wg14/www/docs/n925.htm}}}
+  note =      {Available at
+                  \url{http://www.open-std.org/jtc1/sc22/wg14/www/docs/n925.htm}},
+  annote =    "This proposal gives a rigorous description of how C's
+                  expression evaluation should work, with particular
+                  reference to the possible undefinedness of
+                  expressions caused by the sequence point rules."
+}
+
+@Manual{HOLdescription,
+  key =   {HOL},
+  title =        {The HOL System: Description},
+  year =      2007,
+  note =      {Available at \url{http://hol.sourceforge.net}},
+  annote = "A complete description of the HOL4 system, with details
+                  about its ML implementation, as well as its logical
+                  theories."
+}
 
