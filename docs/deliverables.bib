@@ -2,7 +2,7 @@
   author={Daniel Wasserrab and Tobias Nipkow and Gregor Snelting and Frank Tip},
   title={An Operational Semantics and Type Safety Proof for Multiple
          Inheritance in {C}++},
-  booktitle={{OOPSLA} '06: Object oriented programming, systems, languages,
+  booktitle={{OOPSLA}~'06: Object oriented programming, systems, languages,
              and applications},
   publisher={ACM Press},
   year=2006,
@@ -63,7 +63,8 @@ annote = "This article is relevant to C++ only inasmuch as it suggests
   crossref  = {DBLP:conf/ecoop/2006},
   bibsource = {DBLP, http://dblp.uni-trier.de},
   annote =    "A elegant, though somewhat simplistic, presentation of
-                  template instantiation in C++."
+                  template instantiation in \cpp.  Discussed in
+                  Section~\ref{sec:templates}. "
 }
 
 @proceedings{DBLP:conf/ecoop/2006,
@@ -86,14 +87,20 @@ annote = "This article is relevant to C++ only inasmuch as it suggests
   year =         1998,
   note =         {Also published as Technical Report 453, available from \url{ht
 tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}},
-  annote =       "The starting point for the C++ mechanisation.  This
-                  semantics for C has an awkward treatment of
+  annote =       "The starting point for the \cpp{} mechanisation.
+                  This semantics for C has an awkward treatment of
                   statements, attempting to give statements a big-step
                   semantics at the same time as expressions are
-                  evaluated in a small-step style.  The thesis's
+                  evaluated in a small-step style.  The new statement
+                  model for \cpp{} is described in
+                  Section~\ref{sec:small-step-stmts}. The thesis's
                   treatment of the sequence point rule allowing
                   references to variables that are to be updated is
-                  also rather complicated."
+                  also rather complicated.  In preference, Clive
+                  Feather's semantics has been adopted for the \cpp{}
+                  model (see the discussion of assignment in
+                  Section~\ref{sec:assignment} on
+                  page~\pageref{sec:assignment})."
 }
 
 @Misc{Feather2000,
@@ -118,5 +125,53 @@ tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}},
   annote = "A complete description of the HOL4 system, with details
                   about its ML implementation, as well as its logical
                   theories."
+}
+
+@Book{Stroustrup1994:DECPP,
+  author =    {Bjarne Stroustrup},
+  title =        {The Design and Evolution of \cpp},
+  publisher =    {Addison-Wesley},
+  year =         1994,
+  annote =    "A description of the history of \cpp's
+                  development. Some of the discussion is quite useful
+                  in describing why certain features of the language
+                  are the way they are."
+}
+
+
+@Book{Stroustrup2000:TCPL,
+  author =    {Bjarne Stroustrup},
+  title =        {The \cpp{} Programming Language},
+  publisher =    {Addison-Wesley},
+  year =         2006,
+  edition =   {2nd},
+  annote =    "A very complete introduction to \cpp, explaining how to
+                  use the language effectively and in a principled
+                  way.  Detailed, ISO~standard style discussion of
+                  semantics is present haphazardly."
+}
+
+@Book{Paulson:ML,
+  author =    {Lawrence C. Paulson},
+  title =        {{ML} for the Working Programmer},
+  publisher =    {Cambridge University Press},
+  year =         1996,
+  edition =   {2nd},
+  annote =    "An introductory textbook describing the functional
+                  programming language SML.  Logical specifications in
+                  HOL often resemble functional programs.
+                  Additionally, many of the functions used in HOL
+                  theories have counterparts in SML.  (SML is often
+                  known simply as ``ML''.)"
+}
+
+@Book{Gordon93,
+ editor = "M. J. C. Gordon and T. Melham",
+ title = "Introduction to {HOL}: a theorem proving environment for higher order logic",
+ publisher = "Cambridge University Press",
+ year = 1993,
+ annote = "This book is the ancestor to~\cite{HOLdescription}; it is a
+                  complete description, including much reference
+                  material, for the (now outdated) HOL88 system."
 }
 

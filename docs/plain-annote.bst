@@ -226,9 +226,9 @@ FUNCTION {format.authors}
 FUNCTION {format.annotate}
 { annote empty$
         { "" }
-        { " \begin{quotation}\noindent "
+        { " \par \vspace{1ex}{\itshape\noindent "
           annote
-          * " \end{quotation} " *
+          * "} " *
         }
       if$
 }

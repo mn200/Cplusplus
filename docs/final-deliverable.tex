@@ -9,7 +9,12 @@
 \usepackage{pstricks}
 \usepackage{pst-node}
 \usepackage{makeidx}
+\usepackage[square]{natbib}
 
+\renewcommand{\bibsection}{\section{Annotated
+    Bibliography}\label{sec:bibliography}}
+\newcommand{\bibpreamble}{These sources were either used directly in
+  the development of the \cpp{} model, or provide useful background reading.}
 \include{cpp-macros}
 
 \newcommand{\ie}{\emph{i.e.}}
@@ -19,17 +24,28 @@
 \newcommand{\rbr}{\texttt{\}}}
 \newcommand{\HOLfile}[1]{HOL:\texttt{#1}}
 
+\setcounter{tocdepth}{2}
+
 \title{A Formal Semantics for \cpp}
-\author{Michael Norrish\thanks{
-  This work has been performed under funding from QinetiQ's Systems
-  Assurance Group under the UK MOD Output 3a research project entitled
-  \emph{Robust Languages}.}\\{\small \texttt{Michael.Norrish@nicta.com.au}}}
+\author{Michael Norrish\\{\small \texttt{Michael.Norrish@nicta.com.au}}}
 \date{}
 
 \makeindex
 
 \begin{document}
 \maketitle
+\begin{abstract}
+  This document describes a formal operational model of the dynamic
+  semantics of much of the \cpp{} language (as specified in the ISO
+  Standard~\cite{cpp-standard-iso14882}).  The formal model was
+  developed in the HOL theorem-prover, providing additional guarantees
+  as to its good sense.  This report presents and explains extracts
+  from the mechanised source-code that was fed to HOL.
+
+  This work was been performed under funding from QinetiQ's Systems
+  Assurance Group under the UK MOD Output 3a research project entitled
+  \emph{Robust Languages}.
+\end{abstract}
 
 \tableofcontents
 \listoffigures
@@ -53,7 +69,8 @@ Section~\ref{sec:validation} for more on validation.)
 
 In addition to the ISO~Standard itself~\cite{cpp-standard-iso14882},
 the report draws on a number of other sources.  The annotated
-bibliography in the appendix describes all of these.
+bibliography in Appendix~\ref{sec:bibliography} describes all of
+these.
 
 \vspace{1ex}
 \noindent This document supercedes all previous deliverables.
@@ -83,7 +100,79 @@ signature in the file
 HOL is a powerful logical language, equipped with the usual features
 of predicate logic (quantifiers such as $\forall$ and propositional
 connectives such as $\lor$ and $\Rightarrow$), as well as a rich,
-typed term language.
+typed term language.  In higher-order logic, unlike in predicate
+logic, there is no distinction between terms and formulas.  The latter
+are simply terms of type \texttt{:bool}.
+
+Terms in HOL come in four forms: variables, constants (defined by the
+user, or provided by the system), function applications and
+abstractions.  Function applications are usually written without
+parentheses around the argument, so that one will see \texttt{f~x} (an
+application of function \texttt{f} to argument \texttt{x}) rather than
+\texttt{f(x)}.  Of course, sometimes the nature of the values will
+require parentheses: \texttt{f~x~+~y} would be parenthesised
+\texttt{(f~x)~+~y}, which is not the same as \texttt{f(x~+~y)}.
+
+Functions are often also ``curried'', meaning that instead of
+\texttt{f(x,y)}, one will often see \texttt{f~x~y} (though the former
+is still possible).  In \texttt{f(x,y)}, the type of \texttt{f} (a
+function) will be
+\begin{alltt}
+   xty # yty -> result\_ty
+\end{alltt}
+(where \texttt{\#} indicates the cartesian product).  In the second
+term, the type of \texttt{f} is
+\begin{alltt}
+   xty -> (yty -> result\_ty)
+\end{alltt}
+
+\noindent
+Abstractions are $\lambda$-expressions, forming functions.  For
+example, the term
+\begin{alltt}
+   \(\lambda\)x. x + y
+\end{alltt}
+is the function which takes an argument \texttt{x} and returns the
+result of adding \texttt{x} to the value \texttt{y}.  The type of this
+function will be
+\begin{alltt}
+   num -> num
+\end{alltt}
+
+\vspace{1ex}
+\noindent Two further derived forms occur frequently in the \cpp{}
+model: \texttt{let} and conditional expressions.
+%
+\index{let expressions@\texttt{let} expressions}
+%
+A term of the form
+\begin{alltt}
+   let \(\mathit{pat}\) = \(\mathit{exp}_1\) in \(\mathit{exp}_2\)
+\end{alltt}
+evaluates $\mathit{exp}_2$ in a context where the names occurring in
+$\mathit{pat}$ are bound to the value given by $\mathit{exp}_1$.  For
+example,
+\begin{alltt}
+   let x = 3 * 10 in x + 6
+\end{alltt}
+has value 36.  The use of \texttt{let} expressions serves only to
+structure the source, and is useful for readability.  By way of
+contrast, in a programming language like SML, where there are side
+effects, the use of \texttt{let} can make significant semantic
+differences.
+
+\vspace{1ex}
+\index{conditional expressions}
+\index{if-then-else in HOL@\texttt{if}-\texttt{then}-\texttt{else} in HOL}
+%
+\noindent Conditional expressions are written
+\begin{alltt}
+   if \(g\) then \(e_1\) else \(e_2\)
+\end{alltt}
+where $g$ must be of type \texttt{:bool}.
+
+\subsubsection{Standard HOL Types}
+\label{sec:standard-hol-types}
 
 \paragraph{Numbers} HOL has three different numeric types: natural
 numbers~(\texttt{num}), integers~(\texttt{int}) and real
@@ -220,7 +309,7 @@ optionally accompanied by data (following the \texttt{of} keyword).
 If the arithmetic expression is an addition, for example, then it
 consists of (recursively) two arithmetic expressions representing the
 left and right arguments (the \texttt{\#} symbol is the type operator
-for Cartesian products).
+for cartesian products).
 
 As a result of a definition like the above, the new type is
 established, and five new constants (known as the new type's
@@ -256,6 +345,21 @@ So, rather than taking its two arguments as a pair (as in the first
 \texttt{ArithExp} example above), the \texttt{Plus} constructor for
 \texttt{SimpExp} takes its two arguments one after the other.
 
+\vspace{1ex} \index{case expressions in HOL} When a type has been
+defined in this way, an expression can be analysed with a ``case
+expression'' that allows pattern-matching.  For example, one might
+write an evaluator for \texttt{SimpExp} values:
+\begin{alltt}
+   eval e  =  case e of
+                 Number i -> i
+              || Plus e1 e2 -> eval e1 + eval e2
+\end{alltt}
+Successive cases are separated by the \texttt{||} symbol, and the
+pattern is separated from the body by the arrow \texttt{->}.  This is
+very similar to what is possible in functional programming languages
+such as SML and Haskell.
+
+
 \paragraph{Defining Functions}
 In HOL, definitions of functions look similar to function definitions
 in functional programming languages, with features such as
@@ -272,13 +376,14 @@ is not well-founded, or if there is some other error in the quoted
 text, then HOL does not allow the definition to proceed, and no
 theorem is produced.)
 
-\paragraph{Defining Relations} Inductive relations allow the
-definition of systems of rules, common in the definitions of
-operational semantics.  For example, one might write a big-step rule
-for applicative order reduction in the $\lambda$-calculus as
+\paragraph{Defining Relations}\index{Inductive definitions in HOL|(}
+Inductive relations allow the definition of systems of rules, common
+in the definitions of operational semantics.  For example, one might
+write a big-step rule for applicative order reduction in the
+$\lambda$-calculus as
 \[
-\infer{\Gamma \vdash M\,N\;\Downarrow \;v}{\Gamma \vdash M \;\Downarrow\; (\lambda x. M_0) &
-  \Gamma \vdash N \;\Downarrow\;v_0 & (x\mapsto v_0),\Gamma \vdash M_0 \;\Downarrow\; v}
+\infer{\Gamma \vdash M\,N\;\Downarrow \;v}{\Gamma \vdash M \;\Downarrow\; (\lambda x. M_0) \;\;&
+  \;\;\Gamma \vdash N \;\Downarrow\;v_0\;\; & \;\;(x\mapsto v_0),\Gamma \vdash M_0 \;\Downarrow\; v}
 \]
 This should be read as stating that an application $M\,N$ reduces to a
 value $v$ if $M$ reduces to an abstraction ($\lambda x. M_0$), if $N$
@@ -286,34 +391,98 @@ reduces to some value $v_0$, and if the body $M_0$ reduces to $v$,
 while the bound variable $x$ is linked to $v_0$.
 
 The same rule might be presented in HOL syntax as
-\begin{center}
-\begin{minipage}{\textwidth}
-\begin{alltt}
+\begin{stdrule}
      apeval G M (LAM x M0) \(\land\)
      apeval G N v0 \(\land\)
      apeval ((x,v0) :: G) M0 v
    \(\Rightarrow\)
      apeval G (APP M N) v
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 The use of the conjunction and implication symbols makes the
 propositional structure of the rule explicit.  Also, the relation
 being defined is always the first symbol (\texttt{apeval} here) of the
-conclusion.
+conclusion.  Note also how the commonly used curried style is used to
+define \texttt{apeval}.
 
-Note also how the \texttt{apeval} constant of this example is applied
-to its three arguments in ``curried'' $\lambda$-calculus or
-functional-programming style.  This is in contrast with ``standard''
-mathematical style, where functions are typically applied to arguments
-in parentheses separated by commas, as in $f(x,y,z)$.  Such tuples do
-also appear in the model, but sequences of function or predicate
-arguments are often just separated by whitespace, as above.
+Another example is the rule \ruleid{var-to-fvalue} from the dynamic
+semantics for \cpp{}:
+\index{rule (dynamic)!var-to-fvalue@\texttt{var-to-fvalue}}
+\begin{stdrule}
+(* RULE-ID: var-to-fvalue *)
+     (lookup_type s vname = SOME ty) \(\land\)
+     function_type ty \(\land\)
+     vname \(\in\) FDOM s.fnencode
+   \(\Rightarrow\)
+     mng (s, EX (Var vname) se) (s, EX (FVal vname ty NONE) se)
+\end{stdrule}
+\textit{(Aside)} A ``pretty'', more ``mathematical'', version of the same rule might
+appear
+\[
+\infer{(s,\textsf{EX}(\textsf{Var}(v),\mathit{se})) \;\rightarrow\;
+       (s,\textsf{EX}(\textsf{FVal}(v,\tau,*),\mathit{se}))}{
+       \textsf{lookup\_type}(s,v) = \lfloor\tau\rfloor \;&\;
+       \textsf{function\_type}(\tau) \;&\;
+       v \in \textsf{dom}(s.\textsf{fnencode})}
+\]
+Here I have (arbitrarily) chosen to represent the \texttt{mng}
+relation with an arrow ($\rightarrow$), to use Greek for the type
+variable (\texttt{ty} \textit{vs} $\tau$), and to use
+$\lfloor\,\_\,\rfloor$ and $*$ to represent \texttt{SOME} and
+\texttt{NONE} respectively.  I have made \textsf{EX} and \textsf{FVAL}
+take tuples of arguments, though the original \texttt{EX} and
+\texttt{FVAL} take curried arguments, and I have introduced various
+\LaTeX{} spacing commands, all in an attempt to lay the rule out in an
+aesthetically pleasing way.  Unfortunately, this sort of effort does
+not scale to very large rules. It is also entirely manual (at least in
+HOL4; constrast Isabelle's support for automatic generation of
+``reasonable'' \LaTeX).  If a translation is manual, it is inherently
+error-prone.\hfill{\textit{(End Aside)}}
 
+In the ASCII rendering, we see that the rule has three premises
+(separated by $\land$), and that its conclusion defines the constant
+\texttt{mng}.  The inductive relation \texttt{mng} is similar to the
+reduction relation for the $\lambda$-calculus. That was a ternary
+relation describing how one language form (the second argument) might
+evolve into another (the third argument), all in a context $\Gamma$.
+
+Here, there is no separate context, so \texttt{mng} is just a binary
+relation, but like \texttt{apeval} it is also defining the evolution
+of language forms.  The first argument is a pair of a state \texttt{s}
+and an expression, and this can be seen as the ``starting point''.  The
+second argument is another pair, and it is the result of the execution
+step.
+
+There are two important things to note about rules of this form.
+\begin{itemize}
+\item Rules do not \emph{require} a step to take place.  Rather they
+  state that a step is \emph{permitted}.  If another rule describes
+  another possible behaviour for the same form, then that second
+  behaviour is also permitted, and the rules collectively describe a
+  non-deterministic system.
+\item Rules' premises represent preconditions on the behaviour.  If
+  the preconditions are not satisfied then the rule can not ``fire'',
+  and the behaviour may not occur.  Of course, another rule may allow
+  some other behaviour to occur for the same starting point.
+\end{itemize}
+
+The three premises in \ruleid{var-to-fvalue} require that (1)~the
+variable's name \texttt{vname} ``looks up'' in the state \texttt{s} to
+some type \texttt{ty}; that (2)~this type \texttt{ty} be a function
+type; and that (3)~\texttt{vname} also be present in the domain of the
+state's \texttt{fnencode} map.  If all of these conditions are
+satisfied, the behaviour can occur.
+
+In this case, the behaviour leaves the state unchanged (the same
+\texttt{s} occurs in both arguments), but the expression form changes
+from a \texttt{Var} to an \texttt{FVal}, where the latter includes the
+function's type and the fact that it is not a member function (the
+\texttt{NONE} parameter to \texttt{FVal}).
+
+\index{Inductive definitions in HOL|)}
 \index{HOL definitions|)}
 
 
-\subsection{Understanding \cpp in Three Phases}
+\subsection{Understanding \cpp{} in Three Phases}
 
 When we attempt to understand the meaning of a \cpp{} source file (or
 ``translation unit'' to use the standardese), this task is best broken
@@ -446,7 +615,7 @@ types:
 In other words, values of identifier type are constructed by applying
 the function \texttt{IDConstant} to three arguments: a boolean
 indicating whether or not this is an ``absolute'' identifier
-(represented in the concrete syntax by prefixing it with \texttt{::});
+(represented in the concrete syntax by prefixing it with \texttt{::}),
 a list of ID components and one final ID component.
 
 An ID component might either be a simple name, or can be a simple name
@@ -554,10 +723,10 @@ model uses a type of hierarchical environments, giving maps from
 structured names into information about those names.  These maps are
 instances of a type called \texttt{fmaptree} (see \HOLfile{fmaptree}).
 This type has one constructor:
-\begin{verbatim}
+\begin{stdrule}
    FTNode : 'value -> ('key |-> ('key,'value)fmaptree) ->
             ('key,'value)fmaptree
-\end{verbatim}
+\end{stdrule}
 The \texttt{|->} type operator returns finite maps, so
 \texttt{FTNode} takes a value, and a finite map from keys to more
 \texttt{fmaptree}s, and returns a new \texttt{fmaptree}.  This type
@@ -710,7 +879,7 @@ no \texttt{x} in the namespace \texttt{::ns1}, at least at that stage.
 
 The HOL definition of the Phase~1 state is (see
 \HOLfile{name_resolution}):
-\begin{verbatim}
+\begin{stdrule}
    P1state = <|
      current_nspath : string list ;
      dynclasses : string |-> bool # IDComp list #
@@ -721,7 +890,7 @@ The HOL definition of the Phase~1 state is (see
      global : state ;
      accdecls : ext_decl list
    |>
-\end{verbatim}
+\end{stdrule}
 The three \texttt{dyn} fields record what names are visible in three
 different categories: namespaces~(\texttt{dynns}),
 classes~(\texttt{dynclasses}) and objects~(\texttt{dynobjs}).  Each
@@ -1155,12 +1324,12 @@ One might imagine that it be possible to treat templates at
 ``run-time'', as if one had written a one-pass \cpp{} interpreter.
 However, the example in Figure~\ref{fig:templates-not-interpretable}
 demonstrates that such a goal is impossible, or at least that one
-would have to write a two pass interpreter at the very least.  Any
-reference to the figure's \texttt{List} template, perhaps within a
-function that was called at a great stack depth, causes the need to
-statically initialise the global \texttt{node\_count} before the
-program even begins.  A \naive{} interpreter that attempts to execute
-the program source as it sees it, will come unstuck.
+would have to write a two pass interpreter.  Any reference to the
+figure's \texttt{List} template, perhaps within a function that was
+called at a great stack depth, causes the need to statically
+initialise the global \texttt{node\_count} before the program even
+begins.  A \naive{} interpreter that attempts to execute the program
+source as the source is read in will come unstuck.
 
 As the interpreter sees the template declarations above, it does
 nothing.  Then it performs its global declarations, and jumps into
@@ -1254,8 +1423,8 @@ example:
 This must be an error because it is not sensible to write
 \texttt{int::staticfield}.  (Other type substitutions may also cause
 this to be an error, but this error can be detected as the
-substitution is done, without any need to lookup information about the
-argument.)
+substitution is done, without any need to look up any information
+about the argument.)
 
 The partiality of instantiation does not prevent us from defining a
 partial order over types, such that $\tau_1 \leq \tau_2$ when $\tau_2$
@@ -1355,7 +1524,7 @@ do.  Thus, the general forms of the relations' definition is
 Template instantiation only begins when all of the program's
 declarations have been analysed in Phase~1.  This means that the
 process begins with a complete Phase~1 state, and with all of the
-translation unit's definitions ``to hand''.  This is only real
+translation unit's definitions ``to hand''.  This is the only real
 difference between the model here and Siek \& Taha's.  Their core
 relation is presented in their Figure~6, and consists of 4 rules,
 including one that checks when instantiation can finish.  It is their
@@ -1622,9 +1791,9 @@ statements:
 
 Most of the time reduction occurs between expressions and expressions,
 or between statements and statements, allowing one to imagine that one
-has the $\rightarrow_e$ and $\rightarrow_s$ from the C semantics.
-For example, when evaluating expressions, rules in the dynamics have
-conclusions of the form
+has the $\rightarrow_e$ and $\rightarrow_s$ from the PhD's C
+semantics.  For example, when evaluating expressions, rules in the
+dynamics have conclusions of the form
 \begin{alltt}
    mng (s0, EX e0 se0) (s, EX e se)
 \end{alltt}
@@ -1765,14 +1934,14 @@ Variables can also denote functions:
 \index{FVal@\texttt{FVal}}%
 \index{Var@\texttt{Var}}%
 \index{rule (dynamic)!var-to-fvalue@\texttt{var-to-fvalue}}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: var-to-fvalue *)
      (lookup_type s vname = SOME ty) \(\land\)
      function_type ty \(\land\)
      vname \(\in\) FDOM s.fnencode
    \(\Rightarrow\)
      mng (s, EX (Var vname) se) (s, EX (FVal vname ty NONE) se)
-\end{alltt}
+\end{stdrule}
 
 
 \paragraph{Contextual Evaluation}
@@ -1928,26 +2097,25 @@ their arguments in a prescribed order, and must exhaust the pending
 side effects that may have accumulated in a state before they can move
 from one argument to the next, if indeed they move on at all.   For
 example, the rule where logical-and returns false is
-\index{rule (dynamic)!and-false@\texttt{and-false}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: and-false *)
      is_zero t v
    \(\Rightarrow\)
      mng (s, EX (CAnd (ECompVal v t) sub2) se)
          (s, EX (ECompVal (signed_int 0) Bool) se)
-\end{alltt}
+\end{stdrule}\index{rule (dynamic)!and-false@\texttt{and-false}}%
 When the first argument is true (non-zero), the truth value of the
 second argument is the result.  The conversion of the second argument
 to a truth value is achieved by negating twice:
-\index{rule (dynamic)!and-true@\texttt{and-true}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: and-true *)
      ~is_zero t v \(\land\)
      is_null_se se
    \(\Rightarrow\)
      mng (s, EX (CAnd (ECompVal v t) sub2) se)
          (s, EX (CApUnary CNot (CApUnary CNot sub2)) base_se)
-\end{alltt}
+\end{stdrule}
+\index{rule (dynamic)!and-true@\texttt{and-true}}%
 \index{is_null_se@\texttt{is_null_se}|textbf}%
 The \texttt{is_null_se} predicate tests whether or not a side effect
 record is empty of pending side effects.
@@ -1964,14 +2132,14 @@ its arguments.  As with the other operators, evaluation of the first
 argument is handled by the contextual evaluation rule; we need only
 provide a rule for when the left-hand expression has been fully
 evaluated.
-\index{rule (dynamic)!comma-progresses@\texttt{comma-progresses}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: comma-progresses *)
      final_value (EX e1 se)
    \(\Rightarrow\)
      mng (s0, EX (CommaSep e1 e2) se)
          (s0, EX (RValreq e2) base_se)
-\end{alltt}
+\end{stdrule}
+\index{rule (dynamic)!comma-progresses@\texttt{comma-progresses}}%
 \index{RValreq@\texttt{RValreq}}%
 The special \texttt{RValreq} form is used to force l-values to
 evaluate to r-values if possible.  (See~\cite[\S3.3.3]{Norrish98} for
@@ -2155,6 +2323,8 @@ The rule is complicated by the fact that if the pointer to a member is
 to a virtual function, then the result must be a reference to a
 virtual function in the class on which the dereference is
 performed.
+\begin{center}
+\begin{minipage}{\textwidth}
 \index{rule (dynamic)!offset-deref@\texttt{offset-deref}}%
 \begin{alltt}
 (* RULE-ID: offset-deref *)
@@ -2176,6 +2346,8 @@ performed.
          (s, EX (SVar (LVal a (Class cnm1) p) fld)
                 se)
 \end{alltt}
+\end{minipage}
+\end{center}
 The invariant in the model is that if a reference is made to a virtual
 function, then it must occur as the right-hand argument of a
 field-selection as a bare name (hence the
@@ -2208,6 +2380,7 @@ It is undefined behaviour to apply the null member pointer to any
 class.
 
 \paragraph{Assignment}
+\label{sec:assignment}
 The rules for assignment do not need to change from their presentation
 in C.  Nonetheless, this semantics adopts Clive
 Feather's\index{Feather, Clive} proposal~\cite{Feather2000} for
@@ -2321,12 +2494,9 @@ required the complete evaluation of the function body.)
 \index{FnApp@\texttt{FnApp}} At the base level, a function call turns
 an \texttt{EX} piece of syntax into an extended expression tagged with
 \texttt{ST}.  The rule \ruleid{global-function-call} of
-Figure~\ref{fig:global-function-call} governs (normal) function calls:
+Figure~\ref{fig:global-function-call} governs (normal) function calls.
 \begin{figure}[hbtp]
-\begin{center}
-\begin{minipage}{\textwidth}
-\index{rule (dynamic)!global-function-call@\texttt{global-function-call}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: global-function-call *)
      find_best_fnmatch s0 fnid (MAP valuetype args)
                        rtype params body \(\land\)
@@ -2344,13 +2514,12 @@ Figure~\ref{fig:global-function-call} governs (normal) function calls:
                      exprclasses updated_by stackenv_newscope ;
                      env := empty_env |>,
           ST (Block T pdecls [body]) (return_cont se rtype))
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
+\index{rule (dynamic)!global-function-call@\texttt{global-function-call}}%
 \caption{Making a Call to a Global (\ie, Non-member) Function}
 \label{fig:global-function-call}
 \end{figure}
-
+%
 \index{return_cont@\texttt{return_cont}}%
 (For the details behind \texttt{return_cont}, and the \texttt{RVC}
 function that appears in the next rule, see
@@ -4012,9 +4181,9 @@ the address of some other, non-reference, local parameter.)
 
 This requires a change to the existing semantics, to remove function
 arguments from the l-value context (as defined by
-\texttt{valid_lvcontext}.\index{valid_lvcontext@\texttt{valid_lvcontext}}
-In order to allow some function arguments to decay into r-values, a
-new rule is introduced:
+\texttt{valid_lvcontext}).\index{valid_lvcontext@\texttt{valid_lvcontext}}
+But then, in order to allow some function arguments to decay into
+r-values, a new rule is introduced:
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (dynamic)!fnapp-lval2rval@\texttt{fnapp-lval2rval}}%
@@ -5179,6 +5348,8 @@ directory of the \cpp{} deliverable to create and check the logical
 theories.
 
 \newpage
+\label{sec:bibliography}
+\nocite{Stroustrup1994:DECPP,Stroustrup2000:TCPL,Paulson:ML,Gordon93}
 \bibliographystyle{plain-annote}
 \bibliography{deliverables}
 

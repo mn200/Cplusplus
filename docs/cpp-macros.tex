@@ -1,4 +1,6 @@
-\newcommand{\cpp}{\mbox{C\hspace{-0.5pt}+\hspace{-1.5pt}+}}
+\newcommand{\cpp}{\mbox{C\hspace{-0.5pt}+\hspace{-2pt}+}}
+%\newcommand{\cpp}{C\nolinebreak\hspace{-.05em}\raisebox{.4ex}{\tiny\bf +}\nolinebreak\hspace{-.10em}\raisebox{.4ex}{\tiny\bf +}}
+
 \newcommand{\ruleid}[1]{\textsl{[#1]}}
 
 \newcommand\ckey[1]{\texttt{#1}}
@@ -106,6 +108,8 @@
 
 \newenvironment{proof}{\sl\setlength\parindent{0mm}\addtolength\parskip{2mm}}%
 {}
+
+\newenvironment{stdrule}{\begin{center}\begin{minipage}{\textwidth}\begin{alltt}}{\end{alltt}\end{minipage}\end{center}}
 
 % Local Variables:
 % mode: latex
