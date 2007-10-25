@@ -70,12 +70,28 @@ Section~\ref{sec:validation} for more on validation.)
 In addition to the ISO~Standard itself~\cite{cpp-standard-iso14882},
 the report draws on a number of other sources.  The annotated
 bibliography in Appendix~\ref{sec:bibliography} describes all of
-these.
+these.  The remainder of this introduction describes how to read the
+HOL syntax that appears throughout the report (in
+Section~\ref{sec:reading-HOL}), and then gives a high-level picture of
+the \cpp{} semantics in Section~\ref{sec:intro-three-phases}.
+
+Section~\ref{sec:basic-types} describes the basic types that underly
+the semantics.  Here, for example, are discussions of how \cpp{}'s
+hierarchical namespaces are modelled with a custom data type in
+HOL. Sections~\ref{sec:phase1}--\ref{sec:phase3} describe each of the
+three phases identified in Section~\ref{sec:intro-three-phases} in
+more detail.  Section~\ref{sec:validation} describes how the semantics
+has been and might be validated to increase confidence in its
+correctness.  Section~\ref{sec:omissions} describes the omissions and
+faults in the semantics, and concludes with a discussion of possible
+future work to help rectify known and any as-yet undiscovered faults.
+
 
 \vspace{1ex}
 \noindent This document supercedes all previous deliverables.
 
 \subsection{Reading  HOL Source Code}
+\label{sec:reading-HOL}
 
 This report contains a large number of extracts from the HOL source
 code found in the \texttt{holsrcs} directory of the deliverable.
@@ -100,9 +116,20 @@ signature in the file
 HOL is a powerful logical language, equipped with the usual features
 of predicate logic (quantifiers such as $\forall$ and propositional
 connectives such as $\lor$ and $\Rightarrow$), as well as a rich,
-typed term language.  In higher-order logic, unlike in predicate
-logic, there is no distinction between terms and formulas.  The latter
-are simply terms of type \texttt{:bool}.
+typed term language.  HOL's types can be simple, as with the types
+\texttt{:bool}, that of boolean values ``true'' and ``false'', and
+\texttt{:num}, the type of natural numbers.  HOL also includes
+type-operators that take other types as arguments in order to create
+fresh types.  For example, the function arrow \texttt{->} creates the
+type of functions between two existing types.  In this way,
+\begin{stdrule}
+   :num -> bool
+\end{stdrule}
+is the type of functions from natural numbers to booleans.  Another
+type operator (\texttt{list}) allows for the type of lists of elements
+drawn from a particular type.  Finally, in higher-order logic, unlike
+in predicate logic, there is no distinction between terms and
+formulas.  The latter are simply terms of type \texttt{:bool}.
 
 Terms in HOL come in four forms: variables, constants (defined by the
 user, or provided by the system), function applications and
@@ -118,12 +145,12 @@ Functions are often also ``curried'', meaning that instead of
 is still possible).  In \texttt{f(x,y)}, the type of \texttt{f} (a
 function) will be
 \begin{alltt}
-   xty # yty -> result\_ty
+   :xty # yty -> result\_ty
 \end{alltt}
-(where \texttt{\#} indicates the cartesian product).  In the second
-term, the type of \texttt{f} is
+(where \texttt{\#} is the cartesian product type operator).  In the
+second term, the type of \texttt{f} is
 \begin{alltt}
-   xty -> (yty -> result\_ty)
+   :xty -> (yty -> result\_ty)
 \end{alltt}
 
 \noindent
@@ -136,7 +163,7 @@ is the function which takes an argument \texttt{x} and returns the
 result of adding \texttt{x} to the value \texttt{y}.  The type of this
 function will be
 \begin{alltt}
-   num -> num
+   :num -> num
 \end{alltt}
 
 \vspace{1ex}
@@ -175,27 +202,28 @@ where $g$ must be of type \texttt{:bool}.
 \label{sec:standard-hol-types}
 
 \paragraph{Numbers} HOL has three different numeric types: natural
-numbers~(\texttt{num}), integers~(\texttt{int}) and real
-numbers~(\texttt{real}).  The latter are not used in the C++
+numbers~(\texttt{:num}), integers~(\texttt{:int}) and real
+numbers~(\texttt{:real}).  The latter are not used in the C++
 formalisation.  All types support the standard arithmetic operators,
 such as addition~(\texttt{+}), subtraction~(\texttt{-}) and
 multiplication~(\texttt{*}).  In addition, HOL supports types of
 fixed-width memory ``words''.
 
 \paragraph{Pairs} The type of pairs of $\sigma$s and $\tau$s is
-written \texttt{$\sigma$~\#~$\tau$}.  Pair values are written inside
+written \texttt{:$\sigma$~\#~$\tau$}.  Pair values are written inside
 parentheses, with components separated by commas, \eg, \texttt{(1,4)}.
 \index{FST@\texttt{FST}} The function \texttt{FST} returns the first
 component of a tuple, and \index{SND@\texttt{SND}}\texttt{SND} returns
 the second.
 
 \paragraph{Lists} The type of lists of elements drawn from a type
-$\alpha$ is written $\alpha\;\texttt{list}$. Lists can either be empty
-(\texttt{[]}) or the result of ``cons''-ing an element onto the front
-of an existing list.  The list consisting of element \texttt{h}
-followed by list \texttt{t} is written \texttt{h::t}. A literal list
-of a fixed number of elements can also be written between square
-brackets, with successive elements separated by semi-colons.  Thus,
+$\alpha$ is written \texttt{:}$\alpha\;\texttt{list}$ (\ie, the type
+operator appears as a suffix). Lists can either be empty (\texttt{[]})
+or the result of ``cons''-ing an element onto the front of an existing
+list.  The list consisting of element \texttt{h} followed by list
+\texttt{t} is written \texttt{h::t}. A literal list of a fixed number
+of elements can also be written between square brackets, with
+successive elements separated by semi-colons.  Thus,
 \begin{alltt}
    [1; 2; 3]
 \end{alltt}
@@ -288,6 +316,7 @@ new algebraic types, definition of functions specified equationally,
 and inductive definition of relations.
 
 \paragraph{Defining Types}
+\index{algebraic types}
 Algebraic types naturally correspond to the syntax of formal
 languages.  They are defined in a style that resembles
 \texttt{datatype} declarations in functional languages such as Haskell
@@ -311,9 +340,10 @@ consists of (recursively) two arithmetic expressions representing the
 left and right arguments (the \texttt{\#} symbol is the type operator
 for cartesian products).
 
+\index{constructors, of algebraic types}
 As a result of a definition like the above, the new type is
 established, and five new constants (known as the new type's
-``constructors'') are defined, with types
+\emph{constructors}) are defined, with types
 \begin{alltt}
    Number   : int -> ArithExp
    Variable : string -> ArithExp
@@ -483,6 +513,7 @@ function's type and the fact that it is not a member function (the
 
 
 \subsection{Understanding \cpp{} in Three Phases}
+\label{sec:intro-three-phases}
 
 When we attempt to understand the meaning of a \cpp{} source file (or
 ``translation unit'' to use the standardese), this task is best broken
