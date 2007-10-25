@@ -5186,30 +5186,51 @@ pointer to the object can be returned.
 \section{Validation}
 \label{sec:validation}
 
-The deliverable includes a directory \texttt{holsrcs/testfiles}.  In
-this directory there is some preliminary work towards the creation of
-a symbolic evaluator, for demonstrating that programs in the model can
-behave as one might expect.  This work builds on the ideas
-in~\cite{netsem:popl2006}, allowing symbolic exploration of a semantic
-definition that features non-deterministic branching.  For the moment,
-the code only handles a sequence of external declarations not
-requiring any expression evaluation, which is very minimalist.  More
-in this vein would require a significant investment of work, though it
-would be an appealing one as it might allow the semantics to pass a
-test suite.
+There are at least two possible forms of mechanical validation
+possible for a semantics such as the one presented in this report:
+sanity theorems, and evaluation of the specification on ground
+programs.  In addition, there are informal, social, routes to
+validation.  This section of the report describes the (limited) steps
+already taken along these three paths, and discusses what might still
+be done.
 
-This tool requires some sort of parser for \cpp{} source code, as
-having to write out abstract syntax trees by hand is a major
-annoyance.  It's possible that the front-end of \texttt{g++} might be
-usable in this regard.
+\paragraph{Sanity theorems}
+\index{sanity theorems} A sanity theorem is a result that we expect to
+be true of a specification, should be relatively easy to prove, and
+whose falseness would indicate a serious flaw in the specification.
+(Such theorems are a class of ``formal challenge'', as discussed in
+Rushby~\cite{Rushby93}.)
 
-Throughout the sources, there are a number of sanity theorems.  These
-are identified by ML comments of the form \texttt{(*~SANITY~*)}.
+Throughout the HOL sources, there are a number of sanity theorems.
+These are identified by ML comments of the form \texttt{(*~SANITY~*)}.
 There is one slightly more substantial result in the theory
 \HOLfile{sanity}, but its proof pales beside those of transitivity,
 reflexivity and anti-symmetry of name instantiation in
-\HOLfile{instantiation}.
+\HOLfile{instantiation}.  These are painful to establish because of
+the complexity of the abstract syntax that can be instantiated, but
+they are important because they indicate that Siek and Taha's basic
+framework~\cite{DBLP:conf/ecoop/SiekT06} is still usable in the more
+complicated setting of this \cpp{} semantics.
 
+My earlier work on C~\cite{Norrish98}, which included a number of
+simple sanity theorems, also included proofs of the ``standard''
+properties beloved of programming language theorists: type safety and
+progress.  These properties demonstrate respectively that expressions
+of a given type continue to posses that type as they evaluate, and
+that an operational semantics never ``blocks'' but continues to only
+finishes program evaluation in a valid final state (the return of a
+value, or some sort of abort state, say).
+
+Such results for \cpp{} would likely be considerable work.  In
+particular, type safety would be difficult because the current
+semantics has an inadequate description of the type system. (The focus
+of this report is the dynamic semantics, which only uses the type
+system in a very small number of places, mostly where it is needed due
+to the requirements of object-oriented polymorphism.  I'm confident
+the report's treatment of polymorphim is correct; elsewhere, I am far
+less confident.)
+
+\paragraph{Execution of Concrete Programs}
 The file \HOLfile{concrete_tests} includes more sanity theorems, but
 of a particular form: exploring the behaviour of the model when
 applied to concrete examples.  The last test (\texttt{t6}) is name
@@ -5249,6 +5270,28 @@ interpreted as if it were
 \end{verbatim}
   \end{minipage}
 \end{center}
+
+
+The deliverable includes a directory \texttt{holsrcs/testfiles}.  In
+this directory there is some preliminary work towards the creation of
+a symbolic evaluator, for demonstrating that programs in the model can
+behave as one might expect.  This work builds on the ideas
+in~\cite{netsem:popl2006}, allowing symbolic exploration of a semantic
+definition that features non-deterministic branching.  For the moment,
+the code only handles a sequence of external declarations not
+requiring any expression evaluation, which is very minimalist.  More
+in this vein would require a significant investment of work, though it
+would be an appealing one as it might allow the semantics to pass a
+test suite.
+
+This tool requires some sort of parser for \cpp{} source code, as
+having to write out abstract syntax trees by hand is a major
+annoyance.  It's possible that the front-end of \texttt{g++} might be
+usable in this regard.
+
+\paragraph{Social Process}
+The treatment of multiple inheritance in this report owes a great deal
+to the article by Wasserrab \emph{et al}
 
 
 \section{Omissions and Possible Fixes}
@@ -5381,9 +5424,8 @@ the \texttt{HOL/bin} directory) can be run in the \texttt{holsrcs}
 directory of the \cpp{} deliverable to create and check the logical
 theories.
 
-\newpage
-\label{sec:bibliography}
 \nocite{Stroustrup1994:DECPP,Stroustrup2000:TCPL,Paulson:ML,Gordon93}
+\nocite{Rushby93}
 \bibliographystyle{plain-annote}
 \bibliography{deliverables}
 

@@ -161,8 +161,8 @@ tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}},
                   programming language SML.  Logical specifications in
                   HOL often resemble functional programs.
                   Additionally, many of the functions used in HOL
-                  theories have counterparts in SML.  (SML is often
-                  known simply as ``ML''.)"
+                  theories have counterparts in SML.  (SML is commonly
+                  known as ``ML''.)"
 }
 
 @Book{Gordon93,
@@ -175,3 +175,33 @@ tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}},
                   material, for the (now outdated) HOL88 system."
 }
 
+@TechReport{Rushby93,
+  author =       {John Rushby},
+  title =        {Formal methods and the certification of critical systems},
+  institution =  {Computer Science Laboratory, {SRI} International},
+  year =         {1993},
+  number =       {CSL-93-7},
+  address =      {Menlo Park, CA 94025, USA},
+  month =        {November},
+  note =         "Available at \url{http://www.csl.sri.com/papers/csl-93-7/}",
+  annote =       "A well-written introduction to the nature and use of
+                  ``formal methods'' at a variety of levels (ranging
+                  from ``no use of FM'' to ``full use of mechanically
+                  checked proofs'').  Rushby introduces the notion of
+                  \emph{formal challenge} to a specification, which
+                  corresponds to what Section~\ref{sec:validation}
+                  calls a ``sanity theorem''. \\[1ex] Rushby's \S2.3
+                  discusses validation of formal specifications
+                  generally.  Because HOL, cited by Rushby, uses the
+                  definitional approach everywhere, ``internal
+                  consistency'' is easy to establish in the context of
+                  this \cpp{} project. On the other hand, what Rushby
+                  calls ``external fidelity'' (\S2.3.2) is much
+                  harder, and is validation in the sense: ``the
+                  specification means what we
+                  want/expect/think''.\\[1ex] Rushby's \S3 includes an
+                  exhaustive, and by no means out-dated, check-list of
+                  features that formal methods tools should exhibit if
+                  they are to be practically useful in large
+                  verification projects. "
+}
