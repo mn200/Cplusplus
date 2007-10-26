@@ -67,8 +67,7 @@ liberally, and aims to make these relatively easily understood by
 accompanying HOL extracts with English prose.  Where prose and rule
 appear to conflict, this will almost certainly reflect a problem with
 the prose and not the rule.  The rule has been type-checked, and in
-some cases, will have also been validated to some extent.  (See
-Section~\ref{sec:validation} for more on validation.)
+some cases, will have also been validated to some extent.
 
 In addition to the ISO~Standard itself~\cite{cpp-standard-iso14882},
 the report draws on a number of other sources.  The annotated
@@ -409,7 +408,7 @@ is not well-founded, or if there is some other error in the quoted
 text, then HOL does not allow the definition to proceed, and no
 theorem is produced.)
 
-\paragraph{Defining Relations}\index{Inductive definitions in HOL|(}
+\paragraph{Defining Relations}\index{inductive definitions in HOL|(}
 Inductive relations allow the definition of systems of rules, common
 in the definitions of operational semantics.  For example, one might
 write a big-step rule for applicative order reduction in the
@@ -511,7 +510,7 @@ from a \texttt{Var} to an \texttt{FVal}, where the latter includes the
 function's type and the fact that it is not a member function (the
 \texttt{NONE} parameter to \texttt{FVal}).
 
-\index{Inductive definitions in HOL|)}
+\index{inductive definitions in HOL|)}
 \index{HOL definitions|)}
 
 
@@ -535,10 +534,10 @@ interesting a problem.  This abstract syntax, as consumed and
 manipulated by the semantic model, is described in
 Section~\ref{sec:basic-types} below.
 
-The first phase of understanding, or of ascribing meaning, is to do
-what I refer to as ``name resolution''.  In this phase, bare names are
-resolved into fully-qualified names wherever possible.  For example,
-this phase turns a program such as
+\index{name resolution}The first phase of understanding, or
+of ascribing meaning, is to do what I refer to as ``name resolution''.
+In this phase, bare names are resolved into fully-qualified names
+wherever possible.  For example, this phase turns a program such as
 \begin{verbatim}
    int x;
    int f(int i) { return i + x; }
@@ -557,19 +556,20 @@ defined), but the next phase of understanding does not expect valid
 class namespaces inheriting from bases, Phase~1 is not entirely
 trivial.  It is described in some detail in Section~\ref{sec:phase1}.
 
-The second phase of the semantics is to deal with templates.  The
-input to template resolution is a translation unit with most of its
-names resolved, and where the translation unit consists of both
-``ground'' (non-template) declarations or definitions, and template
-declarations or definitions.  The ground definitions may refer to
-various template classes or functions.  If so, the appropriate
-template instantiations need to be made, producing fresh ground
-declarations.  These new declarations need to first have their names
-resolved (requiring a nested ``call'' to Phase~1), and may in turn
-require more template instantiations.  In fact, template instantiation
-may never terminate.  Templates are further described in
+\index{templates} The second phase of the semantics is to deal with
+templates.  The input to template resolution is a translation unit
+with most of its names resolved, and where the translation unit
+consists of both ``ground'' (non-template) declarations or
+definitions, and template declarations or definitions.  The ground
+definitions may refer to various template classes or functions.  If
+so, the appropriate template instantiations need to be made, producing
+fresh ground declarations.  These new declarations need to first have
+their names resolved (requiring a nested ``call'' to Phase~1), and may
+in turn require more template instantiations.  In fact, template
+instantiation may never terminate.  Templates are further described in
 Section~\ref{sec:templates}.
 
+\index{dynamic semantics}
 The final phase of the semantics is execution, or ``dynamics''.  In
 this phase, top-level declarations are executed, resulting in the
 dynamic initialisation of variables, which can in turn result in the
@@ -625,6 +625,7 @@ Similarly, a function taking two \texttt{int}s and returning a
 \end{verbatim}
 
 \paragraph{Identifiers}
+\index{identifiers|(}
 In the presence of templates, identifiers can take on forms such as
 \begin{verbatim}
    List<int>::fldname
@@ -638,23 +639,33 @@ for naming and referring to class types.
 
 Therefore, we must add the following to the above definition of \cpp{}
 types:
-\index{IDComp@\texttt{IDComp}}
-\index{IDConstant@\texttt{IDConstant}}
-\begin{verbatim}
+\index{IDComp@\texttt{IDComp}}%
+\index{IDConstant@\texttt{IDConstant}}%
+\index{CPP_ID type@\texttt{CPP\_ID} type}%
+\begin{stdrule}
    CPP_ID = IDConstant of bool => IDComp list => IDComp ;
 
    IDComp = IDTempCall of string => TemplateArg list
           | IDName of string
-\end{verbatim}
+\end{stdrule}
 In other words, values of identifier type are constructed by applying
 the function \texttt{IDConstant} to three arguments: a boolean
 indicating whether or not this is an ``absolute'' identifier
 (represented in the concrete syntax by prefixing it with \texttt{::}),
-a list of ID components and one final ID component.
+a list of ID components and one final ID component.  We will
+frequently see ``bare'' names that are not absolute, and which do not
+have any outer namespaces attched.  To abbreviate this common case, we
+define the \texttt{Base} function:%
+\index{Base function@\texttt{Base} function}%
+%
+\begin{stdrule}
+   Base s = IDConstant F [] (IDName s)
+\end{stdrule}
 
-An ID component might either be a simple name, or can be a simple name
-applied to multiple ``template arguments''.  There are three sorts of
-template arguments: types, templates and values; giving
+An ID component might either be a simple name (the \texttt{IDName}
+case), or can be a simple name applied to multiple ``template
+arguments''.  There are three sorts of template arguments: types,
+templates and values; giving
 \begin{verbatim}
    TemplateArg = TType of CPP_Type
                | TTemp of CPP_ID
@@ -665,7 +676,7 @@ So, the type above would be represented as
    IDConstant F [IDTempCall "List" [TType (Signed Int)]]
                 (IDName "fldname")
 \end{verbatim}
-
+\index{identifiers|)}
 
 \paragraph{Expressions and Statements}
 
@@ -687,8 +698,8 @@ However, the type here is rather more complicated because statements
 not only include expressions but must be mutually recursive with other
 syntactic categories: variable and class declarations, ``class
 entries'' (those things that can appear with a \texttt{class}
-declaration), and initializers (those things that appear in variable
-declarations that also explicitly initialise the variable).
+declaration), and initializers (which appear in variable declarations
+and explicitly initialise the variable in question).
 
 \subsection{Bytes \& Memory}
 \label{sec:bytes-memory-states}
@@ -761,12 +772,12 @@ This type has one constructor:
    FTNode : 'value -> ('key |-> ('key,'value)fmaptree) ->
             ('key,'value)fmaptree
 \end{stdrule}
-The \texttt{|->} type operator returns finite maps, so
-\texttt{FTNode} takes a value, and a finite map from keys to more
-\texttt{fmaptree}s, and returns a new \texttt{fmaptree}.  This type
-rather resembles the trie data structure.  Like lists and other
-``container'' types, the \texttt{fmaptree} is polymorphic, both in the
-type of keys, and the type of values.
+The \texttt{|->} type operator returns finite maps, so \texttt{FTNode}
+takes a value, and a finite map from keys to more \texttt{fmaptree}s,
+and returns a new \texttt{fmaptree}.  This type rather resembles the
+trie data structure.  Like lists and other ``container'' types, the
+\texttt{fmaptree} is polymorphic, here both in the type of keys, and
+the type of values.
 
 The operation to lookup up the sub-tree at a particular key list position
 is \texttt{apply_path}:
@@ -855,6 +866,7 @@ the static information associated with a class.
 \section{Phase 1: Name Resolution}
 \label{sec:phase1}
 
+\index{name resolution|(}
 Name resolution must occur in a separate phase before dynamic
 evaluation, and must rewrite declarations so that their name
 dependencies are made explicit.  This is exemplified by the program in
@@ -1341,6 +1353,7 @@ When one comes to analyse the function \texttt{f}, both the global
 variable \texttt{ns::x}, and the member variable \texttt{C::i} are in
 scope.  This adjustment of scopes is done by the calls to
 \texttt{open_path}.
+\index{name resolution|)}
 
 \section{Phase 2: Templates}
 \label{sec:templates}
@@ -1704,6 +1717,7 @@ requiring that all other contenders be instantiable to it.
 \section{Phase 3: Dynamics}
 \label{sec:phase3}
 
+\index{dynamic semantics|(}
 Much of the core semantics in this section is based on the C semantics
 presented in my PhD thesis~\cite{Norrish98}.  In particular, details
 of the way in which side effects are created and applied remain the
@@ -2316,6 +2330,7 @@ occurring within the class.
 \bigskip\noindent
 The more interesting case occurs when the member is not static.
 \index{rule (dynamic)!mem-addr-nonstatic@\texttt{mem-addr-nonstatic}}%
+\index{member functions!pointers to}%
 \begin{alltt}
 (* RULE-ID: mem-addr-nonstatic *)
      (encode_offset cnm fldname = SOME bl) \(\land\)
@@ -2738,8 +2753,11 @@ This allows just one, unconditional rule for all loops:
 
 \paragraph{Traps, and Loop Interruptions}
 \index{Trap@\texttt{Trap}}%
-\index{Break@\texttt{Break}}%
-\index{Cont@\texttt{Cont}}%
+\index{Break (stmt constructor)@\texttt{Break} (\texttt{stmt} constructor)}%
+\index{Cont (stmt constructor)@\texttt{Cont} (\texttt{stmt} constructor)}%
+\index{continue@\texttt{continue}}%
+\index{break@\texttt{break}}%
+\index{exceptions}%
 Again, following my thesis, the rules for traps are straightforward,
 though relatively plentiful because of the different possible
 combinations of \texttt{continue} (written \texttt{Cont}) and
@@ -2920,6 +2938,7 @@ evaluate, then the \texttt{EmptyStmt} can be discarded:
 \end{minipage}
 \end{center}
 
+\index{exceptions}
 Alternatively, if the head statement is an exception or interruption
 form, and it is followed by other statements, then it causes all
 following statements to disappear:
@@ -3172,6 +3191,7 @@ the variable being initialised is not a reference.%
 \subsection{Exceptions}
 \label{sec:exceptions}
 \newcommand{\ethrow}{\texttt{EThrow}}
+\index{exceptions|(}
 
 Exceptions are modelled in a way similar to the treatment of
 \texttt{return}, \texttt{break} and \texttt{continue}.  One difference
@@ -3626,6 +3646,7 @@ normal object creation.  When a block exits normally, sub-object
 destructors are not called, but instead delayed so that they can be
 recorded as having the same lifetime as the enclosing object.  For
 more on this, see Section~\ref{sec:object-lifetimes}.
+\index{exceptions|)}
 
 \subsection{Basic Object-Orientation}
 \label{sec:basic-oo}
@@ -3696,12 +3717,12 @@ to know dynamically that it is really of a derived type.  This
 information is traditionally recorded in \texttt{vtable} fields.
 Following Wasserrab~\emph{et al}, my model instead records an
 additional path accompanying every l-value.  This path is a list of
-strings, listing the path through the ancestry-tree that leads from
-the most-derived class to the static class type.  Moreover, the type
-that accompanies every l-value (recall that the \texttt{LVal}
-constructor takes three arguments, an address, a type and a list of
-identifiers), will have as the type, the \emph{dynamic} type
-of the l-value.
+class names (values of type \texttt{CPP_ID}), listing the path through the
+ancestry-tree that leads from the most-derived class to the static
+class type.  Moreover, the type that accompanies every l-value (recall
+that the \texttt{LVal} constructor takes three arguments, an address,
+a type and a list of identifiers), will have as the type, the
+\emph{dynamic} type of the l-value.
 
 \index{member functions!virtual}
 Consider, for example, the code in Figure~\ref{fig:oo-example}.  The
@@ -5182,6 +5203,7 @@ pointer to the object can be returned.
 \caption{Allocating a Class Object on the Heap}
 \label{fig:new-simple-class}
 \end{figure}
+\index{dynamic semantics|)}
 
 \section{Validation}
 \label{sec:validation}
@@ -5217,9 +5239,9 @@ simple sanity theorems, also included proofs of the ``standard''
 properties beloved of programming language theorists: type safety and
 progress.  These properties demonstrate respectively that expressions
 of a given type continue to posses that type as they evaluate, and
-that an operational semantics never ``blocks'' but continues to only
-finishes program evaluation in a valid final state (the return of a
-value, or some sort of abort state, say).
+that an operational semantics never ``blocks'' but only finishes
+program evaluation in a valid final state (the return of a value, or
+some sort of abort state, say).
 
 Such results for \cpp{} would likely be considerable work.  In
 particular, type safety would be difficult because the current
@@ -5231,78 +5253,146 @@ the report's treatment of polymorphim is correct; elsewhere, I am far
 less confident.)
 
 \paragraph{Execution of Concrete Programs}
-The file \HOLfile{concrete_tests} includes more sanity theorems, but
-of a particular form: exploring the behaviour of the model when
-applied to concrete examples.  The last test (\texttt{t6}) is name
-resolution on the following, small program, featuring a local class.
-\begin{center}
-\begin{minipage}{\textwidth}
-\begin{verbatim}
-    int x;
-    int f()
-    {
-      struct s {
-        int g() { return x; }
-        int x;
-      };
-      s val;
-      val.x = x;
-      return val.g();
-    }
-\end{verbatim}
-\end{minipage}
-\end{center}
-The test confirms that the body of the function \texttt{f} is
-interpreted as if it were
-\begin{center}
-  \begin{minipage}{\textwidth}
-\begin{verbatim}
-    int f()
-    {
-      struct s {
-        int g() { return s::x; }
-        int x;
-      };
-      s val;
-      val.s::x = ::x;
-      return val.s::g();
-    }
-\end{verbatim}
-  \end{minipage}
-\end{center}
+The file \HOLfile{concrete_tests} includes more theorems, but of a
+slightly different nature: exploring the behaviour of the model when
+applied to concrete examples.  \index{name resolution!validation of} The
+last test (\texttt{t6}) is name resolution on the following, small
+program, featuring a local class.
+\begin{stdrule}
+   int x;
+   int f()
+   \{
+     struct s \{
+       int g() \{ return x; \}
+       int x;
+     \};
+     s val;
+     val.x = x;
+     return val.g();
+   \}
+\end{stdrule}
+The test confirms that this pair of declarations is interpreted as if
+it were
+\begin{stdrule}
+   int ::x;
+   int ::f()
+   \{
+     struct s \{
+       int g() \{ return s::x; \}
+       int x;
+     \};
+     s val;
+     val.s::x = ::x;
+     return val.s::g();
+   \}
+\end{stdrule}
+Even this much is a great deal of work to do by hand, as the length of
+the proof leading to the \texttt{t6} result demonstrates.  There is
+even a little proof automation involved in getting this result, but
+any tool for working with larger programs would require considerably
+more engineering effort.
 
-
-The deliverable includes a directory \texttt{holsrcs/testfiles}.  In
-this directory there is some preliminary work towards the creation of
-a symbolic evaluator, for demonstrating that programs in the model can
+The deliverable also includes a directory \texttt{holsrcs/testfiles},
+where there is some preliminary work towards the creation of a
+symbolic evaluator to demonstrate that programs in the model can
 behave as one might expect.  This work builds on the ideas
 in~\cite{netsem:popl2006}, allowing symbolic exploration of a semantic
 definition that features non-deterministic branching.  For the moment,
 the code only handles a sequence of external declarations not
-requiring any expression evaluation, which is very minimalist.  More
-in this vein would require a significant investment of work, though it
-would be an appealing one as it might allow the semantics to pass a
-test suite.
+requiring any expression evaluation, which is very minimalist indeed.
+Again, more in this vein would require a significant investment of
+work.
 
-This tool requires some sort of parser for \cpp{} source code, as
-having to write out abstract syntax trees by hand is a major
-annoyance.  It's possible that the front-end of \texttt{g++} might be
-usable in this regard.
+Tools of this form really also require some sort of parser for \cpp{}
+source code, as having to write out abstract syntax trees by hand is a
+major annoyance.  For example, the \texttt{t6} program has to be
+presented to the tool in the form given in
+Figure~\ref{fig:translated-t6}.
+\begin{figure}
+\begin{stdrule}
+    [Decl (VDec (Signed Int) (Base "x"));
+     FnDefn (Signed Int) (Base "f") []
+       (Block F
+          [VStrDec (Base "s")
+             (SOME
+               <| ancestors := [];
+                  fields := [(CFnDefn F (Signed Int) (IDName "g") []
+                                (SOME
+                                  (SOME (Ret (EX (Var (Base "x"))
+                                                 base_se)))),
+                                F, Public);
+                             (FldDecl (IDName "x") (Signed Int),
+                              F, Public)]
+               |>);
+           VDec (Class (Base "s")) (Base "val")]
+          [Standalone
+             (EX
+              (Assign NONE
+                      (SVar (Var (Base "val")) (Base "x"))
+                      (Var (Base "x")))
+              base_se);
+           Ret (EX (FnApp (SVar (Var (Base "val")) (Base "g")) [])
+                      base_se)])]
+\end{stdrule}
+\caption{The Abstract Syntax Corresponding to Test Program
+  \texttt{t6}}
+\label{fig:translated-t6}
+\end{figure}
+There, one sees that the program is a sequence of external
+declarations (the \texttt{ext_decl} type is defined at the bottom of
+theory \HOLfile{statements}).  There are two declarations, one for the
+variable \texttt{x}, and one for the function \texttt{f}.  The body of
+\texttt{f} is a \texttt{Block} with a list of two declarations
+followed by a list of two statements.  The first of the two
+declarations is the desclaration of the struct \texttt{s}, with its
+two member declarations nested inside that.
+
+The abstract syntax for \cpp{} programs is given in theory files
+\HOLfile{types}, \HOLfile{expressions} and \HOLfile{statements}.  One
+route into the HOL model's abstract syntax might be via the
+parse-trees generated by \texttt{g++}'s front-end.
 
 \paragraph{Social Process}
 The treatment of multiple inheritance in this report owes a great deal
-to the article by Wasserrab \emph{et al}
+to the article by Wasserrab~\emph{et
+  al}~\cite{wasserrab-nst-OOPSLA06}; similarly, the treatment of
+templates is informed by Siek and Taha~\cite{DBLP:conf/ecoop/SiekT06}.
+Both of these resources have appeared in the academic literature, and
+build in turn on earlier work in their respective areas.  I feel
+confident therefore that my adoption of these formal models here is
+well-justified.  My work on modelling C expressions was also published
+academically~\cite{norrish99}, so the underlying C semantics has met
+with some degree of social examination.
+
+Clearly, it would be ideal to now put the \cpp{} semantics before the
+public.  The academic community's thirst for novelty, and the current
+absence of any ``deep'' proofs, might make it difficult to publish the
+whole semantics academically.  My feeling is that the most interesting
+material for this audience might be name resolution
+(Section~\ref{sec:phase1}). This is the sort of thing that is usually
+thought trivial, but which is in fact quite complex in \cpp{}.
+
+Publication in other venues would also be desirable.  The ISO
+standardisation process is currently obsessing over the next revision
+to the standard, adding a great deal more complexity to the existing
+language and aiming to do so before 2010.  It seems unlikely therefore
+that the relevant committee there would want to pay any attention to
+new material that would, to them, appear to have come ``out of left
+field''.  Simply making the report (and HOL source code) available on
+an accessible web-page would perhaps be a good first step.  As its
+commissioners, QinetiQ (or the UK Ministry of Defence?) should perhaps
+decide how to best publicise the work.
+
 
 
 \section{Omissions and Possible Fixes}
 \label{sec:omissions}
 
-\index{overloading}
-The most significant omission in this semantics is a treatment of
-overloading.  This is a complicated feature of the language, but one
-that is purely syntactic, and one that is checked and resolved
-entirely by the compiler.  If this semantics were to handle
-overloading, it would be done in Phases~1~(Name Resolution) and
+\index{overloading} The most significant omission in this semantics is
+a treatment of overloading.  This is a complicated feature of the
+language, but one that is purely syntactic, and one that is checked
+and resolved entirely by the compiler.  If this semantics were to
+handle overloading, it would be done in Phase~1~(Name Resolution) and
 Phase~2~(Templates).  There a call to a bare \texttt{f} would
 ultimately turn into a call into the \texttt{f} whose parameters'
 types best matched the types of the actual arguments.  This resolved
@@ -5315,6 +5405,7 @@ where calls to operators such as \texttt{+} would be resolved into
 calls to functions over particular types, in particular namespaces and
 classes.
 
+\index{const@\texttt{const}}
 Two other large omissions in the realm of statics are \texttt{const},
 and protection statuses (including \texttt{friend} functions).  In
 general, the \texttt{const}-ness of an expression influences the
@@ -5322,8 +5413,8 @@ selection of particular functions to call (more name resolution), and
 can prevent certain expressions from being written at all.  These
 latter constraints are an important part of the practice of
 programming with \cpp{}, but again, are checked by the compiler.  The
-semantics does model the fact that it is undefined behaviour to update
-memory that has been declared as \texttt{const}.
+semantics \emph{does} model the fact that it is undefined behaviour to
+update memory that has been declared as \texttt{const}.
 
 Protection statuses (\ie, the designation of certain fields or base
 classes as being \texttt{public}, \texttt{protected} or
@@ -5388,6 +5479,12 @@ turn contains four directories
 \subsection{Building HOL Source-Files}
 \label{sec:getting-hol}
 
+HOL4 builds on Windows~XP, MacOS~X and Linux.  Though untested on a
+recent Solaris, we expect it should also build there.  The only
+dependency is on the Moscow~ML compiler and interpreter~\cite{mosml};
+so HOL should build and run on all the platforms where Moscow~ML
+builds and runs.
+
 \paragraph{Getting HOL From SourceForge}
 
 To get a particular, dated, version of the HOL4 sources from the
@@ -5426,6 +5523,7 @@ theories.
 
 \nocite{Stroustrup1994:DECPP,Stroustrup2000:TCPL,Paulson:ML,Gordon93}
 \nocite{Rushby93}
+\newpage
 \bibliographystyle{plain-annote}
 \bibliography{deliverables}
 

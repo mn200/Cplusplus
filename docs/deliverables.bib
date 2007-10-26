@@ -1,3 +1,8 @@
+@string{cacm = "Communications of the {ACM}"}
+@string{jacm = "Journal of the {ACM}"}
+@string{lncs = "Lecture Notes in Computer Science"}
+@string{JAR = "Journal of Automated Reasoning"}
+
 @inproceedings{wasserrab-nst-OOPSLA06,
   author={Daniel Wasserrab and Tobias Nipkow and Gregor Snelting and Frank Tip},
   title={An Operational Semantics and Type Safety Proof for Multiple
@@ -189,8 +194,9 @@ tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}},
                   from ``no use of FM'' to ``full use of mechanically
                   checked proofs'').  Rushby introduces the notion of
                   \emph{formal challenge} to a specification, which
-                  corresponds to what Section~\ref{sec:validation}
-                  calls a ``sanity theorem''. \\[1ex] Rushby's \S2.3
+                  notion includes what Section~\ref{sec:validation}
+                  calls a sanity theorem. \\[1ex]
+                  Rushby's \S2.3
                   discusses validation of formal specifications
                   generally.  Because HOL, cited by Rushby, uses the
                   definitional approach everywhere, ``internal
@@ -199,9 +205,43 @@ tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}},
                   calls ``external fidelity'' (\S2.3.2) is much
                   harder, and is validation in the sense: ``the
                   specification means what we
-                  want/expect/think''.\\[1ex] Rushby's \S3 includes an
+                  want/expect/think''.\\[1ex]
+
+                  Rushby's \S3 includes an
                   exhaustive, and by no means out-dated, check-list of
                   features that formal methods tools should exhibit if
                   they are to be practically useful in large
                   verification projects. "
 }
+
+
+
+@InProceedings{norrish99,
+  author =       {Michael Norrish},
+  title =        {Deterministic expressions in {C}},
+  pages =        {147--161},
+  crossref =     {esop99},
+  annote = "Essentially a presentation of the main result from Chapter~4 of my thesis~\cite{Norrish98}; that expressions without sequence points can only evaluate to one possible result."
+}
+
+@Proceedings{esop99,
+  title =        {Programming languages and systems, 8th European Symposium on Programming},
+  booktitle =    {Programming languages and systems, 8th European Symposium on Programming},
+  year =         1999,
+  editor =       {S. Doaitse Swierstra},
+  volume =       1576,
+  series =       lncs,
+  month =        {March},
+  publisher =    {Springer},
+}
+
+@Misc{mosml,
+  author =    {Sergei Romanenko and Claudio Russo and Niels Kokholm and Ken Friis Larsen and Peter Sestoft},
+  title =     {Moscow {ML} 2.01},
+  howpublished = {Available from \url{http://www.dina.dk/~sestoft/mosml.html}},
+  annote = "A light-weight implementation of SML, including an
+                  interpreter and compiler. The SML implementation
+                  required for HOL4 (and also the earlier
+                  \texttt{hol98})."
+}
+
