@@ -1196,10 +1196,10 @@ and its definition appears in Figure~\ref{fig:newgvar-def}.
 \caption{Defining a New Global Variable in Phase 1}
 \label{fig:newgvar-def}
 \end{figure}
-The input to this procedure is a the type of the variable being
-declared, its bare name (\texttt{sfnm} here), and the Phase~1 state
-being updated.  The type is rewritten so that any of the names it
-mentions are themselves resolved, and the state's \texttt{dynobjs}
+The input to the \texttt{NewGVar} function is the type of the variable
+being declared, its bare name (\texttt{sfnm} here), and the Phase~1
+state being updated.  The type is rewritten so that any of the names
+it mentions are themselves resolved, and the state's \texttt{dynobjs}
 field is updated to map the name to a full identifier, using the
 current namespace path.  (The 4-tuple has \texttt{T} as its first
 component because this is known to be a global variable; were we
@@ -1233,8 +1233,8 @@ following is an error:
 To make this correct, one should either explicitly qualify the type in
 the declaration of member \texttt{b} (one could write \texttt{::B~b;}
 to refer to the external class), or reorder so that the declaration of
-the nested class came before the definition of \texttt{b} (in which
-the field would be of the sub-class's type).
+the nested class came before the definition of \texttt{b} (which would
+then make field \texttt{b} of \texttt{C} have type \texttt{C::B}).
 
 This analysis is illustrated in the definition of
 \texttt{phase1_gclassdefn}, one clause of which is given in
@@ -5381,7 +5381,7 @@ new material that would, to them, appear to have come ``out of left
 field''.  Simply making the report (and HOL source code) available on
 an accessible web-page would perhaps be a good first step.  As its
 commissioners, QinetiQ (or the UK Ministry of Defence?) should perhaps
-decide how to best publicise the work.
+decide how to best publicise the work in these non-academic venues.
 
 
 
