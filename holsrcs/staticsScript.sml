@@ -157,7 +157,7 @@ val (expr_type_rules, expr_type_ind, expr_type_cases) = Hol_reln`
   (!s e1 e2 rt.
        expr_type s RValue (FnApp e1 e2) rt
           ==>
-       expr_type s RValue (FnApp_sqpt e1 e2) rt) /\
+       expr_type s RValue (FnApp_sqpt rvrt e1 e2) rt) /\
 
   (!s e t.
        expr_type s LValue e t /\ scalar_type t ==>

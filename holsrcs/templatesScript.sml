@@ -120,7 +120,7 @@ val expr_ttypes_def = Define`
   (expr_ttypes (Cast ty e) = ttypes ty UNION expr_ttypes e) /\
   (expr_ttypes (PostInc e) = expr_ttypes e) /\
   (expr_ttypes (New ty elopt) = ttypes ty UNION exprlopt_ttypes elopt) /\
-  (expr_ttypes (FnApp_sqpt e elist) =
+  (expr_ttypes (FnApp_sqpt rvrt e elist) =
      expr_ttypes e UNION exprl_ttypes elist) /\
   (expr_ttypes (LVal _ _ _) = {}) /\
   (expr_ttypes (FVal _ _ _) = {}) /\

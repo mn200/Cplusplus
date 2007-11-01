@@ -670,20 +670,20 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      * no need to update memory, or init_map as this will have all been
        done by the constructor
 *)
-(!cnm subp subobjs rest a se0 s0 s construct.
+(!cnm subp subobjs rest a se0 s0 s construct amap.
      is_null_se se0 /\
      (construct = if subp then SubObjConstruct else NormalConstruct) /\
-     (s0.exprclasses = subobjs :: rest) /\
+     (s0.exprclasses = (subobjs,amap) :: rest) /\
      (s = s0 with <| blockclasses updated_by
                         stackenv_extendl (MAP construct
                                               (subobjs ++ [(a,cnm,[cnm])])) ;
                      exprclasses := rest |>)
    ==>
      declmng mng
-       (VDecInitA (Class cnm)
-                  (ObjPlace a)
-                  (DirectInit (EX (ConstructedVal subp a cnm) se0)), s0)
-                  ([], s))
+       (VDecInitA (Class cnm) (ObjPlace a)
+                  (DirectInit (EX (ConstructedVal subp a cnm) se0)),
+        s0)
+       ([], s))
 
 (* TODO: add a rule for performing class based CopyInit updates *)
 `

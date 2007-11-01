@@ -42,7 +42,7 @@ val _ = Hol_datatype
          | CApBinary of c_binops => CExpr => CExpr
          | CApUnary of c_unops => CExpr
          | Deref of CExpr
-         | OffsetDeref of CExpr => CExpr 
+         | OffsetDeref of CExpr => CExpr
          | Addr of CExpr
          | MemAddr of CPP_ID => IDComp
          | Assign of c_binops option => CExpr => CExpr
@@ -62,8 +62,10 @@ val _ = Hol_datatype
 
 
             (* this represents the point where all arguments and function
-               have been evaluated *)
-         | FnApp_sqpt of CExpr => CExpr list
+               have been evaluated, it optionally includes the address of space
+               allocated for a class of type name CPP_ID.  This space can be filled
+               in by the return value of a function that returns a class value  *)
+         | FnApp_sqpt of (addr # CPP_ID) option => CExpr => CExpr list
 
             (* this is an object lvalue, the string list is the sub-object
                path a la Wasserab et al for values of class type.  Elsewhere
@@ -86,7 +88,8 @@ val _ = Hol_datatype
                being constructed, and the name of the class. *)
          | ConstructorFVal of bool => bool => addr => CPP_ID
 
-            (* this is the value "returned" from a constructor call.  The
+            (* this is the value "returned" from a constructor call, or a function
+               returning an object r-value.  The
                boolean is true iff the class is a sub-object.
             *)
          | ConstructedVal of bool => addr => CPP_ID
@@ -96,6 +99,10 @@ val _ = Hol_datatype
          | RValreq of CExpr
          | ECompVal of byte list => CPP_Type
          | EThrow of CExpr option
+
+           (* this is assumed to sit around all expressions before they start
+              getting evaluated *)
+         | NoScope of CExpr
          | UndefinedExpr
 
 `;
@@ -126,7 +133,7 @@ val rec_expr_P_def = Define`
     (rec_expr_P (CApUnary f' e) P =
       P (CApUnary f' e) /\ rec_expr_P e P) /\
     (rec_expr_P (Deref e) P = P (Deref e) /\ rec_expr_P e P) /\
-    (rec_expr_P (OffsetDeref e1 e2) P = 
+    (rec_expr_P (OffsetDeref e1 e2) P =
       P (OffsetDeref e1 e2) /\ rec_expr_P e1 P /\ rec_expr_P e2 P) /\
     (rec_expr_P (Addr e) P = P (Addr e) /\ rec_expr_P e P) /\
     (rec_expr_P (MemAddr cname fld) P = P (MemAddr cname fld)) /\
@@ -141,8 +148,8 @@ val rec_expr_P_def = Define`
     (rec_expr_P (Cast t e) P = P (Cast t e) /\ rec_expr_P e P) /\
     (rec_expr_P (DynCast t e) P = P (DynCast t e) /\ rec_expr_P e P) /\
     (rec_expr_P (PostInc e) P = P (PostInc e) /\ rec_expr_P e P) /\
-    (rec_expr_P (FnApp_sqpt e args) P =
-      P (FnApp_sqpt e args) /\ rec_expr_P e P /\ rec_exprl_P args P) /\
+    (rec_expr_P (FnApp_sqpt rvrt e args) P =
+      P (FnApp_sqpt rvrt e args) /\ rec_expr_P e P /\ rec_exprl_P args P) /\
     (rec_expr_P (LVal a t p) P = P (LVal a t p)) /\
     (rec_expr_P (ExpTypeID e) P = P (ExpTypeID e) /\ rec_expr_P e P) /\
     (rec_expr_P (TyTypeID t) P = P (TyTypeID t)) /\
@@ -157,6 +164,7 @@ val rec_expr_P_def = Define`
        P (ConstructedVal subp a cnm)) /\
     (rec_expr_P (DestructorCall a nm) P = P (DestructorCall a nm)) /\
     (rec_expr_P (New ty argsopt) P = P (New ty argsopt)) /\
+    (rec_expr_P (NoScope e) P = P (NoScope e) /\ rec_expr_P e P) /\
     (rec_expr_P (EThrow eopt) P = P (EThrow eopt) /\ rec_expr_opt eopt P) /\
     (rec_exprl_P [] P = T) /\
     (rec_exprl_P (CONS e es) P = rec_expr_P e P /\ rec_exprl_P es P) /\
@@ -200,7 +208,7 @@ val _ = export_rewrites ["has_no_undefineds"]
 val side_affecting_def = Define`
   (side_affecting (Assign f e1 e2) = T) /\
   (side_affecting (FnApp fdes args) = T) /\
-  (side_affecting (FnApp_sqpt fdes args) = T) /\
+  (side_affecting (FnApp_sqpt rvrt fdes args) = T) /\
   (side_affecting (PostInc e)    = T) /\
   (side_affecting allelse = F)
 `;
@@ -210,7 +218,7 @@ val syn_pure_expr_def = Define`
 
 val has_sqpt = Define`
   (has_sqpt (FnApp f args) = T) /\
-  (has_sqpt (FnApp_sqpt f args) = T) /\
+  (has_sqpt (FnApp_sqpt rvrt f args) = T) /\
   (has_sqpt (CommaSep e1 e2) = T) /\
   (has_sqpt (CAnd e1 e2) = T) /\
   (has_sqpt (COr e1 e2) = T) /\

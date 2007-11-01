@@ -325,8 +325,8 @@ val realise_destructor_calls_def = Define`
     in
         (destcalls,
          s0 with <| blockclasses := [] :: TL s0.blockclasses ;
-                    exprclasses := HD s0.exprclasses :: escapees ::
-                                   TL s0.exprclasses |>)
+                    exprclasses := (escapees, {}) :: s0.exprclasses
+                 |>)
 `;
 
 
@@ -658,7 +658,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (!e1 e2 se s0.
      final_value (EX e1 se)
    ==>
-     mng (s0, EX (CommaSep e1 e2) se) (s0, EX (RValreq e2) base_se)
+     mng (s0, EX (CommaSep e1 e2) se) (s0, EX e2 base_se)
 )
 
    /\
@@ -1140,7 +1140,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      is_null_se se
    ==>
      mng (s, EX (FnApp (FVal fnid fty eopt) params) se)
-         (s, EX (FnApp_sqpt (FVal fnid fty eopt) params) base_se)
+         (s, EX (FnApp_sqpt NONE (FVal fnid fty eopt) params) base_se)
 )
 
    /\
@@ -1172,7 +1172,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
        object
 *)
 (!cnm s0 se s ty a sz args ptrval.
-     (Class cnm = strip_const ty) /\ 
+     (Class cnm = strip_const ty) /\
      malloc s0 ty a /\
      sizeof T (sizeofmap s0) ty sz /\
      (s = s0 with <| hallocmap updated_by (UNION) (range_set a sz) ;
@@ -1199,7 +1199,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      is_null_se se
    ==>
      mng (s, EX (FnApp (ConstructorFVal mdp subp a cnm) params) se)
-         (s, EX (FnApp_sqpt (ConstructorFVal mdp subp a cnm) params) base_se)
+         (s, EX (FnApp_sqpt NONE (ConstructorFVal mdp subp a cnm) params) base_se)
 )
 
    /\
@@ -1219,53 +1219,29 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: global-function-call *)
-(* the NONE as FVal's third argument means this is a global function *)
+(* RULE-ID: function-call *)
+(* FVal's third argument determines whether or not this is a global function *)
 (* TODO: handle return type casting *)
-(!ftype args pdecls params se s0 fnid rtype body.
+(!ftype rvrt args pdecls params se s0 fnid rtype body thisobj thisval thisaddr.
      (find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body) /\
+     ((rvrt = NONE) ==> ~class_type (strip_const rtype)) /\
+     (case thisobj of
+         SOME (LVal a (Class cnm) p) ->
+            (SOME thisaddr = ptr_encode s0 a (Class cnm) p) /\
+            (thisval = SOME (ECompVal thisaddr (Ptr (Class cnm))))
+      || _ -> (thisval = NONE)) /\
      (pdecls = MAP (\ ((n,ty),a). VDecInit ty
                                            (Base n)
                                            (CopyInit (EX a base_se)))
                    (ZIP (params, args)))
    ==>
-     mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se)
-         (s0 with <| stack updated_by 
-                        (CONS (s0.env, s0.thisvalue, s0.allocmap));
-                     thisvalue := NONE;
+     mng (s0, EX (FnApp_sqpt rvrt (FVal fnid ftype thisobj) args) se)
+         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue, s0.allocmap));
+                     rvstk updated_by (CONS rvrt);
+                     thisvalue := thisval;
                      blockclasses updated_by stackenv_newscope ;
-                     exprclasses updated_by stackenv_newscope ;
                      env := empty_env |>,
           ST (Block T pdecls [body]) (return_cont se rtype))
-)
-
-   /\
-
-(* RULE-ID: member-function-call *)
-(*   by the time this call is made, we have already figured out which
-     function we will be jumping into
-
-     NOTE: the block is "manually" entered, hence its flag being T, so that
-     its internal thisvalue can be set correctly.
-*)
-(!fnid ftype a cname args rtype se0 s0 p params pdecls body this.
-     (find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body) /\
-     (pdecls = MAP (\ ((n,ty),a). VDecInit ty
-                                           (Base n)
-                                           (CopyInit (EX a base_se)))
-                   (ZIP (params, args))) /\
-     (SOME this = ptr_encode s0 a (Class cname) p)
-   ==>
-     mng (s0, EX (FnApp_sqpt (FVal fnid ftype (SOME (LVal a (Class cname) p)))
-                             args) se0)
-         (s0 with <| stack updated_by 
-                       (CONS (s0.env, s0.thisvalue, s0.allocmap));
-                     thisvalue := SOME (ECompVal this (Ptr (Class cname)));
-                     blockclasses updated_by stackenv_newscope ;
-                     exprclasses updated_by stackenv_newscope ;
-                     env := empty_env
-                  |>,
-          ST (Block T pdecls [body]) (return_cont se0 rtype))
 )
 
    /\
@@ -1289,12 +1265,11 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                                        handlers)]
         else Block T (pdecls ++ cpfx) [body])
    ==>
-     mng (s0, EX (FnApp_sqpt (ConstructorFVal mdp subp a cnm) args) se0)
+     mng (s0, EX (FnApp_sqpt NONE (ConstructorFVal mdp subp a cnm) args) se0)
          (s0 with <| thisvalue := SOME (ECompVal this (Ptr (Class cnm))) ;
-                     stack updated_by 
-                       (CONS (s0.env, s0.thisvalue, s0.allocmap)) ;
+                     stack updated_by (CONS (s0.env, s0.thisvalue, s0.allocmap)) ;
+                     rvstk updated_by (CONS NONE) ;
                      blockclasses updated_by stackenv_newscope ;
-                     exprclasses updated_by stackenv_newscope ;
                      env := empty_env |>,
           ST newstmt (RVC (\e. ConstructedVal subp a cnm) se0))
 )
@@ -1675,10 +1650,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      mng (s, ST (Block F vds sts) c)
-         (s with <| stack updated_by 
+         (s with <| stack updated_by
                       (CONS (s.env, s.thisvalue, s.allocmap));
-                    blockclasses updated_by stackenv_newscope ;
-                    exprclasses updated_by stackenv_newscope |>,
+                    blockclasses updated_by stackenv_newscope |>,
           ST (Block T vds sts) c)
 )
 
@@ -1705,31 +1679,28 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      find_destructor_info s0 cnm body
    ==>
      mng (s0, EX (DestructorCall a cnm) se0)
-         (s0 with <| stack updated_by 
-                        (CONS (s0.env, s0.thisvalue,s0.allocmap));
+         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue,s0.allocmap));
+                     rvstk updated_by (CONS NONE) ;
                      env := empty_env;
                      thisvalue := SOME (ECompVal this (Ptr (Class cnm)));
-                     blockclasses updated_by stackenv_newscope ;
-                     exprclasses updated_by stackenv_newscope |>,
+                     blockclasses updated_by stackenv_newscope |>,
           ST (Block T [] [body]) (return_cont se0 Void))
 )
 
    /\
 
 (* RULE-ID: block-exit *)
-(!st s c env stk' this amap bcs ecs.
+(!st s c env stk' this amap bcs.
      (s.stack = (env,this,amap) :: stk') /\
      final_stmt st c /\
-     (s.blockclasses = []::bcs) /\
-     (s.exprclasses = []::ecs)
+     (s.blockclasses = []::bcs)
    ==>
      mng (s, ST (Block T [] [st]) c)
          (s with <| stack := stk';
                     allocmap := amap;
                     env := env;
                     thisvalue := this;
-                    blockclasses := bcs;
-                    exprclasses := ecs |>,
+                    blockclasses := bcs |>,
           ST st c)
 )
 

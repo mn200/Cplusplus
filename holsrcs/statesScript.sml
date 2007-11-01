@@ -47,7 +47,7 @@ val _ = Hol_datatype`
 `;
 
 val _ = Hol_datatype `
-   state = <| 
+   state = <|
      allocmap : addr -> bool ;  (* the set of stack-allocated addresses *)
      hallocmap: addr -> bool ;  (* the set of heap-allocated addresses *)
      constmap : addr -> bool ;  (* the set of read-only addresses *)
@@ -69,24 +69,26 @@ val _ = Hol_datatype `
                 (* memory.  Domain might also be ( void * ) words *)
 
      stack    : (environment # CExpr option # (addr->bool)) list ;
-                (* stack of environment, this and allocation info.  
+                (* stack of (environment, this, and allocation info)
                    Updated as blocks are entered and left *)
+     rvstk    : (addr # CPP_ID) option list ;
+                (* optional return addresses for object r-values). *)
 
      thisvalue: CExpr option ;
                 (* the value (i.e., this will always be an ECompVal
                    with a pointer value) of the this expression *)
 
      blockclasses : constructed list list ;
-     exprclasses  : construction_locn list list
-       (* the stack of objects that need to have destructors
+     exprclasses  : (construction_locn list # (addr -> bool)) list
+       (* Stacks of objects that need to have destructors
           called.  First field is for automatic objects that have
           block-delimited lifetimes.  Second is for temporary
           objects that need to be destroyed at the end of the
           full enclosing expression *)
      ;
 
-     current_exns : CExpr list  
-                    (* stack of exceptions that might be subjected 
+     current_exns : CExpr list
+                    (* stack of exceptions that might be subjected
                        to a bare throw *)
    |>`;
 val _ = type_abbrev("CState", ``:state``)
@@ -104,10 +106,11 @@ val initial_state_def = Define`
                      (* note that there is no value provided for locmap *)
 
                      stack := [];
+                     rvstk := [];
                      thisvalue := NONE ;
 
-                     blockclasses := [[]];
-                     exprclasses := [[]] |>
+                     blockclasses := [];
+                     exprclasses := [] |>
 `
 
 (* function that updates memory with a value *)

@@ -1251,8 +1251,14 @@ val expr_inst_def = Define`
   (expr_inst sigma (PostInc e) = OPTION_MAP PostInc (expr_inst sigma e)) /\
   (expr_inst sigma (New ty args_opt) =
      OP2CMB New (type_inst sigma ty) (exprlop_inst sigma args_opt)) /\
-  (expr_inst sigma (FnApp_sqpt e args) =
-     OP2CMB FnApp_sqpt (expr_inst sigma e) (exprl_inst sigma args)) /\
+  (expr_inst sigma (FnApp_sqpt rvrt e args) =
+     case rvrt of
+        NONE -> OP2CMB (FnApp_sqpt NONE) (expr_inst sigma e) (exprl_inst sigma args)
+     || SOME (a,cid) -> (case cppID_inst sigma cid of
+                            NONE -> NONE
+                         || SOME cid' -> OP2CMB (FnApp_sqpt (SOME (a,cid')))
+                                                (expr_inst sigma e)
+                                                (exprl_inst sigma args))) /\
   (expr_inst sigma (LVal ad ty nms) =
      OP2CMB (LVal ad) (type_inst sigma ty) (olmap (cppID_inst sigma) nms)) /\
   (expr_inst sigma (FVal fnid ty eopt) =
@@ -1266,7 +1272,8 @@ val expr_inst_def = Define`
   (expr_inst sigma (RValreq e) = OPTION_MAP RValreq (expr_inst sigma e)) /\
   (expr_inst sigma (ECompVal bytes ty) =
      OPTION_MAP (ECompVal bytes) (type_inst sigma ty)) /\
-  (expr_inst sigma (EThrow eopt) = OPTION_MAP EThrow (expropt_inst sigma eopt))
+  (expr_inst sigma (EThrow eopt) = OPTION_MAP EThrow (expropt_inst sigma eopt)) /\
+  (expr_inst sigma (NoScope e) = OPTION_MAP NoScope (expr_inst sigma e))
 
      /\
 

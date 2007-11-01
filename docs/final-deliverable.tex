@@ -1766,13 +1766,15 @@ causes undefined behaviour.)
      stack    : (environment # CExpr option # (addr->bool)) list ;
                 (* stack of environment, this and allocation info.
                    Updated as blocks are entered and left *)
+     rvstk    : (addr # CPP_ID) option list ;
+                (* optional return addresses for object r-values). *)
 
      thisvalue: CExpr option ;
                 (* the value (i.e., this will always be an ECompVal
                    with a pointer value) of the this expression *)
 
      blockclasses : constructed list list ;
-     exprclasses  : construction_locn list list
+     exprclasses  : (construction_locn list # (addr->bool)) list
        (* the stack of objects that need to have destructors
           called.  First field is for automatic objects that have
           block-delimited lifetimes.  Second is for temporary
@@ -2185,29 +2187,25 @@ evaluated.
      final_value (EX e1 se)
    \(\Rightarrow\)
      mng (s0, EX (CommaSep e1 e2) se)
-         (s0, EX (RValreq e2) base_se)
+         (s0, EX e2 base_se)
 \end{stdrule}
 \index{rule (dynamic)!comma-progresses@\texttt{comma-progresses}}%
-\index{RValreq@\texttt{RValreq}}%
-The special \texttt{RValreq} form is used to force l-values to
-evaluate to r-values if possible.  (See~\cite[\S3.3.3]{Norrish98} for
-why this form is necessary.)
+The whole expression is an l-value if the second expression is (this
+is different from C's behaviour)~\cite[\S5.18]{cpp-standard-iso14882}
+(see also \HOLfile{notes/comma-lvalue.cpp}).
 \index{final_value@\texttt{final_value}|textbf}%
 The \texttt{final_value} predicate (from \HOLfile{statements}) checks
 an extended expression to confirm that it represents a completely
 evaluated form.  Its definition is
-\begin{center}
-\begin{minipage}{\textwidth}
-\begin{alltt}
+\vspace{1ex}
+\begin{stdrule}
    (final_value (EX e se) =
       is_null_se se \(\land\)
       ((\(\exists\)v t. e = ECompVal v t) \(\lor\)
        (\(\exists\)a t p. e = LVal a t p))) \(\land\)
 
    (final_value (ST s c) = F)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 
 \paragraph{Pointer Operations}
 The two significant pointer operations are dereferencing and
@@ -2540,78 +2538,116 @@ occur if statement evaluation is big-step because the hypothesis in
 the expression rule for a function call would be a statement rule that
 required the complete evaluation of the function body.)
 
-\index{FnApp@\texttt{FnApp}} At the base level, a function call turns
-an \texttt{EX} piece of syntax into an extended expression tagged with
-\texttt{ST}.  The rule \ruleid{global-function-call} of
-Figure~\ref{fig:global-function-call} governs (normal) function calls.
+\index{FnApp@\texttt{FnApp}}%
+\index{FnApp_sqpt@\texttt{FnApp_sqpt}}%
+\index{rule (dynamic)!function-call@\texttt{function-call}|(}%
+At the base level, a function call turns an \texttt{EX} piece of
+syntax into an extended expression tagged with \texttt{ST}.  This is
+shown in the rule \ruleid{function-call} of
+Figure~\ref{fig:function-call}, governing function calls (calls to
+constructors are set up a little differently, see
+\ruleid{constructor-function-call}).
 \begin{figure}[hbtp]
 \begin{stdrule}
-(* RULE-ID: global-function-call *)
-     find_best_fnmatch s0 fnid (MAP valuetype args)
-                       rtype params body \(\land\)
-     (pdecls = MAP (\(\lambda\)((n,ty),a).
-                       VDecInit ty (Base n)
-                                   (CopyInit (EX a base_se)))
+(* RULE-ID: function-call *)
+     find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body \(\land\)
+     ((rvrt = NONE) \(\Rightarrow\) \(\neg\)class_type (strip_const rtype)) \(\land\)
+     (case thisobj of
+         SOME (LVal a (Class cnm) p) ->
+            (SOME thisaddr = ptr_encode s0 a (Class cnm) p) \(\land\)
+            (thisval = SOME (ECompVal thisaddr (Ptr (Class cnm))))
+      || _ -> (thisval = NONE)) \(\land\)
+     (pdecls = MAP (\(\lambda\)((n,ty),a). VDecInit ty
+                                          (Base n)
+                                          (CopyInit (EX a base_se)))
                    (ZIP (params, args)))
    \(\Rightarrow\)
-     mng (s0, EX (FnApp_sqpt (FVal fnid ftype NONE) args) se)
+     mng (s0, EX (FnApp_sqpt rvrt (FVal fnid ftype thisobj) args) se)
          (s0 with <| stack updated_by
-                       (CONS (s0.env, s0.thisvalue,
-                              s0.allocmap));
-                     thisvalue := NONE;
+                        (CONS (s0.env, s0.thisvalue, s0.allocmap));
+                     rvstk updated_by (CONS rvrt);
+                     thisvalue := thisval;
                      blockclasses updated_by stackenv_newscope ;
-                     exprclasses updated_by stackenv_newscope ;
                      env := empty_env |>,
           ST (Block T pdecls [body]) (return_cont se rtype))
 \end{stdrule}
-\index{rule (dynamic)!global-function-call@\texttt{global-function-call}}%
-\caption{Making a Call to a Global (\ie, Non-member) Function}
-\label{fig:global-function-call}
+\caption{Making a Function Call}
+\label{fig:function-call}
 \end{figure}
 %
 \index{return_cont@\texttt{return_cont}}%
-(For the details behind \texttt{return_cont}, and the \texttt{RVC}
-function that appears in the next rule, see
-Section~\ref{sec:refs-returned-from-fns}.  For the operations applied
-to \texttt{s0}, setting up the new function's scope, see
-Section~\ref{sec:statements-blocks}.)  At this point, the standard
-rule for evaluating an expression within a context
-(\ruleid{expr-econtext}, p\pageref{rule:econtext-expr}) can not fire,
-because its hypothesis is of the form
+The hypotheses in \ruleid{function-call} are relatively involved.
+
+The first hypothesis is really a static matter:
+\texttt{find_best_fnmatch} is a placeholder for the process that
+calculates which function is actually to be called.  This should
+really occur in Phase~1.  The second hypothesis checks that if the
+function to be called is going to return a class r-value, then the
+\texttt{rvrt} argument to the \texttt{FnApp_sqpt} constructor needs to
+have been filled out by \ruleid{allocate-rvrt}.  Note also how the
+\texttt{rvrt} argument is pushed onto the \texttt{rvstk} component of
+the stack, so that the body of the function will know where to
+construct its result.
+
+\index{member functions!calling} The third hypothesis calculates what
+the value for \texttt{this}\index{this@\texttt{this}} should be in the
+body of the function being called.  In other words, if the function is
+the member function of some class, the \texttt{thisobj} variable will
+be \texttt{SOME~(LVal~a~t~p)} giving the location of the object of the
+given class.  Note that if this is a member function, resolution of
+OO-polymorphism through \texttt{virtual} functions will have already
+been resolved and the appropriate function will have been selected
+(see Section~\ref{sec:class-values}).  Otherwise, if this is not a
+member function, the value for \texttt{this} will be \texttt{NONE}.
+
+Finally, the last hypothesis sets up the initialisation of the
+parameters by specifying the value of the variable \texttt{pdecls}.
+Each parameter is a new local variable, copy-initialised by the
+parameter value.
+
+In the conclusion of the rule, see
+Section~\ref{sec:refs-returned-from-fns} for the details behind
+\texttt{return_cont}, and Section~\ref{sec:statements-blocks} for the
+operations applied to \texttt{s0}, setting up the new function's
+scope.  Note that when this transition is made the standard rule for
+evaluating an expression within a context (\ruleid{expr-econtext},
+p\pageref{rule:econtext-expr}) can not fire, because its hypothesis is
+of the form
 \[
 \texttt{mng (s0, EX e0 se0) (s, EX e se)}
 \]
+but our conclusion is of the form
+\[
+\texttt{mng (s0, EX e0 se0) (s, ST st c)}
+\]
 Instead, the new rule
 \label{rule:econtext-stmt}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: econtext-stmt *)
      mng (s0, EX e se0) (s, ST stmt c) \(\land\)
      valid_econtext f
    \(\Rightarrow\)
      mng (s0, EX (f e) se0) (s, ST stmt (cont_comp f c))
-\end{alltt}
+\end{stdrule}
 can fire, turning the enclosing expression into a statement form, with
 an ever more elaborate continuation.   The r\^ole of the continuation
 is to do no more than record where the function-call was, so that when
 the statement form finishes execution, its result can be slotted back
 into the appropriate expression.
+\index{rule (dynamic)!function-call@\texttt{function-call}|)}%
 
 These rules have specified what happens when an expression evaluation
 switches to a statement evaluation.  In the opposite direction, when a
-function call is about to return, one of the rules is
-\begin{center}
-\begin{minipage}{\textwidth}
-\index{rule (dynamic)!return-rvalue@\texttt{return-rvalue}}
-\label{rule:return-rvalue}
-\begin{alltt}
+function call is about to return, one of the rules is %
+\index{rule (dynamic)!return-rvalue@\texttt{return-rvalue}}%
+\label{rule:return-rvalue}%
+\begin{stdrule}
 (* RULE-ID: return-rvalue *)
      is_null_se se0
    \(\Rightarrow\)
      mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se))
          (s, EX (c (ECompVal v t)) se)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 In this situation, the \texttt{return} statement has completely
 evaluated its argument into a value, and there are no remaining side
 effects to be evaluated.  This means that the value can be put back
@@ -2659,7 +2695,7 @@ returned to a higher level as some sort of result.  The definition of
      case c of
         LVC f se0 -> (\(\exists\)a t p se. (e = EX (LVal a t p) se) \(\land\)
                                  is_null_se se)
-     || RVC f se0 -> final_value e) \(\land\)
+     || RVC f se0 -> final_value e \(\land\) no_class_lval e) \(\land\)
   (final_stmt (Throw exn) c = \(\exists\)e. (exn = SOME e) \(\land\)
                                   final_value e) \(\land\)
   (final_stmt _ c = F)
@@ -3207,23 +3243,21 @@ that there is a statement-level version of \texttt{throw} as well
 (\texttt{Throw}), and it will be this that propagates through
 statement syntax.  The rule \ruleid{expression-throw-some} describes
 the behaviour when \texttt{EThrow} has an argument:
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!expression-throw-some@\texttt{expression-throw-some}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: expression-throw-some *)
      T
    \(\Rightarrow\)
      mng (s, EX (EThrow (SOME e)) se)
          (s, ST (Throw (SOME (EX e se))) c)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 The variable \texttt{c} represents the continuation that would
 normally convert the result of the statement into a value to be
-inserted into a containing expression tree.  Because thrown
-values can't ever turn into values until they initialise a handler,
-this $c$ can be anything at all.
+inserted into a containing expression tree.  Because thrown values
+can't ever turn into values until they initialise a handler, this $c$
+can be anything at all.  Because throw-expressions are of type
+\texttt{void}~(\cite[\S15,p1]{cpp-standard-iso14882}), they will never
+evaluate while a sub-expression of some containing expression.
 
 At the statement level, the \texttt{Throw} form takes an extended
 expression as an argument.  This evaluates its argument as one might
@@ -3861,10 +3895,8 @@ member functions, and normal functions.  Each sort has its own rule
 in the semantics.
 \index{member functions!static}
 First, the rule for static member functions:
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!static-fn-member-select@\texttt{static-fn-member-select}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: static-fn-member-select *)
      (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
      (s,\lbr\rbr) |- LAST Ds has least method
@@ -3875,9 +3907,7 @@ First, the rule for static member functions:
    \(\Rightarrow\)
      mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se)
          (s, EX (FVal fldid ftype NONE) se)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \index{is_qualified@\texttt{is_qualified}}%
 The third hypothesis (\texttt{is_qualified}) checks that the field
 name has multiple components to it.  This qualification will be
@@ -3902,10 +3932,8 @@ include a class component.
 The rule for normal, non-static  member functions is given in
 Figure~\ref{fig:nstatic-fn-member-select}.
 \begin{figure}
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!nstatic-fn-member-select@\texttt{nstatic-fn-member-select}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: nstatic-fn-member-select *)
      (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
      (s,\lbr\rbr) |- LAST Ds has least method
@@ -3918,9 +3946,7 @@ Figure~\ref{fig:nstatic-fn-member-select}.
          (s, EX (FVal fldid ftype
                       (SOME (LVal a (Class cnm) (Cs ^ Ds))))
                 se)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \caption{Selecting a Non-static Member Function}
 \label{fig:nstatic-fn-member-select}
 \end{figure}
@@ -3934,44 +3960,13 @@ defined.
 \paragraph{Calling a Member Function}
 Once the name of the function to be called has been found, the step of
 actually entering the body of the function can be taken.  This is
-described in rule \ruleid{member-function-call}, presented in
-Figure~\ref{fig:member-function-call}.
-\begin{figure}[htbp]
-\begin{center}
-\begin{minipage}{\textwidth}
-\index{rule (dynamic)!member-function-call@\texttt{member-function-call}}%
-\begin{alltt}
-(* RULE-ID: member-function-call *)
-     find_best_fnmatch s0 fnid (MAP valuetype args)
-                       rtype params body \(\land\)
-     (pdecls = MAP (\(\lambda\)((n,ty),a). VDecInit ty
-                                     (Base n)
-                                     (CopyInit (EX a base_se)))
-                   (ZIP (params, args))) \(\land\)
-     (SOME this = ptr_encode s0 a (Class cname) p)
-   \(\Rightarrow\)
-     mng (s0, EX (FnApp_sqpt (FVal fnid ftype
-                                   (SOME (LVal a (Class cname) p)))
-                             args) se0)
-         (s0 with <| stack updated_by
-                       (CONS (s0.env, s0.thisvalue, s0.allocmap));
-                     thisvalue :=
-                       SOME (ECompVal this (Ptr (Class cname)));
-                     blockclasses updated_by stackenv_newscope ;
-                     exprclasses updated_by stackenv_newscope ;
-                     env := empty_env
-                  |>,
-          ST (Block T pdecls [body]) (return_cont se0 rtype))
-\end{alltt}
-\end{minipage}
-\end{center}
-\caption{Making a Member Function Call}
-\label{fig:member-function-call}
-\end{figure}
-This rule is basically the same as that for normal function calls (see
-\ruleid{global-function-call} in
-Figure~\ref{fig:global-function-call}), except that the value of the
-\texttt{this} pointer has to be established.\index{This@\texttt{This}}
+described in rule \ruleid{function-call}, already presented in
+Figure~\ref{fig:function-call}.%
+\index{rule (dynamic)!function-call@\texttt{function-call}}%
+When a member function is called, the \texttt{FVal} constructor stores
+the address and type of the object that the function is a member of.
+The rule extracts this information to initialise the \texttt{this}
+value used in the body of the member function.
 
 \paragraph{Field Selection}
 Field selection is also based on the notion of being able to find the
@@ -4310,11 +4305,10 @@ achieves this by encoding this expectation in the continuation that
 accompanies every statement evaluation.
 
 \index{return_cont@\texttt{return_cont}}%
-The rules for function calls (see, for example
-\ruleid{global-function-call} in Figure~\ref{fig:global-function-call}
-(page~\pageref{fig:global-function-call})) construct the continuation
-with a call to \texttt{return_cont}.  The continuation type is defined
-in \HOLfile{statements}:
+The rules for function calls (see, for example \ruleid{function-call}
+in Figure~\ref{fig:function-call} (page~\pageref{fig:function-call}))
+construct the continuation with a call to \texttt{return_cont}.  The
+continuation type is defined in \HOLfile{statements}:
 \begin{verbatim}
   conttype = RVC of (CExpr -> CExpr) => se_info
            | LVC of (CExpr -> CExpr) => se_info
@@ -4872,13 +4866,13 @@ side-effect record.  This will evolve as references to and updates of
 memory occur.
 
 Once the parameters to the constructor have been evaluated, the
-constructor body can be entered.  This happens in rule
-\ruleid{constructor-function-call}, for which see
+constructor body can be entered.%
+\index{rule (dynamic)!constructor-function-call@\texttt{constructor-function-call}|(}%
+This happens in rule \ruleid{constructor-function-call}, for which see
 Figure~\ref{fig:constructor-function-call}.
 \begin{figure}[htbp]
 \begin{center}
 \begin{minipage}{\textwidth}
-\index{rule (dynamic)!constructor-function-call@\texttt{constructor-function-call}}%
 \begin{alltt}
 (* RULE-ID: constructor-function-call *)
      find_constructor_info s0 cnm args params mem_inits body \(\land\)
@@ -5051,6 +5045,7 @@ it will in turn initialise its members.  The constructor for
 be evaluated in the context where the parameters are in scope, so it
 is clear that the declarations for the parameters must come before the
 base and member initialisations.
+\index{rule (dynamic)!constructor-function-call@\texttt{constructor-function-call}|)}
 
 \paragraph{Object Destruction}
 When an object of class type is first declared (with a

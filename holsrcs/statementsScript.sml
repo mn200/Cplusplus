@@ -188,6 +188,11 @@ val final_value_def = Define`
   (final_value (ST s c) = F)
 `;
 
+val no_class_lval_def = Define`
+  (no_class_lval (LVal a t p) = ~class_type (strip_const t)) /\
+  (no_class_lval e = T)
+`
+
 val final_stmt_def = Define`
   (final_stmt EmptyStmt c = T) /\
   (final_stmt Break c = T) /\
@@ -195,7 +200,10 @@ val final_stmt_def = Define`
   (final_stmt (Ret e) c =
      case c of
         LVC f se0 -> (?a t p se. (e = EX (LVal a t p) se) /\ is_null_se se)
-     || RVC f se0 -> final_value e) /\
+     || RVC f se0 -> final_value e /\
+                     (case e of
+                         EX e0 se -> no_class_lval e0
+                      || ST st c0 -> T)) /\
   (final_stmt (Throw exn) c = ?e. (exn = SOME e) /\ final_value e) /\
   (final_stmt _ c = F)
 `;
