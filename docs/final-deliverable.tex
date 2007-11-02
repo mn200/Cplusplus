@@ -234,29 +234,29 @@ is an alternative to writing
    1 :: 2 :: 3 :: []
 \end{alltt}
 Lists come equipped with various standard functional language
-operations such as \index{EL (list operation)@\texttt{EL} (list
-  operation)}%
+operations such as %
+\index{EL (list operation)@\texttt{EL} (list operation)}%
+\index{++ (list operation)@\texttt{++} (list operation)}%
 \index{CONS (list operation)@\texttt{CONS} (list operation)}%
 \index{FOLDL (list operation)@\texttt{FOLDL} (list operation)}%
-\index{++ (list operation)@\texttt{++} (list operation)}%
-\index{ZIP (list operation)@\texttt{ZIP} (list operation)}%
+\index{HD (list operation)@\texttt{HD} (list operation)}%
 \index{LAST (list operation)@\texttt{LAST} (list operation)}%
 \index{MAP (list operation)@\texttt{MAP} (list operation)}%
 \index{MEM (list operation)@\texttt{MEM} (list operation)}%
-\begin{center}
-\begin{minipage}{\textwidth}
-\begin{alltt}
+\index{TL (list operation)@\texttt{TL} (list operation)}%
+\index{ZIP (list operation)@\texttt{ZIP} (list operation)}%
+\begin{stdrule}
    ++    : 'a list -> 'a list -> 'a list
    CONS  : 'a -> 'a list -> 'a list
    EL    : num -> 'a list -> 'a
    FOLDL : ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+   HD    : 'a list -> 'a
    LAST  : 'a list -> 'a
    MAP   : ('a -> 'b) -> 'a list -> 'b list
    MEM   : 'a -> 'a list -> bool
+   TL    : 'a list -> 'a list
    ZIP   : 'a list -> 'b list -> ('a # 'b) list
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 The list append operation (\texttt{++}) is written as an infix.
 
 \paragraph{Options} The option type has two constructors
@@ -289,11 +289,13 @@ value for \texttt{k}), is written \texttt{fm |+ (k,v)}.  The function
 \texttt{FDOM} returns the domain of a finite map.\index{FDOM@\texttt{FDOM}}
 
 \paragraph{Records}\index{records (in HOL)}
+\index{:=@\texttt{:=} (record update)}%
 Record literals are written as a sequence of assignment to field-names
 in between ASCII angle brackets, thus:
 \begin{verbatim}
    <| fld1 := 3; fld2 := 5; fld3 := (F,[]) |>
 \end{verbatim}
+\index{with@\texttt{with} (record update)}%
 New record values can be constructed from old ones with the
 \texttt{with} keyword.  For example
 \begin{verbatim}
@@ -303,6 +305,7 @@ is a record value that is everywhere identical to \texttt{rec} except
 that its fields \texttt{fld2} and \texttt{fld6} have different
 values.
 
+\index{updated_by (record update)@\texttt{updated_by} (record update)}%
 When updating records, in addition to the assignment
 syntax~(\texttt{:=}), one can also use \texttt{updated_by}, which
 allows a function to be applied to the old value of the field.  So,
@@ -2202,10 +2205,15 @@ evaluated form.  Its definition is
    (final_value (EX e se) =
       is_null_se se \(\land\)
       ((\(\exists\)v t. e = ECompVal v t) \(\lor\)
-       (\(\exists\)a t p. e = LVal a t p))) \(\land\)
+       (\(\exists\)a t p. e = LVal a t p) \(\lor\)
+       (\(exists\)b a i. e = ConstructedVal b a i))) \(\land\)
 
    (final_value (ST s c) = F)
 \end{stdrule}
+The \texttt{ConstructedVal} constructor %
+\index{ConstructedVal (expr constructor)@\texttt{ConstructedVal} (\texttt{expr} constructor)}%
+is used to refer to class r-values (for which see
+Section~\ref{sec:class-rvalues}).
 
 \paragraph{Pointer Operations}
 The two significant pointer operations are dereferencing and
@@ -2369,13 +2377,12 @@ dereferencing).  In the abstract syntax, the one operator is called
 The rule is complicated by the fact that if the pointer to a member is
 to a virtual function, then the result must be a reference to a
 virtual function in the class on which the dereference is
-performed.
-\begin{center}
-\begin{minipage}{\textwidth}
+performed.%
 \index{rule (dynamic)!offset-deref@\texttt{offset-deref}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: offset-deref *)
      (encode_offset cnm2 fldname = SOME bl) \(\land\)
+     (derive_objid obj = SOME (a,Class cnm1,p)) \(\land\)
      (fld = if function_type fldty then
               let (r,a) = dest_function_type fldty
               in
@@ -2386,15 +2393,11 @@ performed.
             else
               mk_member cnm2 fldname)
    \(\Rightarrow\)
-     mng (s, EX (OffsetDeref
-                     (LVal a (Class cnm1) p)
-                     (ECompVal bl (MPtr cnm2 fldty)))
+     mng (s, EX (OffsetDeref obj
+                  (ECompVal bl (MPtr cnm2 fldty)))
                 se)
-         (s, EX (SVar (LVal a (Class cnm1) p) fld)
-                se)
-\end{alltt}
-\end{minipage}
-\end{center}
+         (s, EX (SVar obj fld) se)
+\end{stdrule}
 The invariant in the model is that if a reference is made to a virtual
 function, then it must occur as the right-hand argument of a
 field-selection as a bare name (hence the
@@ -2409,20 +2412,16 @@ It is possible to have null member pointers
 \texttt{encode_offset} in such a way that the null member pointer
 constant is not in its range, and add the rule
 \index{rule (dynamic)!offset-deref-fails@\texttt{offset-deref-fails}}%
-\begin{center}
-\begin{minipage}{\textwidth}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: offset-deref-fails *)
      T
    \(\Rightarrow\)
      mng (s, EX (OffsetDeref
-                   (LVal a (Class cnm1) p)
+                   obj
                    (ECompVal null_member_ptr (MPtr cnm2 fldty)))
                 se)
          (s, EX UndefinedExpr se)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 It is undefined behaviour to apply the null member pointer to any
 class.
 
@@ -2609,7 +2608,12 @@ In the conclusion of the rule, see
 Section~\ref{sec:refs-returned-from-fns} for the details behind
 \texttt{return_cont}, and Section~\ref{sec:statements-blocks} for the
 operations applied to \texttt{s0}, setting up the new function's
-scope.  Note that when this transition is made the standard rule for
+scope. %
+\index{rvstk (state field)@\texttt{rvstk} (\texttt{state} field)}%
+The use of \texttt{CONS~rvrt} to update the \texttt{rvstk} field
+pushes the \texttt{rvrt} value onto the front of the list.
+
+Finally, note that when this transition is made the standard rule for
 evaluating an expression within a context (\ruleid{expr-econtext},
 p\pageref{rule:econtext-expr}) can not fire, because its hypothesis is
 of the form
@@ -2646,7 +2650,7 @@ function call is about to return, one of the rules is %
      is_null_se se0
    \(\Rightarrow\)
      mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se))
-         (s, EX (c (ECompVal v t)) se)
+         (s with rvstk updated_by TL, EX (c (ECompVal v t)) se)
 \end{stdrule}
 In this situation, the \texttt{return} statement has completely
 evaluated its argument into a value, and there are no remaining side
@@ -2654,7 +2658,9 @@ effects to be evaluated.  This means that the value can be put back
 into the containing expression tree, and expression evaluation can
 continue.  This is reflected by the switch from \texttt{ST} to
 \texttt{EX}, and the application of the continuation \texttt{c} to the
-value.
+value.  The \texttt{TL}%
+\index{TL (list operation)@\texttt{TL} (list operation) function} %
+function ``pops'' the \texttt{rvstk}
 
 Note how the argument to the return statement is itself an extended
 expression.  This means that the argument will be tagged with
@@ -2685,6 +2691,7 @@ that is accompanying the statement.  In essence, a final form is both
 one that can not be further evaluated, and also something that can be
 returned to a higher level as some sort of result.  The definition of
 \texttt{final_stmt} is from \HOLfile{statements}:
+\label{def:final-stmt}
 \index{final_stmt@\texttt{final_stmt}|textbf}%
 \index{final_value@\texttt{final_value}}%
 \begin{alltt}
@@ -3410,18 +3417,14 @@ declarations (in \texttt{statementsScript}):
 \noindent
 Statements can evaluate as usual under a \texttt{Catch}
 \ruleid{catch-stmt-evaluation}:
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!catch-stmt-evaluation@\texttt{catch-stmt-evaluation}}%
 \index{Catch@\texttt{Catch}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: catch-stmt-evaluation *)
      mng (s0, ST st c) (s, ST st' c)
-   ==>
+   \(\Rightarrow\)
      mng (s0, ST (Catch st hnds) c) (s, ST (Catch st' hnds) c)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 Non-exception statements pass through \texttt{Catch} statements,
 ignoring the handlers \ruleid{catch-normal-stmt-passes}:
 \begin{center}
@@ -3723,10 +3726,10 @@ entered into the state's function map.  The same function map is used
 for normal (non-class) functions, but the structured nature of \cpp{}
 identifiers allows the model to distinguish both sorts of function.
 
-\subsubsection{Class Values and Member Functions}
+\subsubsection{Class L-Values and Member Functions}
 \label{sec:class-values}
-Classes can not be converted into r-values like other values.  This is
-because of the problems that arise with multiple inheritance.  In
+Classes can not be converted into r-values as other values can.  This
+is because of the problems that arise with multiple inheritance.  In
 particular, with multiple inheritance in place, it is no longer true
 that one can extract the byte sequence for a given l-value by starting
 at the base address and taking as many bytes from memory as the size
@@ -3734,13 +3737,7 @@ of the type.  In particular, virtual base classes may be at completely
 different places in memory, not necessarily even contiguous with the
 rest of the object.  (This is demonstrated for the \texttt{g++}
 compiler by the little program in
-\texttt{notes/mult-inheritance-layout.cpp}.)
-
-Absence of support for r-values means that, in this model, one can not
-assign classes, pass them as parameters, or return them from
-functions.  However, because references are supported (see
-Section~\ref{sec:reftypes}) much idiomatic \cpp{} is still covered by
-the model.
+\texttt{notes/mult-inheritance-layout.cpp}.)  The special way in which class r-values are handled is described in Section~\ref{sec:class-rvalues}.
 
 \index{LVal@\texttt{LVal}!and dynamic types}
 %
@@ -3812,11 +3809,10 @@ has evaluated to an l-value.\footnote{Even when the model allows for
 \end{figure}
 
 \begin{figure}[hbtp]
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!virtual-fn-member-select@\texttt{virtual-fn-member-select}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: virtual-fn-member-select *)
+     (derive_objid obj = SOME (a, Class C, Cs)) \(\land\)
      (s,\lbr\rbr) |- LAST Cs has least method
                  (IDName fld) -:
                  (static_retty,F,args0,body0) via
@@ -3826,15 +3822,12 @@ has evaluated to an l-value.\footnote{Even when the model allows for
                  (dyn_retty,F,args,body) via
                  Cs'
    \(\Rightarrow\)
-     mng (s, EX (SVar (LVal a (Class C) Cs)
-                      (IDConstant F [] (IDName fld))) se)
+     mng (s, EX (SVar obj (IDConstant F [] (IDName fld))) se)
          (s, EX (FVal (mk_member (LAST Cs') (IDName fld))
                       (Function dyn_retty (MAP SND args))
                       (SOME (LVal a (Class C) Cs'))) se)
 
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \caption{The Rule for Virtual Member Function Dispatch}
 \label{fig:virtual-fn-member-select}
 \end{figure}
@@ -3898,6 +3891,7 @@ First, the rule for static member functions:
 \index{rule (dynamic)!static-fn-member-select@\texttt{static-fn-member-select}}%
 \begin{stdrule}
 (* RULE-ID: static-fn-member-select *)
+     (derive_objid obj = SOME (a, Class cnm,  Cs)) \(\land\)
      (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
      (s,\lbr\rbr) |- LAST Ds has least method
                   (IDtl fldid) -: (retty,T,ps,body)
@@ -3905,7 +3899,7 @@ First, the rule for static member functions:
      (ftype = Function retty (MAP SND ps)) \(\land\)
      is_qualified fldid
    \(\Rightarrow\)
-     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se)
+     mng (s, EX (SVar obj fldid) se)
          (s, EX (FVal fldid ftype NONE) se)
 \end{stdrule}
 \index{is_qualified@\texttt{is_qualified}}%
@@ -3935,6 +3929,7 @@ Figure~\ref{fig:nstatic-fn-member-select}.
 \index{rule (dynamic)!nstatic-fn-member-select@\texttt{nstatic-fn-member-select}}%
 \begin{stdrule}
 (* RULE-ID: nstatic-fn-member-select *)
+     (derive_objid obj = SOME (a, Class cnm, Cs)) \(\land\)
      (s,\lbr\rbr) |- path (LAST Cs) to class_part fldid via Ds \(\land\)
      (s,\lbr\rbr) |- LAST Ds has least method
                   (IDtl fldid) -: (retty,F,ps,body)
@@ -3942,7 +3937,7 @@ Figure~\ref{fig:nstatic-fn-member-select}.
      (ftype = Function retty (MAP SND ps)) \(\land\)
      is_qualified fldid
    \(\Rightarrow\)
-     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se)
+     mng (s, EX (SVar obj fldid) se)
          (s, EX (FVal fldid ftype
                       (SOME (LVal a (Class cnm) (Cs ^ Ds))))
                 se)
@@ -3990,10 +3985,8 @@ over distinct parts of memory.)
 The rule for finding the offset of a non-static data member is given
 in Figure~\ref{fig:nstatic-data-field-select}.
 \begin{figure}
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!nstatic-data-field-select@\texttt{nstatic-data-field-select}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: nstatic-data-field-select *)
      (s,\lbr\rbr) |- path (LAST p) to cnm2 via p' \(\land\)
      (s,\lbr\rbr) |- LAST p' has least
@@ -4010,9 +4003,7 @@ in Figure~\ref{fig:nstatic-data-field-select}.
                   (a + subobj_offset s (cnm1, p ^ p') + offn)
                   ty
                   (SND (default_path ty))) se)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \caption{Calculating the Offset of a Non-static Data Member}
 \label{fig:nstatic-data-field-select}
 \end{figure}
@@ -4112,11 +4103,10 @@ The most important of \cpp{}'s explicit casts is the
 \texttt{dynamic_cast} operation which allows for run-time checked
 manoeuvering around a class hierarchy.  First up-casts to unambiguous bases
 are permitted (this is the rule for references; there are parallel
-rules for the dynamic casting of pointers):
-\begin{center}
-\begin{minipage}{\textwidth}
+rules for the dynamic casting of pointers):%
 \index{rule (dynamic)!dyncast-derived-base-ref@\texttt{dyncast-derived-base-ref}}%
-\begin{alltt}
+%
+\begin{stdrule}
 (* RULE-ID: dyncast-derived-base-ref *)
 (* assume that base is accessible (checked by compiler) *)
      (strip_const dty = Class dcnm) \(\land\)
@@ -4125,14 +4115,11 @@ rules for the dynamic casting of pointers):
    \(\Rightarrow\)
      mng (s, EX (DynCast (Ref dty) (LVal a (Class scnm) p)) se)
          (s, EX (LVal a (Class scnm) (p ^ p')) se)
-\end{alltt}
-\end{minipage}
-\end{center}
-The second hypothesis is strictly redundant in the dynamics; along
-with the base's accessibility, this will be checked before the
-dynamics gets a chance to execute.  The third hypothesis is where the
-extended path from the dynamic type up to the new base is
-constructed.
+\end{stdrule}
+The second hypothesis is strictly redundant in the dynamics; along with
+the base's accessibility, this will be checked before the dynamics
+gets a chance to execute.  The third hypothesis is where the extended
+path from the dynamic type up to the new base is constructed.
 
 In the other direction (back down a class hierarchy), dynamic casts
 can fail, and require the source type to be polymorphic (\ie, the
@@ -4266,10 +4253,8 @@ meant ``had been evaluated to a value (consisting of a list of
 bytes)''.  The new rule checks that every parameter is either a
 byte-list value (when the function doesn't expect a reference type),
 or an l-value:
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!function-call-sqpt@\texttt{function-call-sqpt}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: function-call-sqpt *)
      (fty = Function retty argtys) \(\land\)
      EVERYi (\(\lambda\)i e. if ref_type (EL i argtys) then
@@ -4279,11 +4264,9 @@ or an l-value:
      is_null_se se
    \(\Rightarrow\)
      mng (s, EX (FnApp (FVal fnid fty eopt) params) se)
-         (s, EX (FnApp_sqpt (FVal fnid fty eopt) params)
+         (s, EX (FnApp_sqpt NONE (FVal fnid fty eopt) params)
                 base_se)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 The \texttt{EVERYi} function (from \HOLfile{utils}) is of type
 \begin{verbatim}
    : (num -> 'a -> bool) -> 'a list -> bool
@@ -4329,19 +4312,16 @@ In the continuations, the ``tags'', \texttt{RVC} and \texttt{LVC},
 allow other rules to determine what is expected.  To return to the
 example of the ``l-value to r-value'' conversion, this is done by the
 following rule:
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!return-lval2rval@\texttt{return-lval2rval}}%
 \index{lval2rval@\texttt{lval2rval}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: return-lval2rval *)
-     lval2rval (s0,e,se0) (s,e,se)
+     lval2rval (s0,e,se0) (s,e,se) \(\land\)
+     (HD s.rvstk = NONE)
    \(\Rightarrow\)
      mng (s0, ST (Ret (EX e0 se0)) (RVC c ret_se))
          (s, ST (Ret (EX e se)) (RVC c ret_se))
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 The continuation that accompanies every statement is the second
 argument of the \texttt{ST} tag. Also note that the first argument of
 a \ckey{return} might itself be another statement.  If the original
@@ -4350,40 +4330,40 @@ a statement, would eventually become the top of the expression.  In
 this rule, the use of the inner \texttt{EX} tag precludes this
 possibility.
 
+The second hypothesis in \ruleid{return-lval2rval} prevents the
+l-value to r-value conversion occurring if the function is returning
+a value of class type (when the top of the \texttt{rvstk} component %
+\index{rvstk (state field)@\texttt{rvstk} (\texttt{state} field)}%
+will be a \texttt{SOME} value).  This is because the value will be
+passed to a copy constructor for the class being returned, and the
+copy constructor may be expecting a reference.
+
 There are two rules allowing a \ckey{return} statement to pass its
 expression-value to the continuation.  The rule for returning normal
 values is \ruleid{return-rvalue} (we saw this rule earlier, in
-Section~\ref{sec:small-step-stmts}):
-\begin{center}
-\begin{minipage}{\textwidth}
+Section~\ref{sec:small-step-stmts}):%
 \index{rule (dynamic)!return-rvalue@\texttt{return-rvalue}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: return-rvalue *)
      is_null_se se0
    \(\Rightarrow\)
      mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se))
-         (s, EX (c (ECompVal v t)) se)
+         (s with rvstk updated_by TL, EX (c (ECompVal v t)) se)
 
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 
 \smallskip\noindent
-The rule for returning a reference \ruleid{return-lvalue} is similar:
-\begin{center}
-\begin{minipage}{\textwidth}
+The rule for returning a reference \ruleid{return-lvalue} is similar:%
 \index{rule (dynamic)!return-lvalue@\texttt{return-lvalue}}%
-\label{rule:return-lvalue}
-\begin{alltt}
+\label{rule:return-lvalue}%
+\begin{stdrule}
 (* RULE-ID: return-lvalue *)
      is_null_se se0
    \(\Rightarrow\)
      mng (s, ST (Ret (EX (LVal a t p) se0)) (LVC c se))
-         (s, EX (c (LVal a t p)) se)
+         (s with rvstk updated_by TL, EX (c (LVal a t p)) se)
 
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 
 \subsubsection{Declaring References}
 
@@ -4685,6 +4665,9 @@ int main()
 \subsection{Object Lifetimes}
 \label{sec:object-lifetimes}
 
+For comments specific to the lifetimes of class r-values, see
+Section~\ref{sec:class-rvalues} below.
+
 \paragraph{Constructors}
 Handling constructors has easily wrought the greatest change to the
 simple C model.  The basic approach taken has been to encode as much
@@ -4716,7 +4699,8 @@ where the boolean flag indicates whether or not the block has been
 entered yet.  In this way, the abstract syntax has values in it that
 can't be written down in the concrete syntax.  (Simiarly, the original
 thesis model for C included the \texttt{RVR} constructor and the
-$\hat{f}$ intermediate form for function calls.)
+\texttt{FnApp_sqpt} intermediate form (written $\hat{f}$) for function
+calls.)
 
 Constructors are intimately tied up with declarations and
 initialization.  In the simple C world, a variable comes into being in
@@ -4794,8 +4778,8 @@ of arguments.)
 
 The \texttt{DirectInit} constructor takes one argument, an ``extended
 expression'', which will initially be an expression constructed by an
-application of the special constructor
-\texttt{ConstructorFVal}\index{ConstructorFVal@\texttt{ConstructorFVal}}
+application of the special constructor \texttt{ConstructorFVal}%
+\index{ConstructorFVal@\texttt{ConstructorFVal}} %
 to the same argument list.  This form needs to be an extended
 expression so that the body of the constructor (a statement) can be
 entered.
@@ -4830,10 +4814,12 @@ function applications (with the unspecified order of evaluation of
 arguments, for example).  The function value position is filled by a
 new abstract syntactic form
 \texttt{ConstructorFVal}.\index{ConstructorFVal@\texttt{ConstructorFVal}}
-This takes three parameters:
+This takes four parameters:
 \begin{itemize}
 \item a boolean indicating whether or not the constructor is being
   called for a most-derived object or not;
+\item a boolean indicating whether or not the constructor is being
+  called for a sub-object or not;
 \item the address of the space which the constructor is to operate
   over; and
 \item the name of the class that is being constructed
@@ -4847,15 +4833,15 @@ So, if a declaration is made of the form
 then, once sufficient space is allocated for the new object \texttt{v}
 (at address \texttt{a}, say), the abstract syntax will look like
 \begin{alltt}
-   VDecInitA (Class \(\mathit{cnm}\))
+   VDecInitA (Class (Base "class"))
              (ObjPlace a)
              (DirectInit
-                (EX (FnApp (ConstructorFVal T a \(\mathit{cnm}\))
+                (EX (FnApp (ConstructorFVal T F a (Base "class"))
                            [Var "x"])
                     base_se))
 \end{alltt}
-where $\mathit{cnm}$ is the identifier corresponding to the class
-\texttt{class}.
+Note how the name \texttt{v} has disappeared, subsumed into the
+allocated address at \texttt{a}.
 
 The \texttt{ObjPlace} constructor is used to distinguish this from the
 situation where a reference is being initialised.  The \texttt{EX}
@@ -4871,9 +4857,7 @@ constructor body can be entered.%
 This happens in rule \ruleid{constructor-function-call}, for which see
 Figure~\ref{fig:constructor-function-call}.
 \begin{figure}[htbp]
-\begin{center}
-\begin{minipage}{\textwidth}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: constructor-function-call *)
      find_constructor_info s0 cnm args params mem_inits body \(\land\)
      (pdecls = MAP (\(\lambda\)((n,ty),a).
@@ -4899,16 +4883,13 @@ Figure~\ref{fig:constructor-function-call}.
                        SOME (ECompVal this (Ptr (Class cnm)));
                      stack updated_by
                        (CONS (s0.env, s0.thisvalue));
+                     rvstk updated_by (CONS NONE);
                      blockclasses updated_by stackenv_newscope;
-                     exprclasses updated_by stackenv_newscope;
                      env := empty_env |>,
           ST newstmt (RVC (\(\lambda\)e. ConstructedVal subp a cnm)
                           se0))
-\end{alltt}
-    \end{minipage}
-  \end{center}
-
-  \caption{Making a Call to a Class Constructor}
+\end{stdrule}
+\caption{Making a Call to a Class Constructor}
 \label{fig:constructor-function-call}
 \end{figure}
 The basic rule is complicated enough, and there is more complexity
@@ -5011,7 +4992,7 @@ of the members (given as \texttt{Boff}, \texttt{ptroff} and
   VDecInitA B (ObjPlace (a + Boff))
               (DirectInit
                  (NormE
-                    (FnApp (ConstructorFVal F (a + Boff) B)
+                    (FnApp (ConstructorFVal F T (a + Boff) B)
                            [Deref(Plus (Var "cptr")
                                        (Var "i"))])
                     base_se))
@@ -5037,7 +5018,7 @@ bases in the example, the most-derived object would be ``responsible''
 for constructing them (see~\cite[\S12.6.2, paragraph
 5]{cpp-standard-iso14882}).  If \texttt{C} had any non-static members
 of class type, then these would be constructed with their
-$\mathit{mdp}$ flag set to true.
+\texttt{mdp} and \texttt{subobj} flags both set to true.
 
 When the constructor for the base class \texttt{B} comes to be called,
 it will in turn initialise its members.  The constructor for
@@ -5094,9 +5075,7 @@ only occur if the current scope's \texttt{blockclasses} information is
 empty.  As long as it is not empty, the destructor corresponding to
 the object on the top of the stack is set up to be called.  This is
 done in rule \ruleid{block-exit-destructors-to-call}:
-\begin{center}
-  \begin{minipage}{\textwidth}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: block-exit-destructors-to-call *)
      (s0.blockclasses = destroy_these :: bcs) \(\land\)
      \(\neg\)(destroy_these = []) \(\land\)
@@ -5106,9 +5085,7 @@ done in rule \ruleid{block-exit-destructors-to-call}:
    \(\Rightarrow\)
      mng (s0, ST (Block T [] [st]) c)
          (s, ST (Block T [] (destcalls ++ [st])) c)
-\end{alltt}
-  \end{minipage}
-\end{center}
+\end{stdrule}
 This is another example of evolving syntax: the block that the flow of
 control is about to leave, has this departure deferred with the
 insertion of new statements before the block's final statement.  The
@@ -5167,10 +5144,8 @@ hypotheses are very similar to the non-class rule, but the conclusion
 differs because the class's constructor must be called before the
 pointer to the object can be returned.
 \begin{figure}[htbp]
-\begin{center}
 \index{rule (dynamic)!new-simple-class@\texttt{new-simple-class}}
-\begin{minipage}{\textwidth}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: new-simple-class *)
 (* The T F parameters to the ConstructorFVal constructor indicate
     1. the object produced is most-derived, and
@@ -5192,13 +5167,214 @@ pointer to the object can be returned.
          (s, EX (CommaSep (FnApp (ConstructorFVal T F a cnm) args)
                           (ECompVal ptrval (Ptr ty)))
                 se)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \caption{Allocating a Class Object on the Heap}
 \label{fig:new-simple-class}
 \end{figure}
 \index{dynamic semantics|)}
+
+\subsection{Class R-Values}
+\label{sec:class-rvalues}
+\index{temporaries|see{class r-values}}
+\index{class r-values|(}
+
+As discussed earlier, r-values of class type are harder to model than
+r-values of other types.  (Note that the standard also talks of
+``temporary values'' in this context.) For example, it is legitimate
+to call member functions on such values, which in turn means that such
+values must continue to have addresses so that \texttt{this} can have
+a value in the bodies of those member functions.  But once class
+r-values are given residence in memory, they have to be allocated,
+constructed, destroyed and de-allocated properly.  This opens up many
+cans of worms.
+
+The first saving grace is that class r-values can only occur as a
+result of function calls.  There is no way of creating a class r-value
+within a normal expression except by calling a function that returns a
+value of the given type.\footnote{Compound literals can be used to
+  initialise POD classes, but these are not general r-values as found
+  inside arbitrary expressions.  Moreover, this model doesn't handle
+  that form of initialisation in any case.}  Once created, class
+r-values can be
+\begin{itemize}
+\item passed as parameters to other functions;
+\item used to initialise newly declared variables; and
+\item returned from functions
+\end{itemize}
+It is also possible for an r-value to be the ``result'' of an
+expression-statement (the \texttt{Standalone} constructor in the
+\texttt{stmt} type).  For example, in
+\begin{stdrule}
+   class C \{ ... \};
+   C f(int x);
+   int g(int y) \{ f(y + 1); ... \}
+\end{stdrule}
+the body of \texttt{g}, a ``standalone'' \texttt{C} r-value is created
+and then does nothing (presumably there were interesting side effects
+incident on its creation).
+
+The rest of this section describes the modelling of five modes of being:
+creation, the three bullet-points above, and eventual destruction.
+
+\subsubsection{R-Value Creation}
+\label{sec:r-value-creation}
+
+R-values must live in memory, so it is important to know how the
+memory they consume comes to be allocated.  Thankfully, we know that
+all r-values are created by function calls, so the model can arrange
+for memory to be allocated when a function is about to be entered.
+This memory is allocated at the level of the caller rather than the
+callee, which is important because the temporary lives at the level of
+the caller.
+
+Allocation is done in the rule \ruleid{allocate-rvrt}, in
+Figure~\ref{fig:allocate-rvrt}.
+\begin{figure}[hbtp]
+\index{rule (dynamic)!allocate-rvrt@\texttt{allocate-rvrt}}
+\begin{stdrule}
+(* RULE-ID: allocate-rvrt *)
+(* allocates space for a function call so that it can return an
+   object r-value *)
+     find_best_fnmatch s0 fnid (MAP valuetype args)
+                       rtype params body \(\land\)
+     class_type (strip_const rtype) \(\land\)
+     malloc s0 rtype a \(\land\)
+     sizeof T (sizeofmap s0) rtype sz
+   \(\Rightarrow\)
+     mng (s0, EX (FnApp_sqpt NONE
+                             (FVal fnid ftype thisobj)
+                             args)
+                 se0)
+         (s0 with allocmap updated_by (UNION) (range_set a sz),
+          EX (FnApp_sqpt (SOME
+                           (a, dest_class (strip_const rtype)))
+                         (FVal fnid ftype thisobj)
+                         args)
+             se0)
+\end{stdrule}
+\caption[Allocating Memory for Class R-Values]{Allocating Memory into
+  Which Class R-Values will be Constructed}
+\label{fig:allocate-rvrt}
+\end{figure}
+If the first argument slot of the
+\texttt{FnApp_sqpt}\index{FnApp_sqpt@\texttt{FnApp_sqpt}} constructor
+is \texttt{NONE} (as it is initially, thanks to rule
+\ruleid{function-call-sqpt}), then this rule can fire, and update it.
+The call to \texttt{find_best_fnmatch} is used to calculate the type
+of value returned by the function.  If that type is a class type, then
+space is allocated for a value of the right size, and this type and
+the space's address is recorded in the first argument slot.
+Naturally, if the return type of the function call is not a class
+type, then the first argument slot will remain \texttt{NONE}.
+
+We have already seen how
+\ruleid{function-call}~(p\pageref{fig:function-call}) subsequently
+transfers the information from the \texttt{FnApp_sqpt} constructor
+onto the state's \texttt{rvstk} stack %
+\index{rvstk (state field)@\texttt{rvstk} (\texttt{state} field)}%
+when the function call enters the body of the function.  The last step
+of r-value creation comes when a \texttt{return} statement is
+executed.
+
+At the base level, all r-values must be created by returning an
+l-value in a function such as\footnote{There are many possible
+  variations on this of course: the l-value need not be an automatic
+  variable but might be some global; if returning an automatic, the
+  block where it is allocated need not be the body of the whole
+  function; etc}
+\begin{stdrule}
+   C f(...)
+   \{
+     C x;
+     ...
+     return x;
+   \}
+\end{stdrule}
+If this is the case, we will eventually see the following situation in
+the abstract syntax:
+\begin{stdrule}
+   ST (Block T [] [Return (EX (LVal a t p) se)]) (RVC c)
+\end{stdrule}
+This tells us that we have an l-value due to be returned but that the
+statement continuation is expecting an r-value.  The last thing we
+want happening at this point is for
+\ruleid{block-exit-destructors-to-call} to fire: that may well
+invalidate the l-value.  For this reason, the definition of
+\texttt{final_stmt}~(p\pageref{def:final-stmt}) checks to see that the
+expression being returned is not a class l-value when there is an
+\texttt{RVC} continuation.
+
+Instead, a fresh object needs to be constructed, calling a constructor
+to do so.  This is done in the rule
+\ruleid{ret-construct-rvalue}:%
+\index{rule (dynamic)!ret-construct-rvalue@\texttt{ret-construct-rvalue}}
+\begin{stdrule}
+(* RULE-ID: ret-construct-rvalue *)
+     (HD s.rvstk = SOME (a,cnm)) \(\land\)
+     \(\neg\)(e0 = ConstructedVal T a cnm)
+   \(\Rightarrow\)
+     mng (s, ST (Ret (EX e0 se0)) (RVC c se))
+         (s, ST (Ret (EX (FnApp (ConstructorFVal T F a cnm) [e0])
+                         se0))
+                (RVC c se))
+\end{stdrule}
+Calling a constructor will eventually return a \texttt{ConstructedVal} value %
+\index{ConstructedVal (expr constructor)@\texttt{ConstructedVal} (\texttt{expr} constructor)}%
+%
+that has been allocated to fill in the appropriate space, at address
+\texttt{a'}.  Note that the type of the value \texttt{e0} may not be
+exactly the same as the value being returned.  Indeed it does not need
+to be of class type at all.  For example, the rule above would fire in
+the program
+\begin{stdrule}
+   class C \{
+   public:
+     C(int x) \{ ... \}
+     ...
+   \}
+
+   C f(...) \{ int x; ... return 3; \}
+\end{stdrule}
+When the call to the constructor returns it will be with a
+\texttt{ConstructedFVal} value at the given address.  This then allows
+\ruleid{ret-class-rvalue} to fire: %
+\index{rule (dynamic)!ret-class-rvalue@\texttt{ret-class-rvalue}}%
+\begin{stdrule}
+(* RULE-ID: ret-class-rvalue *)
+     (HD s.rvstk = SOME (a,cnm)) \(\land\)
+     (e0 = ConstructedVal T a cnm)
+   \(\Rightarrow\)
+     mng (s, ST (Ret (EX e0 se0)) (RVC c se))
+         (s with rvstk updated_by TL, EX (c e0) se)
+\end{stdrule}
+
+\paragraph{Creation of R-Values By Explicitly Calling Constructors}
+\index{explicit type conversion}%
+\cpp{} allows constructors to be called ``as normal functions'' within
+expressions (actually this is known as \emph{explicit type conversion
+  (functional notation)}, see~\cite[\S5.2.3]{cpp-standard-iso14882}).
+For example
+\begin{stdrule}
+   class C \{
+   public:
+     C(int x) \{ ... \}
+     ...
+   \};
+   int g(C);
+   int f(int y)
+   \{
+      return g(C(y + 3));
+   \}
+\end{stdrule}
+The model does not explicitly model this in the abstract syntax, but
+assumes instead that for every class constructor there is an
+accompanying function with arguments of the same type and declared as
+returning an object of the given class type.  When an explicit type
+conversion appears for a class, a call to this accompanying function
+can be substituted.
+
+\index{class r-values|)}
+
 
 \section{Validation}
 \label{sec:validation}
@@ -5220,14 +5396,14 @@ Rushby~\cite{Rushby93}.)
 
 Throughout the HOL sources, there are a number of sanity theorems.
 These are identified by ML comments of the form \texttt{(*~SANITY~*)}.
-There is one slightly more substantial result in the theory
-\HOLfile{sanity}, but its proof pales beside those of transitivity,
-reflexivity and anti-symmetry of name instantiation in
-\HOLfile{instantiation}.  These are painful to establish because of
-the complexity of the abstract syntax that can be instantiated, but
-they are important because they indicate that Siek and Taha's basic
-framework~\cite{DBLP:conf/ecoop/SiekT06} is still usable in the more
-complicated setting of this \cpp{} semantics.
+There are 39 of these.  There is also one slightly more substantial
+result in the theory \HOLfile{sanity}, but its proof pales beside
+those of transitivity, reflexivity and anti-symmetry of name
+instantiation in \HOLfile{instantiation}.  These are painful to
+establish because of the complexity of the abstract syntax that can be
+instantiated, but they are important because they indicate that Siek
+and Taha's basic framework~\cite{DBLP:conf/ecoop/SiekT06} is still
+usable in the more complicated setting of this \cpp{} semantics.
 
 My earlier work on C~\cite{Norrish98}, which included a number of
 simple sanity theorems, also included proofs of the ``standard''
@@ -5420,24 +5596,9 @@ type-matching that is done in exception handlers.)  I feel that all of
 these omissions are justified given the commission to prefer treatment
 of dynamics rather than static issues.
 
-I believe the most significant dynamic omission is the failure to
-support class r-values.  The model also omits \texttt{delete},
-placement-\texttt{new}, and some of the constraints on what may or may
-not be done with constructors (for example, that
-in\cite[\S12.1,~para~15]{cpp-standard-iso14882}).
-
-Class r-values would clearly be modelled almost as l-values, using the
-\texttt{LVal}\index{LVal@\texttt{LVal}} constructor.  The greatest
-complexity would come in having them returned from functions.  This
-would require (potentially anonymous) space to be allocated for them
-at the calling level, allowing copy constructors to be called to
-install the returned value into the appropriate spot.  The
-\texttt{exprclasses}%
-\index{exprclasses (state field)@\texttt{exprclasses} (\texttt{state} field)}%
-field of the state is designed to record such anonymously allocated
-objects so that they can be appropriate destroyed when the enclosing
-expression has finished its termination.
-
+The model also omits \texttt{delete}, placement-\texttt{new}, and some
+of the constraints on what may or may not be done with constructors
+(for example, that in\cite[\S12.1,~para~15]{cpp-standard-iso14882}).
 Other language features completely ignored (mainly on the grounds that
 they are of less interest) are: enumerated types, \texttt{typedef}
 declarations, unions, bit-field members and the \texttt{goto} and

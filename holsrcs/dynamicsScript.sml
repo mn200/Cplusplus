@@ -365,8 +365,6 @@ val RVR_def = Define`
 `
 
 
-val _ = print "About to define meaning relation\n"
-
 val valuetype_def = Define`
   (valuetype (ECompVal v t) = t) /\
   (valuetype (LVal a t p) = static_type (t,p))
@@ -401,6 +399,13 @@ val exception_parameter_match_def = Define`
         ?v1 v2. nonclass_conversion s (v1,exnty) (v2,paramty)
 `;
 
+val derive_objid_def = Define`
+  (derive_objid (LVal a t p) = SOME (a,t,p)) /\
+  (derive_objid (ConstructedVal b a cnm) = SOME(a,Class cnm,[cnm])) /\
+  (derive_objid _ = NONE)
+`;
+
+val _ = print "About to define meaning relation\n"
 val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: number-literal *)
@@ -870,8 +875,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: offset-deref *)
-(!cnm1 cnm2 fldname s se a p bl fld fldty.
+(!cnm1 cnm2 fldname s se a p bl fld fldty obj.
      (encode_offset cnm2 fldname = SOME bl) /\
+     (derive_objid obj = SOME (a,Class cnm1,p)) /\
      (fld = if function_type fldty then
               let (r,a) = dest_function_type fldty
               in
@@ -882,22 +888,19 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
             else
               mk_member cnm2 fldname)
    ==>
-     mng (s, EX (OffsetDeref
-                     (LVal a (Class cnm1) p)
-                     (ECompVal bl (MPtr cnm2 fldty)))
+     mng (s, EX (OffsetDeref obj
+                   (ECompVal bl (MPtr cnm2 fldty)))
                 se)
-         (s, EX (SVar (LVal a (Class cnm1) p) fld)
-                se)
+         (s, EX (SVar obj fld) se)
 )
 
    /\
 
 (* RULE-ID: offset-deref-fails *)
-(!s se cnm1 cnm2 a p fldty.
+(!s se cnm2 obj fldty.
      T
    ==>
-     mng (s, EX (OffsetDeref
-                   (LVal a (Class cnm1) p)
+     mng (s, EX (OffsetDeref obj
                    (ECompVal null_member_ptr (MPtr cnm2 fldty)))
                 se)
          (s, EX UndefinedExpr se)
@@ -1058,13 +1061,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: static-data-member-field-selection *)
-(!s se cnm cnm1 p p' fldid ty0 ty a statpath.
+(!s se cnm cnm1 p p' fldid ty0 ty a obj statpath.
+     (derive_objid obj = SOME (a, Class cnm1, p)) /\
      (s,{}) |- path (LAST p) to (class_part fldid) via p' /\
      (s,{}) |- LAST p' has least (IDtl fldid) -: (ty0, T) via [LAST p'] /\
      (lookup_addr s fldid = SOME (a, cnm, statpath)) /\
      (ty = if class_type ty0 then Class cnm else ty0)
    ==>
-     mng (s, EX (SVar (LVal a (Class cnm1) p) fldid) se)
+     mng (s, EX (SVar obj fldid) se)
          (s, EX (LVal a ty statpath) se)
 )
 
@@ -1074,28 +1078,30 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* this is very similar to the above, because this is a non-virtual function
    that is being looked up.  We can tell it's not virtual because the
    identifier is structured (making the call to class_part well-formed) *)
-(!se s a fldid ftype Cs Ds cnm retty ps body.
+(!se s a fldid ftype Cs Ds cnm retty ps obj body.
+     (derive_objid obj = SOME (a, Class cnm, Cs)) /\
      (s,{}) |- path (LAST Cs) to class_part fldid via Ds /\
      (s,{}) |- LAST Ds has least method (IDtl fldid) -: (retty,F,ps,body)
             via [LAST Ds] /\
      (ftype = Function retty (MAP SND ps)) /\
      is_qualified fldid
    ==>
-     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se)
+     mng (s, EX (SVar obj fldid) se)
          (s, EX (FVal fldid ftype (SOME (LVal a (Class cnm) (Cs ^ Ds)))) se)
 )
 
    /\
 
 (* RULE-ID: static-fn-member-select *)
-(!se s a fldid ftype Cs Ds cnm retty ps body.
+(!se s a fldid ftype Cs Ds cnm retty ps body obj.
+     (derive_objid obj = SOME (a, Class cnm,  Cs)) /\
      (s,{}) |- path (LAST Cs) to class_part fldid via Ds /\
      (s,{}) |- LAST Ds has least method (IDtl fldid) -: (retty,T,ps,body)
             via [LAST Ds] /\
      (ftype = Function retty (MAP SND ps)) /\
      is_qualified fldid
    ==>
-     mng (s, EX (SVar (LVal a (Class cnm) Cs) fldid) se)
+     mng (s, EX (SVar obj fldid) se)
          (s, EX (FVal fldid ftype NONE) se)
 )
 
@@ -1115,14 +1121,14 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    Similarly, the F in the "least method" call is the static-ness predicate,
    which must be false as this is a virtual method
  *)
-(!a C Cs Cs' Ds fld dyn_retty se s static_retty body0 args0 args body.
+(!a C Cs Cs' Ds fld dyn_retty se s static_retty body0 args0 args obj body.
+     (derive_objid obj = SOME (a, Class C, Cs)) /\
      (s,{}) |- LAST Cs has least method
              (IDName fld) -: (static_retty,F,args0,body0) via Ds /\
      (s,{}) |- (C,Cs ^ Ds) selects (IDName fld) -: (dyn_retty,F,args,body)
          via Cs'
    ==>
-     mng (s, EX (SVar (LVal a (Class C) Cs)
-                      (IDConstant F [] (IDName fld))) se)
+     mng (s, EX (SVar obj (IDConstant F [] (IDName fld))) se)
          (s, EX (FVal (mk_member (LAST Cs') (IDName fld))
                       (Function dyn_retty (MAP SND args))
                       (SOME (LVal a (Class C) Cs')))
@@ -1219,6 +1225,24 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: allocate-rvrt *)
+(* allocates space for a function call so that it can return an object r-value *)
+(!s0 fnid ftype thisobj args se0 rtype params body a sz.
+     find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body /\
+     class_type (strip_const rtype) /\
+     malloc s0 rtype a /\
+     sizeof T (sizeofmap s0) rtype sz
+   ==>
+     mng (s0, EX (FnApp_sqpt NONE (FVal fnid ftype thisobj) args) se0)
+         (s0 with allocmap updated_by (UNION) (range_set a sz),
+          EX (FnApp_sqpt (SOME (a, dest_class (strip_const rtype)))
+                         (FVal fnid ftype thisobj)
+                         args)
+             se0)
+)
+
+   /\
+
 (* RULE-ID: function-call *)
 (* FVal's third argument determines whether or not this is a global function *)
 (* TODO: handle return type casting *)
@@ -1303,7 +1327,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: return-lval2rval *)
 (!e0 se0 s0 e se ret_se s c.
-     lval2rval (s0,e,se0) (s,e,se)
+     lval2rval (s0,e,se0) (s,e,se) /\
+     (HD s.rvstk = NONE)
    ==>
      mng (s0, ST (Ret (EX e0 se0)) (RVC c ret_se))
          (s, ST (Ret (EX e se)) (RVC c ret_se))
@@ -1320,7 +1345,30 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      is_null_se se0
    ==>
      mng (s, ST (Ret (EX (ECompVal v t) se0)) (RVC c se))
-         (s, EX (c (ECompVal v t)) se)
+         (s with rvstk updated_by TL, EX (c (ECompVal v t)) se)
+)
+
+   /\
+
+(* RULE-ID: ret-construct-rvalue *)
+(!s a' cnm c e0 se0 se.
+     (HD s.rvstk = SOME (a',cnm)) /\
+     ~(e0 = ConstructedVal T a' cnm)
+   ==>
+     mng (s, ST (Ret (EX e0 se0)) (RVC c se))
+         (s, ST (Ret (EX (FnApp (ConstructorFVal T F a' cnm) [e0]) se0))
+                (RVC c se))
+)
+
+   /\
+
+(* RULE-ID: ret-class-rvalue *)
+(!s e0 se0 se c a cnm.
+     (HD s.rvstk = SOME (a,cnm)) /\
+     (e0 = ConstructedVal T a cnm)
+   ==>
+     mng (s, ST (Ret (EX e0 se0)) (RVC c se))
+         (s with rvstk updated_by TL, EX (c e0) se)
 )
 
    /\
@@ -1330,7 +1378,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      is_null_se se0
    ==>
      mng (s, ST (Ret (EX (LVal a t p) se0)) (LVC c se))
-         (s, EX (c (LVal a t p)) se)
+         (s with rvstk updated_by TL, EX (c (LVal a t p)) se)
 )
 
    /\
