@@ -2407,6 +2407,17 @@ must be to a completely qualified identifier.\footnote{Note the
   contrast with C: in \cpp, one can write \texttt{c.::B::fld}, which
   is unambiguous, if ugly, about which \texttt{fld} member is meant.}
 
+\index{derive_objid@\texttt{derive_objid}}The \texttt{derive_objid}
+function above is used to derive object l-value information (\ie,
+address, type and path) from values that may be both normal l-values
+or object r-values.  Its definition is
+\begin{stdrule}
+   (derive_objid (LVal a t p) = SOME (a,t,p)) \(\land\)
+   (derive_objid (ConstructedVal b a cnm) =
+         SOME(a,Class cnm,[cnm])) \(\land\)
+   (derive_objid _ = NONE)
+\end{stdrule}
+
 It is possible to have null member pointers
 (see~\cite[\S4.11]{cpp-standard-iso14882}).  We specify
 \texttt{encode_offset} in such a way that the null member pointer
@@ -5405,7 +5416,8 @@ returning an object of the given class type.  When an explicit type
 conversion appears for a class, a call to this accompanying function
 can be substituted.
 
-
+\subsubsection{R-Values as Parameters and Initialisors}
+\label{sec:rvalues-as-parameters}
 
 \index{class r-values|)}
 
