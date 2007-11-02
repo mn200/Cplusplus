@@ -5348,6 +5348,38 @@ When the call to the constructor returns it will be with a
          (s with rvstk updated_by TL, EX (c e0) se)
 \end{stdrule}
 
+\paragraph{Eliding Unnecessary Copy Constructions} In the standard's
+\S12.8, paragraph 15, it is said
+\begin{quote}when a temporary class
+  object that has not been bound to a reference would be copied to a
+  class object with the same cv-unqualified type, the copy operation
+  can be omitted by constructing the temporary object directly into
+  the target of the omitted copy
+\end{quote}
+Such a situation arises when the expression attached to a return
+statement is itself a call to a function returning an object of the
+same class type that is being returned.  We can model this possible
+optimisation with the rule \ruleid{ret-pass-rvrt}:%
+\index{rule (dynamic)!ret-pass-rvrt@\texttt{ret-pass-rvrt}}
+\begin{stdrule}
+(* RULE-ID: ret-pass-rvrt *)
+     (fnc = FVal fnid ftype thisobj) \(\land\)
+     find_best_fnmatch s fnid (MAP valuetype args)
+                       (Class cnm) params body \(\land\)
+     (HD s.rvstk = SOME (a, cnm))
+   \(\Rightarrow\)
+     mng (s, ST (Ret (EX (FnApp_sqpt NONE fnc args) se)) c)
+         (s, ST (Ret (EX (FnApp_sqpt (SOME(a,cnm)) fnc args)
+                         se))
+                c)
+\end{stdrule}
+As per the standard's language, this rule only fires if the type
+returned by the inner function is the same as the type of the function
+enclosing the \texttt{return} statement.  Nor does this rule stop
+\ruleid{allocate-rvrt} from firing.  If the latter happens, an
+unnecessary copy will be performed, but this reflects the standard's
+permission rather than requirement of the optimisation.
+
 \paragraph{Creation of R-Values By Explicitly Calling Constructors}
 \index{explicit type conversion}%
 \cpp{} allows constructors to be called ``as normal functions'' within
@@ -5372,6 +5404,8 @@ accompanying function with arguments of the same type and declared as
 returning an object of the given class type.  When an explicit type
 conversion appears for a class, a call to this accompanying function
 can be substituted.
+
+
 
 \index{class r-values|)}
 

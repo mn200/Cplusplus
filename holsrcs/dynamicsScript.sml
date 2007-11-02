@@ -1373,6 +1373,18 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: ret-pass-rvrt *)
+(!s se fnc fnid ftype thisobj args cnm a params body c.
+     (fnc = FVal fnid ftype thisobj) /\
+     find_best_fnmatch s fnid (MAP valuetype args) (Class cnm) params body /\
+     (HD s.rvstk = SOME (a, cnm))
+   ==>
+     mng (s, ST (Ret (EX (FnApp_sqpt NONE fnc args) se)) c)
+         (s, ST (Ret (EX (FnApp_sqpt (SOME(a,cnm)) fnc args) se)) c)
+)
+
+   /\
+
 (* RULE-ID: return-lvalue *)
 (!a t p se0 se c s.
      is_null_se se0
