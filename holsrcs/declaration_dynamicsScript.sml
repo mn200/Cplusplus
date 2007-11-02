@@ -543,7 +543,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                             (EX
                                (FnApp (ConstructorFVal T F a cnm) args)
                                base_se))],
-              s1))
+              s1 with exprclasses updated_by (CONS ([], s0.allocmap)))
+)
 
    /\
 
@@ -683,7 +684,53 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
        (VDecInitA (Class cnm) (ObjPlace a)
                   (DirectInit (EX (ConstructedVal subp a cnm) se0)),
         s0)
-       ([], s))
+       ([], s)
+)
+
+   /\
+
+(* RULE-ID: decl-parameter-copy-elision *)
+(!cnm nm a s0.
+     T
+   ==>
+     declmng mng
+       (VDecInit (Class cnm) nm
+                 (CopyInit (EX (ConstructedVal F a cnm) base_se)),
+        s0)
+       ([], new_addr_binding nm NONE (a,cnm,[cnm])
+              (new_type_binding nm (Class cnm) s0))
+)
+
+   /\
+
+(* RULE-ID: decl-fncall-copy-elision *)
+(!fnc fnid ftype thisobj s0 args cnm params body a se.
+     (fnc = FVal fnid ftype thisobj) /\
+     find_best_fnmatch s0 fnid (MAP valuetype args)
+                       (Class cnm) params body
+   ==>
+     declmng mng
+       (VDecInitA (Class cnm) (ObjPlace a)
+                  (CopyInit (EX (FnApp_sqpt NONE fnc args) se)),
+        s0)
+       ([VDecInitA (Class cnm) (ObjPlace a)
+                   (CopyInit (EX (FnApp_sqpt (SOME(a,cnm)) fnc
+                                             args)
+                                 se))],
+        s0)
+)
+
+   /\
+
+(* RULE-ID: decl-class-copy-finishes *)
+(!se e a cnm s.
+     is_null_se se /\
+     (e = ConstructedVal F a cnm)
+   ==>
+     declmng mng
+       (VDecInitA (Class cnm) (ObjPlace a) (CopyInit (EX e se)), s)
+       ([], s)
+)
 
 (* TODO: add a rule for performing class based CopyInit updates *)
 `

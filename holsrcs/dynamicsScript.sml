@@ -324,8 +324,10 @@ val realise_destructor_calls_def = Define`
     let (destcalls, escapees) = FOLDR foldthis ([],[]) destroy_these
     in
         (destcalls,
-         s0 with <| blockclasses := [] :: TL s0.blockclasses ;
-                    exprclasses := (escapees, {}) :: s0.exprclasses
+         s0 with <|
+           blockclasses := [] :: TL s0.blockclasses ;
+           exprclasses := hd_update (\ (objs,amap). (escapees ++ objs, amap))
+                                    s0.exprclasses
                  |>)
 `;
 
@@ -365,10 +367,6 @@ val RVR_def = Define`
 `
 
 
-val valuetype_def = Define`
-  (valuetype (ECompVal v t) = t) /\
-  (valuetype (LVal a t p) = static_type (t,p))
-`;
 
 val unamb_public_base_def = Define`
   (* ignore public-ness constraint for the moment (TODO) *)
@@ -1227,14 +1225,17 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: allocate-rvrt *)
 (* allocates space for a function call so that it can return an object r-value *)
-(!s0 fnid ftype thisobj args se0 rtype params body a sz.
+(!s0 fnid ftype thisobj args se0 rtype params body a sz cnm.
      find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body /\
-     class_type (strip_const rtype) /\
+     (strip_const rtype = Class cnm) /\
      malloc s0 rtype a /\
      sizeof T (sizeofmap s0) rtype sz
    ==>
      mng (s0, EX (FnApp_sqpt NONE (FVal fnid ftype thisobj) args) se0)
-         (s0 with allocmap updated_by (UNION) (range_set a sz),
+         (s0 with <| allocmap updated_by (UNION) (range_set a sz) ;
+                     exprclasses updated_by
+                        (hd_update
+                           (\ (objs,amap). ((a,cnm,[cnm]) :: objs, amap))) |>,
           EX (FnApp_sqpt (SOME (a, dest_class (strip_const rtype)))
                          (FVal fnid ftype thisobj)
                          args)

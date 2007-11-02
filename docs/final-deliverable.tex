@@ -575,7 +575,7 @@ Section~\ref{sec:templates}.
 \index{dynamic semantics}
 The final phase of the semantics is execution, or ``dynamics''.  In
 this phase, top-level declarations are executed, resulting in the
-dynamic initialisation of variables, which can in turn result in the
+dynamic initialization of variables, which can in turn result in the
 execution of source-code.  The exact order of evaluation of external
 declarations is allowed to vary
 (see~\cite[\S3.6.2]{cpp-standard-iso14882}), and may or may not
@@ -702,7 +702,7 @@ not only include expressions but must be mutually recursive with other
 syntactic categories: variable and class declarations, ``class
 entries'' (those things that can appear with a \texttt{class}
 declaration), and initializers (which appear in variable declarations
-and explicitly initialise the variable in question).
+and explicitly initialize the variable in question).
 
 \subsection{Bytes \& Memory}
 \label{sec:bytes-memory-states}
@@ -850,7 +850,7 @@ following record type:
    class_envinfo = <|
       (* ironically, the location of the static variables is
          only available dynamically, as classes are
-         initialised *)
+         initialized *)
       statvars : string |-> addr # CPP_ID # CPP_ID list ;
       info     : state_class_info ;
       refs     : string # addr |-> addr # CPP_ID # CPP_ID list
@@ -1377,7 +1377,7 @@ demonstrates that such a goal is impossible, or at least that one
 would have to write a two pass interpreter.  Any reference to the
 figure's \texttt{List} template, perhaps within a function that was
 called at a great stack depth, causes the need to statically
-initialise the global \texttt{node\_count} before the program even
+initialize the global \texttt{node\_count} before the program even
 begins.  A \naive{} interpreter that attempts to execute the program
 source as the source is read in will come unstuck.
 
@@ -1386,7 +1386,7 @@ nothing.  Then it performs its global declarations, and jumps into
 main.  At this point it has already failed to do the right thing.
 Instead, the putative interpreter would have to scan the whole program
 for template applications so that it can generate the appropriate
-global variable initialisations.  This is no better than explicitly
+global variable initializations.  This is no better than explicitly
 pre-compiling templates, so I have adopted an explicit two-phase
 compilation approach.
 
@@ -1735,7 +1735,7 @@ The dynamic semantics updates values of the type \texttt{state} (see
 first four components of the state are sets of addresses.  The
 \texttt{allocmap} and \texttt{initmap} sets are from my C
 model~\cite{Norrish98}, and record which addresses have been allocated
-and initialised, respectively.  The new field \texttt{hallocmap} is
+and initialized, respectively.  The new field \texttt{hallocmap} is
 necessary to allow memory to be allocated on the heap, and for its
 life-span to persist beyond the end of the current block.  The second
 new field, \texttt{constmap} records which memory has been allocated
@@ -1749,7 +1749,7 @@ causes undefined behaviour.)
      allocmap : addr -> bool ;  (* the set of stack-allocated addresses *)
      hallocmap: addr -> bool ;  (* the set of heap-allocated addresses *)
      constmap : addr -> bool ;  (* the set of read-only addresses *)
-     initmap  : addr -> bool ;  (* the set of initialised addresses *)
+     initmap  : addr -> bool ;  (* the set of initialized addresses *)
 
      fnmap    : CPP_ID |-> fn_info ;
                 (* map from function 'names' to type information about
@@ -1977,7 +1977,7 @@ variables.  Thus, in a function such as
 \begin{verbatim}
    int f(C &c) { return c.memfn(); }
 \end{verbatim}
-the variable \texttt{c} is initialised to ``point at'' some existing
+the variable \texttt{c} is initialized to ``point at'' some existing
 variable, and the address maps are set up so that \texttt{c} is indeed
 a perfect alias for some existing l-value.  But, the argument may in
 fact have been a derived class of \texttt{C}, and so \texttt{c}'s
@@ -2610,9 +2610,9 @@ been resolved and the appropriate function will have been selected
 (see Section~\ref{sec:class-values}).  Otherwise, if this is not a
 member function, the value for \texttt{this} will be \texttt{NONE}.
 
-Finally, the last hypothesis sets up the initialisation of the
+Finally, the last hypothesis sets up the initialization of the
 parameters by specifying the value of the variable \texttt{pdecls}.
-Each parameter is a new local variable, copy-initialised by the
+Each parameter is a new local variable, copy-initialized by the
 parameter value.
 
 In the conclusion of the rule, see
@@ -2953,7 +2953,7 @@ parameter, allowing it to recurse back to it) has type
 The ``return'' of a list of new variable declarations allows
 termination to be indicated (by returning the empty list), and also
 allows complicated object constructions, which involve multiple calls
-to initialise sub-objects, done through special forms of variable
+to initialize sub-objects, done through special forms of variable
 declaration.  There is more on the simple forms of \texttt{declmng} in
 Section~\ref{sec:simple-declarations} below.
 
@@ -3071,7 +3071,7 @@ simple forms of declaration: a bare declaration of a variable, such as
 \begin{verbatim}
    int x;
 \end{verbatim}
-or a declaration coupled with an initialisation
+or a declaration coupled with an initialization
 \begin{verbatim}
    int x = 3;
 \end{verbatim}
@@ -3107,8 +3107,8 @@ also recording the type.  The empty list in the second argument to
 \texttt{declmng} signals that no further work needs to be done for
 this declaration.
 
-When a variable is to be initialised, this can occur as a direct
-initialisation:
+When a variable is to be initialized, this can occur as a direct
+initialization:
 \begin{verbatim}
    int x(3);
 \end{verbatim}
@@ -3118,13 +3118,12 @@ or as a copy-initialiation:
 \end{verbatim}
 \index{DirectInit0@\texttt{DirectInit0}}%
 For non-classes this syntactic difference makes no difference in
-behaviour.  The first rule is for the direct initialisation
+behaviour.  The first rule is for the direct initialization
 (\texttt{DirectInit0} form), where the transition is immediately to a
-copy-initialisation:
-\begin{center}
-\begin{minipage}{\textwidth}
-\index{rule (declaration dynamics)!decl-init-start-eval-dnonclass@\texttt{decl-init-start-eval-dnonclass}}
-\begin{alltt}
+copy-initialization:%
+\index{rule (declaration dynamics)!decl-init-start-eval-dnonclass@\texttt{decl-init-start-eval-dnonclass}}%
+%
+\begin{stdrule}
 (* RULE-ID: decl-vdecinit-start-evaluate-direct-nonclass *)
      ~class_type ty \(\land\)
      vdeclare s0 ty name s \(\land\)
@@ -3135,13 +3134,11 @@ copy-initialisation:
      declmng mng
              (VDecInit ty name (DirectInit0 [arg]), s0)
              ([VDecInitA ty loc (CopyInit (EX arg base_se))], s)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \index{VDecInitA@\texttt{VDecInitA}}%
 \index{vdeclare@\texttt{vdeclare}}%
 The transition is to the \texttt{VDecInitA} form, which records where
-the initialisation is to be performed.  The \texttt{vdeclare} relation
+the initialization is to be performed.  The \texttt{vdeclare} relation
 is used, as before, to allocate space for the new object, and
 subsequent steps in the evaluation of the declaration will fill this
 space in.  (In the case of a reference, \texttt{vdeclare} will not
@@ -3151,7 +3148,7 @@ allocate any space, but will record a type for the new name.)
 The rule for the \texttt{CopyInit} form is similar: there is a
 transition to the \texttt{VDecInitA} form and a call to
 \texttt{vdeclare}. (As it happens this rule can be applied for the
-declaration and initialisation of class objects too.)
+declaration and initialization of class objects too.)
 \begin{center}
 \begin{minipage}{\textwidth}
 \index{rule (declaration dynamics)!decl-init-start-eval-copy@\texttt{decl-init-start-eval-copy}}%
@@ -3169,7 +3166,7 @@ declaration and initialisation of class objects too.)
 \end{minipage}
 \end{center}
 
-Once a \texttt{VDecInitA} form has been achieved, the initialising
+Once a \texttt{VDecInitA} form has been achieved, the initializing
 expression can be evaluated.
 \begin{center}
 \begin{minipage}{\textwidth}
@@ -3184,11 +3181,11 @@ expression can be evaluated.
 \end{alltt}
 \end{minipage}
 \end{center}
-Note that the initialisor form \texttt{f} can only be a
-\texttt{DirectInit} when initialising classes.  All non-class objects
+Note that the initializer form \texttt{f} can only be a
+\texttt{DirectInit} when initializing classes.  All non-class objects
 will be a \texttt{CopyInit} form by this point.
 
-When initialising a non-reference, expressions that yield l-values
+When initializing a non-reference, expressions that yield l-values
 must be allowed to undergo the ``l-value to r-value'' conversion:
 \begin{center}
 \begin{minipage}{\textwidth}
@@ -3205,17 +3202,17 @@ must be allowed to undergo the ``l-value to r-value'' conversion:
 \end{minipage}
 \end{center}
 
-\paragraph{Finishing an Initialisation}
-When a non-class, non-reference initialisation is ready, the rule
+\paragraph{Finishing an Initialization}
+When a non-class, non-reference initialization is ready, the rule
 \ruleid{decl-vdecinit-finish} of Figure~\ref{fig:decl-vdecinit-finish}
-will apply.  The value of the initialising expression is first
+will apply.  The value of the initializing expression is first
 converted to be of the appropriate type, and the resulting value
 (\texttt{v'}, a list of bytes), is copied into memory using the
 \texttt{val2mem}\index{val2mem@\texttt{val2mem}} relation.  Note that
-the state's \texttt{initmap} is also initialised in the
+the state's \texttt{initmap} is also initialized in the
 process.  The fact that the location attached to the
 \texttt{VDecInitA} constructor is an \texttt{ObjPlace} ensures that
-the variable being initialised is not a reference.%
+the variable being initialized is not a reference.%
 \index{initmap (state field)@\texttt{initmap} (\texttt{state} field)}%
 \begin{figure}
 \begin{minipage}{\textwidth}
@@ -3236,8 +3233,8 @@ the variable being initialised is not a reference.%
                  ([], s)
 \end{alltt}
 \end{minipage}
-\caption[Finishing Initialisation of a Non-class, Non-reference
-  Variable]{Completing the Initialisation of a Non-class, Non-reference
+\caption[Finishing Initialization of a Non-class, Non-reference
+  Variable]{Completing the Initialization of a Non-class, Non-reference
   Variable}
 \label{fig:decl-vdecinit-finish}
 \end{figure}
@@ -3272,7 +3269,7 @@ the behaviour when \texttt{EThrow} has an argument:
 The variable \texttt{c} represents the continuation that would
 normally convert the result of the statement into a value to be
 inserted into a containing expression tree.  Because thrown values
-can't ever turn into values until they initialise a handler, this $c$
+can't ever turn into values until they initialize a handler, this $c$
 can be anything at all.  Because throw-expressions are of type
 \texttt{void}~(\cite[\S15,p1]{cpp-standard-iso14882}), they will never
 evaluate while a sub-expression of some containing expression.
@@ -3516,7 +3513,7 @@ mask any existing names in scope (no legal \cpp{} program can have
 variable names that include spaces).
 
 If the declared type \texttt{pty} matches the type of the exception
-value, then the exception value copy-initialises the parameter, and
+value, then the exception value copy-initializes the parameter, and
 the handler body is executed.  The constant
 \texttt{exception_parameter_match} checks the match, embodying the
 rules in~\cite[\S15.3, paragraph 3]{cpp-standard-iso14882}.  If there
@@ -3971,7 +3968,7 @@ Figure~\ref{fig:function-call}.%
 \index{rule (dynamic)!function-call@\texttt{function-call}}%
 When a member function is called, the \texttt{FVal} constructor stores
 the address and type of the object that the function is a member of.
-The rule extracts this information to initialise the \texttt{this}
+The rule extracts this information to initialize the \texttt{this}
 value used in the body of the member function.
 
 \paragraph{Field Selection}
@@ -4186,7 +4183,7 @@ distinctive:
 \begin{itemize}
 \item passed as parameters to functions;
 \item returned from functions;
-\item when they are initialised.
+\item when they are initialized.
 \end{itemize}
 
 Otherwise, it is obvious how the existing semantics should treat
@@ -4208,7 +4205,7 @@ interesting situations.
   below: wherever an \clvalue{} constructor (which is for l-values of
   object type) appears, there will need to also be a rule for
   \cfvalue{}, which is for function values.
-\item The semantics doesn't handle initialisation of \texttt{const}
+\item The semantics doesn't handle initialization of \texttt{const}
   references from r-values.
 \end{itemize}
 
@@ -4378,11 +4375,11 @@ The rule for returning a reference \ruleid{return-lvalue} is similar:%
 
 \subsubsection{Declaring References}
 
-When a reference is declared, it must also be initialised, and the
-initialising expression must be an l-value.  But normal
-initialisations need to be able to turn l-values into r-values so
+When a reference is declared, it must also be initialized, and the
+initializing expression must be an l-value.  But normal
+initializations need to be able to turn l-values into r-values so
 there is an ``lvalue-to-rvalue'' rule for variable declarations that
-are accompanied by initialisations (this rule earlier appeared in
+are accompanied by initializations (this rule earlier appeared in
 Section~\ref{sec:simple-declarations}):
 \begin{center}
 \begin{minipage}{\textwidth}
@@ -4400,7 +4397,7 @@ Section~\ref{sec:simple-declarations}):
 \end{center}
 
 A variable declaration of reference type is ready to ``fire'' when its
-initialising expression has reduced to an l-value, and when there are
+initializing expression has reduced to an l-value, and when there are
 no remaining side effects in the side effect record.  At this point,
 the variable address map in the state is updated to point at the
 l-value's address, and the type map is also updated to make the type
@@ -4429,7 +4426,7 @@ for which see Figure~\ref{fig:decl-vdecinit-finish-ref}.
 \end{alltt}
   \end{minipage}
 \end{center}
-\caption{How References are Initialised}
+\caption{How References are Initialized}
 \label{fig:decl-vdecinit-finish-ref}
 \end{figure}
 
@@ -4723,8 +4720,8 @@ with the variable space is filled in with some value.
 
 The \cpp{} model is similar.  All new objects (but not references)
 must be associated with some new space.  Then they may or may not be
-initialised.  Additionally, in \cpp{}, an object that is only
-declared, and which does not appear to be initialised, will actually
+initialized.  Additionally, in \cpp{}, an object that is only
+declared, and which does not appear to be initialized, will actually
 have its default constructor called.
 
 The abstract syntax supporting this is all defined in
@@ -4855,7 +4852,7 @@ Note how the name \texttt{v} has disappeared, subsumed into the
 allocated address at \texttt{a}.
 
 The \texttt{ObjPlace} constructor is used to distinguish this from the
-situation where a reference is being initialised.  The \texttt{EX}
+situation where a reference is being initialized.  The \texttt{EX}
 constructor specifies that the current form is an expression (as
 opposed to the statement that will be in this position once the
 constructor body is entered).  The \texttt{base_se} value is the empty
@@ -4927,7 +4924,7 @@ Parameter passing is just like variable declaration\footnote{This does
   auxiliary relations effectively duplicating what occurred in
   variable declaration.}, and so the model's existing treatment of
 declarations can be re-used to set up the binding between formal names
-and actual values.  Note that the expressions that initialise the
+and actual values.  Note that the expressions that initialize the
 parameters have already been fully evaluated, so that there will be no
 expression evaluation done when the declarations come to be evaluated
 (except for any class construction that may be called for).
@@ -4940,10 +4937,10 @@ derived classes if any virtual functions are called in the constructor
 bodies.
 
 The fourth hypothesis constructs a \texttt{cpfx} of declaration calls
-to initialise class members and bases.  This is all done in the
+to initialize class members and bases.  This is all done in the
 complicated function \texttt{construct_ctor_pfx} (defined in
 \texttt{dynamicsScript}).  This constructs a sequence of declarations
-to initialise the non-static members of the new class, and the class's
+to initialize the non-static members of the new class, and the class's
 immediate bases.  The mem-initializers are consulted to see what
 initializers should be provided.  (If a mem-initializer is not
 provided for a given member or base, then that object will be value-
@@ -4952,7 +4949,7 @@ or default-initialized; see~\cite[\S12.6.2, paragraphs
 
 For example, in Figure~\ref{fig:mem-inits}, before class \texttt{C}'s
 constructor body is even entered, the parameters \texttt{cptr} and
-\texttt{i} need to be declared and initialised with actual values.
+\texttt{i} need to be declared and initialized with actual values.
 Subsequently, all of \texttt{C}'s immediate bases (just \texttt{B} in
 this case) need to be constructed, followed by its members
 (\texttt{ptr} and \texttt{sz}).  Note that while the parameters need
@@ -5032,11 +5029,11 @@ of class type, then these would be constructed with their
 \texttt{mdp} and \texttt{subobj} flags both set to true.
 
 When the constructor for the base class \texttt{B} comes to be called,
-it will in turn initialise its members.  The constructor for
+it will in turn initialize its members.  The constructor for
 \texttt{B} is called with an argument (\texttt{cptr[i]}) that needs to
 be evaluated in the context where the parameters are in scope, so it
 is clear that the declarations for the parameters must come before the
-base and member initialisations.
+base and member initializations.
 \index{rule (dynamic)!constructor-function-call@\texttt{constructor-function-call}|)}
 
 \paragraph{Object Destruction}
@@ -5203,13 +5200,13 @@ The first saving grace is that class r-values can only occur as a
 result of function calls.  There is no way of creating a class r-value
 within a normal expression except by calling a function that returns a
 value of the given type.\footnote{Compound literals can be used to
-  initialise POD classes, but these are not general r-values as found
+  initialize POD classes, but these are not general r-values as found
   inside arbitrary expressions.  Moreover, this model doesn't handle
-  that form of initialisation in any case.}  Once created, class
+  that form of initialization in any case.}  Once created, class
 r-values can be
 \begin{itemize}
 \item passed as parameters to other functions;
-\item used to initialise newly declared variables; and
+\item used to initialize newly declared variables; and
 \item returned from functions
 \end{itemize}
 It is also possible for an r-value to be the ``result'' of an
@@ -5227,9 +5224,10 @@ incident on its creation).
 The rest of this section describes the modelling of five modes of being:
 creation, the three bullet-points above, and eventual destruction.
 
-\subsubsection{R-Value Creation}
+\subsubsection{R-Value Creation and Function Return}
 \label{sec:r-value-creation}
 
+\index{class r-values!creation and return of|(}
 R-values must live in memory, so it is important to know how the
 memory they consume comes to be allocated.  Thankfully, we know that
 all r-values are created by function calls, so the model can arrange
@@ -5256,7 +5254,13 @@ Figure~\ref{fig:allocate-rvrt}.
                              (FVal fnid ftype thisobj)
                              args)
                  se0)
-         (s0 with allocmap updated_by (UNION) (range_set a sz),
+         (s0 with <|
+            allocmap updated_by (UNION) (range_set a sz) ;
+            exprclasses updated_by
+              (hd_update
+                (\(\lambda\)(objs,amap). ((a,cnm,[cnm]) :: objs,
+                amap)))
+          |>,
           EX (FnApp_sqpt (SOME
                            (a, dest_class (strip_const rtype)))
                          (FVal fnid ftype thisobj)
@@ -5277,6 +5281,12 @@ space is allocated for a value of the right size, and this type and
 the space's address is recorded in the first argument slot.
 Naturally, if the return type of the function call is not a class
 type, then the first argument slot will remain \texttt{NONE}.
+
+The resulting state uses the \texttt{exprclasses} field %
+\index{exprclasses (state field)@\texttt{exprclasses} (\texttt{state} field)}%
+of the state to record that a new object is being constructed.  This
+information will then allow the created temporary to have its
+destructor called as appropriate.
 
 We have already seen how
 \ruleid{function-call}~(p\pageref{fig:function-call}) subsequently
@@ -5322,7 +5332,7 @@ to do so.  This is done in the rule
 \begin{stdrule}
 (* RULE-ID: ret-construct-rvalue *)
      (HD s.rvstk = SOME (a,cnm)) \(\land\)
-     \(\neg\)(e0 = ConstructedVal T a cnm)
+     \(\neg\)(e0 = ConstructedVal F a cnm)
    \(\Rightarrow\)
      mng (s, ST (Ret (EX e0 se0)) (RVC c se))
          (s, ST (Ret (EX (FnApp (ConstructorFVal T F a cnm) [e0])
@@ -5353,7 +5363,7 @@ When the call to the constructor returns it will be with a
 \begin{stdrule}
 (* RULE-ID: ret-class-rvalue *)
      (HD s.rvstk = SOME (a,cnm)) \(\land\)
-     (e0 = ConstructedVal T a cnm)
+     (e0 = ConstructedVal F a cnm)
    \(\Rightarrow\)
      mng (s, ST (Ret (EX e0 se0)) (RVC c se))
          (s with rvstk updated_by TL, EX (c e0) se)
@@ -5361,11 +5371,11 @@ When the call to the constructor returns it will be with a
 
 \paragraph{Eliding Unnecessary Copy Constructions} In the standard's
 \S12.8, paragraph 15, it is said
-\begin{quote}when a temporary class
-  object that has not been bound to a reference would be copied to a
-  class object with the same cv-unqualified type, the copy operation
-  can be omitted by constructing the temporary object directly into
-  the target of the omitted copy
+\begin{quote}when a temporary class object that has not been bound to
+  a reference (12.2) would be copied to a class object with the same
+  cv-unqualified type, the copy operation can be omitted by
+  constructing the temporary object directly into the target of the
+  omitted copy
 \end{quote}
 Such a situation arises when the expression attached to a return
 statement is itself a call to a function returning an object of the
@@ -5415,9 +5425,103 @@ accompanying function with arguments of the same type and declared as
 returning an object of the given class type.  When an explicit type
 conversion appears for a class, a call to this accompanying function
 can be substituted.
+\index{class r-values!creation and return of|)}
 
-\subsubsection{R-Values as Parameters and Initialisors}
+\subsubsection{R-Values as Parameters and Initializers}
 \label{sec:rvalues-as-parameters}
+
+\index{class r-values!as parameters|(}
+\index{class r-values!as initializers|(}
+We have already seen that when a value is passed as a parameter, that
+is treated identically to the copy-initialization of an automatic
+variable with the parameter's name.  Thus, if we have
+\begin{stdrule}
+   int f(C parameter) \{ \(\mathit{body}\) \}
+\end{stdrule}
+and this function \texttt{f} is called
+\begin{stdrule}
+   ... f(expression) ...
+\end{stdrule}
+then this becomes the equivalent of
+\begin{stdrule}
+   \{
+     C parameter = expression;
+     \{
+       \(\mathit{body}\)
+     \}
+   \}
+\end{stdrule}
+Thus, we can handle class r-value parameters as initializers.  The
+only difference between the two scenarios is that the initializing
+expression will already be fully evaluated when it has been created as
+a parameter (because function arguments must be fully evaluated before
+execution of a function can begin).
+
+If a class r-value has been passed as a parameter, the abstract syntax
+will look like:
+\begin{stdrule}
+   VDecInit ty nm (CopyInit (EX (ConstructedVal F a cnm) se))
+\end{stdrule}
+If the \texttt{ty} is equal to \texttt{Class~cnm}, then the space
+already allocated for the r-value can be used for the local variable.
+This behaviour is captured in rule
+\ruleid{decl-parameter-copy-elision}:%
+\index{rule (declaration dynamics)!decl-parameter-copy-elision@\texttt{decl-parameter-copy-elision}}%
+\begin{stdrule}
+(* RULE-ID: decl-parameter-copy-elision *)
+     T
+   \(\Rightarrow\)
+     declmng mng
+       (VDecInit (Class cnm) nm
+                 (CopyInit (EX (ConstructedVal F a cnm)
+                               base_se)),
+        s0)
+       ([], new_addr_binding nm NONE (a,cnm,[cnm])
+              (new_type_binding nm (Class cnm) s0))
+\end{stdrule}\index{class r-values!as parameters|)}
+
+There is another scenario where unnecessary copying can be avoided: if
+the local variable has had space allocated for it, and the expression
+to be evaluated is about to perform a function call returning an
+r-value of the same type, then this function call can construct its
+result in the space allocated for the local variable, and
+\ruleid{allocate-rvrt} can again be avoided.  The rule for this
+behaviour is \ruleid{decl-fncall-copy-elision}:
+\index{rule (declaration dynamics)!decl-fncall-copy-elision@\texttt{decl-fncall-copy-elision}}
+\begin{stdrule}
+(* RULE-ID: decl-fncall-copy-elision *)
+     (fnc = FVal fnid ftype thisobj) \(\land\)
+     find_best_fnmatch s0 fnid (MAP valuetype args)
+                       (Class cnm) params body
+   \(\Rightarrow\)
+     declmng mng
+       (VDecInitA (Class cnm) (ObjPlace a)
+                  (CopyInit (EX (FnApp_sqpt NONE fnc args) se)),
+        s0)
+       ([VDecInitA (Class cnm) (ObjPlace a)
+                   (CopyInit (EX (FnApp_sqpt (SOME(a,cnm)) fnc
+                                             args)
+                                 se))],
+        s0)
+\end{stdrule}
+If it hasn't been short-circuited by
+\ruleid{decl-parameter-copy-elision}, a class copy-initialization
+eventually finishes when the expression under the \texttt{CopyInit}
+constructor is a \texttt{ConstructedVal} with the same address as was
+allocated.  This is rule \ruleid{decl-class-copy-finishes}:%
+\index{rule (declaration dynamics)!decl-class-copy-finishes@\texttt{decl-class-copy-finishes}}%
+\begin{stdrule}
+(* RULE-ID: decl-class-copy-finishes *)
+     is_null_se se \(\land\)
+     (e = ConstructedVal F a cnm)
+   \(\Rightarrow\)
+     declmng mng
+       (VDecInitA (Class cnm) (ObjPlace a) (CopyInit (EX e se)), s)
+       ([], s)
+\end{stdrule}
+
+\index{class r-values!as initializers|)}
+
 
 \index{class r-values|)}
 

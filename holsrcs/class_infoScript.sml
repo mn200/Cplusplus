@@ -128,6 +128,12 @@ val static_type_def = Define`
   static_type (ty, pth) = if NULL pth then ty else Class (LAST pth)
 `;
 
+val valuetype_def = Define`
+  (valuetype (ECompVal v t) = t) /\
+  (valuetype (LVal a t p) = static_type (t,p))
+`;
+
+
 (* has any constructor, which seems to be the sense of what 8.5.1 p1 is
    saying *)
 val has_user_constructor_def = Define`
