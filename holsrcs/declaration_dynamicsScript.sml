@@ -321,9 +321,9 @@ val initA_constructor_call_def = Define`
 `;
 
 val initA_member_call_def = Define`
-  initA_member_call parent_addr nm ty addr args =
+  initA_member_call parent_addr alvl nm ty addr args =
     case strip_const ty of
-       Class cnm -> initA_constructor_call T T cnm addr args
+       Class cnm -> initA_constructor_call T alvl cnm addr args
     || Ref ty0 -> VDecInitA ty
                             (RefPlace (SOME parent_addr) nm)
                             (CopyInit (EX (HD args) base_se))
@@ -429,40 +429,40 @@ val (default_init_rules, default_init_ind, default_init_cases) = Hol_reln`
 *)
 (* TODO: handle unions *)
 val (value_init_rules, value_init_ind, value_init_cases) = Hol_reln`
-   (!s mdp subp cnm addr.
+   (!s mdp alvl cnm addr.
      has_user_constructor s cnm
    ==>
-     value_init s mdp subp (Class cnm) addr
-                [initA_constructor_call mdp subp cnm addr []])
+     value_init s mdp alvl (Class cnm) addr
+                [initA_constructor_call mdp alvl cnm addr []])
 
    /\
 
-   (!s mdp subp cnm a sub_inits.
+   (!s mdp alvl cnm a sub_inits.
      ~has_user_constructor s cnm /\
      listRel (\(cc,off) l.
-                value_init s (nsdp cc) T (cc_type cc) (a + off) l)
+                value_init s (nsdp cc) alvl (cc_type cc) (a + off) l)
              (init_order_offsets s mdp cnm)
              sub_inits
    ==>
-     value_init s mdp subp (Class cnm) a (FLAT sub_inits))
+     value_init s mdp alvl (Class cnm) a (FLAT sub_inits))
 
    /\
 
-   (!s mdp subp ty n addr sz sub_inits.
+   (!s mdp alvl ty n addr sz sub_inits.
      sizeof T (sizeofmap s) ty sz /\
-     listRel (\n l. value_init s T subp ty (addr + n * sz) l)
+     listRel (\n l. value_init s T alvl ty (addr + n * sz) l)
              (GENLIST I n)
              sub_inits
    ==>
-     value_init s mdp subp (Array ty n) addr (FLAT sub_inits))
+     value_init s mdp alvl (Array ty n) addr (FLAT sub_inits))
 
    /\
 
-   (!s mdp subp a ty inits.
+   (!s mdp alvl a ty inits.
      (!ty0. ~(ty = Class ty0)) /\ ~array_type ty /\
      zero_init s mdp ty a inits
    ==>
-     value_init s mdp subp ty a inits)
+     value_init s mdp alvl ty a inits)
 `;
 
 val _ = print "Defining (utility) declaration relation\n"
@@ -507,8 +507,10 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                       (strip_array ty)
                       (ObjPlace (a + n * sz))
                       (DirectInit
-                         (EX (FnApp (ConstructorFVal T F (a + n * sz) cnm)
-                                       [])
+                         (EX (FnApp (ConstructorFVal T 
+                                       (LENGTH s0.stack)
+                                       (a + n * sz) cnm)
+                                    [])
                                 base_se)))
                (array_size ty))
    ==>
@@ -531,19 +533,19 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (* the subobjp flag of the ConstructorFVal is F because this is a top-level
    declaration of a object. *)
 (!s0 ty cnm name args s1 a pth.
-     (ty = Class cnm) /\
-     vdeclare s0 (Class cnm) name s1 /\
+     (strip_const ty = Class cnm) /\
+     vdeclare s0 ty name s1 /\
      (SOME (a,pth) = lookup_addr s1 name)
    ==>
      declmng mng
              (VDecInit ty name (DirectInit0 args), s0)
              ([VDecInitA ty
-                         (ObjPlace a)
-                         (DirectInit
-                            (EX
-                               (FnApp (ConstructorFVal T F a cnm) args)
-                               base_se))],
-              s1 with exprclasses updated_by (CONS ([], s0.allocmap)))
+                 (ObjPlace a)
+                 (DirectInit
+                    (EX (FnApp (ConstructorFVal T (LENGTH s1.stack) a cnm) 
+                               args)
+                        base_se))],
+              s1)
 )
 
    /\
@@ -568,11 +570,12 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      declmng mng
              (VDecInitA ty (ObjPlace a) (CopyInit (EX arg se)), s0)
              ([VDecInitA ty
-                         (ObjPlace a)
-                         (DirectInit
-                          (EX
-                             (FnApp (ConstructorFVal T F a cnm) [arg])
-                             se))],
+                  (ObjPlace a)
+                  (DirectInit
+                  (EX
+                     (FnApp (ConstructorFVal T (LENGTH s0.stack) a cnm) 
+                            [arg])
+                     se))],
               s0))
 
    /\
@@ -671,31 +674,25 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      * no need to update memory, or init_map as this will have all been
        done by the constructor
 *)
-(!cnm subp subobjs rest a se0 s0 s construct amap.
-     is_null_se se0 /\
-     (construct = if subp then SubObjConstruct else NormalConstruct) /\
-     (s0.exprclasses = (subobjs,amap) :: rest) /\
-     (s = s0 with <| blockclasses updated_by
-                        stackenv_extendl (MAP construct
-                                              (subobjs ++ [(a,cnm,[cnm])])) ;
-                     exprclasses := rest |>)
+(!cnm alvl a se0 s0.
+     is_null_se se0 
    ==>
      declmng mng
        (VDecInitA (Class cnm) (ObjPlace a)
-                  (DirectInit (EX (ConstructedVal subp a cnm) se0)),
+                  (DirectInit (EX (ConstructedVal alvl a cnm) se0)),
         s0)
-       ([], s)
+       ([], s0)
 )
 
    /\
 
 (* RULE-ID: decl-parameter-copy-elision *)
-(!cnm nm a s0.
+(!cnm nm a alvl s0.
      T
    ==>
      declmng mng
        (VDecInit (Class cnm) nm
-                 (CopyInit (EX (ConstructedVal F a cnm) base_se)),
+                 (CopyInit (EX (ConstructedVal alvl a cnm) base_se)),
         s0)
        ([], new_addr_binding nm NONE (a,cnm,[cnm])
               (new_type_binding nm (Class cnm) s0))
@@ -723,9 +720,9 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    /\
 
 (* RULE-ID: decl-class-copy-finishes *)
-(!se e a cnm s.
+(!se e a alvl cnm s.
      is_null_se se /\
-     (e = ConstructedVal F a cnm)
+     (e = ConstructedVal alvl a cnm)
    ==>
      declmng mng
        (VDecInitA (Class cnm) (ObjPlace a) (CopyInit (EX e se)), s)

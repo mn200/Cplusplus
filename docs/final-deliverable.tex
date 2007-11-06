@@ -278,15 +278,18 @@ The finite map is a form of function where the domain is guaranteed to
 be finite.  The type of finite maps from $\sigma$ to $\tau$ is written
 \texttt{:$\sigma$~|->~$\tau$}.  The HOL syntax for the application of
 a finite map \texttt{fm} to an element \texttt{x}, is \texttt{fm~'~x},
-with an apostrophe separating function and argument.  (Note that the
-result of the application is unspecified if the argument is not in the
-map's domain.)
+with an apostrophe separating function and argument. %
+\index{' (finite map application)@\texttt{'} (finite map application)}%
+(Note that the result of the application is unspecified if the
+argument is not in the map's domain.)
 
 The empty finite map (one with no domain) is \texttt{FEMPTY}, and
 updating a map \texttt{fm} so that its value at \texttt{k} is
 \texttt{v} (ignoring whether or not \texttt{fm} may have already had a
-value for \texttt{k}), is written \texttt{fm |+ (k,v)}.  The function
-\texttt{FDOM} returns the domain of a finite map.\index{FDOM@\texttt{FDOM}}
+value for \texttt{k}), is written \texttt{fm |+ (k,v)}. %
+\index{!|+ (finite map update)@\texttt{!|+} (finite map update)}%
+The function \texttt{FDOM} returns the domain of a finite
+map.\index{FDOM@\texttt{FDOM}}
 
 \paragraph{Records}\index{records (in HOL)}
 \index{:=@\texttt{:=} (record update)}%

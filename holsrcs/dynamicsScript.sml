@@ -246,7 +246,7 @@ val find_destructor_info_def = Define`
    necessary.
 *)
 val construct_ctor_pfx_def = Define`
-  construct_ctor_pfx s mdp a cnm (mem_inits : mem_initializer list) =
+  construct_ctor_pfx s mdp alvl a cnm (mem_inits : mem_initializer list) =
     let allccs = constituent_offsets s mdp cnm in
     let direct_bases = get_direct_bases s cnm in
     let virt_bases = get_virtual_bases s cnm in
@@ -260,27 +260,26 @@ val construct_ctor_pfx_def = Define`
          (* F T records, no, not most-derived, yes, a subobject *)
          case lookup nm of
            NONE -> (* 12.6.2 p4 - default initialisation *)
-             [initA_constructor_call F T nm (a + a') []]
+             [initA_constructor_call F alvl nm (a + a') []]
         || SOME (nm',NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
-             (@inits. value_init s F T (Class nm) (a + a') inits)
+             (@inits. value_init s F alvl (Class nm) (a + a') inits)
         || SOME (nm',SOME args) -> (* direct initialisation, with args as
                                       initialiser *)
-             [initA_constructor_call F T nm (a + a') args] in
+             [initA_constructor_call F alvl nm (a + a') args] in
     let bases = FLAT (MAP (\bnm. do_bases [cnm; bnm]) direct_bases) in
     let virtuals = if mdp then FLAT (MAP (\vnm. do_bases [vnm]) virt_bases)
                    else [] in
     let do_nsd (nsdname, nsdty) =
       let (c,a') = THE (FINDL (\ (c, off). c = NSD nsdname nsdty) allccs)
       in
-          (* T T pairs below record: yes, most-derived, yes, a subobject *)
           case lookup (Base nsdname) of
              NONE -> (* 12.6.2 p4 - default initialisation *)
-               (@inits. default_init s T T nsdty (a + a') inits)
+               (@inits. default_init s T alvl nsdty (a + a') inits)
           || SOME(nm', NONE) -> (* 12.6.2 p3 1st case - value initialisation *)
-               (@inits. value_init s T T nsdty (a + a') inits)
+               (@inits. value_init s T alvl nsdty (a + a') inits)
           || SOME(nm', SOME args) -> (* direct initialisation, with args as
                                         initialiser *)
-               [initA_member_call a (mk_member cnm (IDName nsdname))
+               [initA_member_call a alvl (mk_member cnm (IDName nsdname))
                                   nsdty (a + a') args]
     in
     let nsds = FLAT (MAP do_nsd data_fields)
@@ -295,17 +294,54 @@ val bad_cast_name_def = Define`
   bad_cast_name = IDConstant T [IDName "std"] (IDName "bad_cast")
 `;
 
+(* example:
+     C : B1, B2 : A1, A2
+  
+   constructor for C calls constructor for B1 and B2, latter of which calls 
+   constructor for A1 and A2.  Say C's a-level is 4.  
+   If we're in constructor for A2 (having successfully completed construction 
+   of A1), and it looks like
+
+     A2::A2(argsA2) mem-inits { localdecs; ... }
+
+   and something raises an exception in the ..., then the objects in
+   localdecs, mem-inits and argsA2 will need to be destroyed first in
+   that order.  Then, we pop out to the B2 constructor.  Assume this
+   looks like:
+
+     B2::B2(argsB2) : A1(params1), A2(params2) { .... } 
+
+   at this point, A1 should be killed (_not_, argsB2).  Then the args 
+   should be killed followed by popping out to C's constructor, which 
+   looks like
+
+     C::C(argsC) : B1(paramsB1), B2(paramsB2) { ... }
+
+   then we should kill B1, followed by argsC.  And that will be the extent
+   of the killing that's necessary.  
+
+   This will be implemented by putting all objects into potentially
+   two positions within the stack, one at its a-level, and two at its
+   "actual level", i.e., that block level where it was allocated "for
+   real".  This is then used if an exception is raised.
+ *)
+
+
 val realise_destructor_calls_def = Define`
   (* parameters
       exp           : T iff we are leaving a block because of an exception
       s0            : starting state, where there is a non-empty list
-                        of things to destroy as the first element of
-                        s.blockclasses
+                      of things to destroy as the (addr#CPP_ID) list 
+                      component of s.stack.  If this is not an exceptional 
+                      exit, then objects that appear twice in the stack
+                      are not destroyed at this level.  If this is, the
+                      object gets destroyed (and also pulled out of the
+                      stack at its a-level).
      outputs
       destcals      : list of statements with explicit destructor
                       calls for those objects that need destroying
-      s             : resulting state, with subobj constructs added
-                      to new scope of exprclasses underneath current one
+      s             : resulting state, with updated stack lists (but with
+                      the top element still un-popped). 
   *)
   realise_destructor_calls exp s0 =
     let destwrap = if exp then
@@ -314,8 +350,10 @@ val realise_destructor_calls_def = Define`
                    else (\s. s) in
     let cloc2call (a, cnm, pth) =
           destwrap (Standalone (EX (DestructorCall a cnm) base_se)) in
-    let destroy_these = HD s0.blockclasses in
-    let foldthis c (here, escape) =
+    let (ign1,ign2,ign3,destroy_these) = HD s0.stack in
+    let findobj_in_finfo e (ign1,ign2,ign3,dests) = FINDL ((=) e) dests in
+    let foldthis (a,cid) (here, escape) =
+        case FINDL (\ (ign1,ign2,ign3,dests). ~(
           case c of
              NormalConstruct cloc -> (cloc2call cloc :: here, escape)
           || SubObjConstruct cloc -> if exp then

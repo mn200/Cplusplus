@@ -82,17 +82,17 @@ val _ = Hol_datatype
                designator position.  They don't need to encode any information
                about types and object identities because this is all
                elsewhere.  The arguments are mdp (T iff constructing a
-               most-derived object), subobjp (T iff constructing a sub-object
-               within another object, NOT the inverse of mdp as members will
-               be mdp and subobjp), the address where the object is
+               most-derived object), subobjp (the allocation level of the 
+               object), the address where the object is
                being constructed, and the name of the class. *)
-         | ConstructorFVal of bool => bool => addr => CPP_ID
+         | ConstructorFVal of bool => num => addr => CPP_ID
 
             (* this is the value "returned" from a constructor call, or a function
                returning an object r-value.  The
-               boolean is true iff the class is a sub-object.
+               number records the allocation level of the object, so that on
+               return it can be added to the appropriate level of the stack.
             *)
-         | ConstructedVal of bool => addr => CPP_ID
+         | ConstructedVal of num => addr => CPP_ID
 
              (* bool is mdp flag *)
          | DestructorCall of addr => CPP_ID

@@ -659,19 +659,17 @@ val let_thms = prove(
     (LET f10    <|allocmap := am; hallocmap := hm; initmap := im; 
                   fnmap := fnm; fnencode := fem; fndecode := fdm;
                  genv := genv ;
-                 env := env; stack := stk; thisvalue := this;
-                 blockclasses := bcs; exprclasses := ecs|> =
+                 env := env; stack := stk; thisvalue := this |> =
        let am0 = am in let hm0 = hm in let fnm0 = fnm in let fem0 = fem in
        let fdm0 = fdm in
        let genv0 = genv in let env0 = env in let im0 = im in let stk0 = stk in
-       let this0 = this in let bcs0 = bcs in let ecs0 = ecs in
+       let this0 = this in
          f10  <|allocmap := am0; hallocmap := hm0; initmap := im0; 
                 fnmap := fnm0;
                   fnencode := fem0; fndecode := fdm0;
                  genv := genv0 ;
                  env := env0; stack := stk0;
-                 thisvalue := this0;
-                 blockclasses := bcs0; exprclasses := ecs0|>) /\
+                 thisvalue := this0 |>) /\
     (LET f11 NONE = f11 NONE) /\
     (LET f11 (SOME x) = let x0 = x in f11 (SOME x0)) /\
     (LET f12 ({}:'a -> bool) = f12 {}) /\

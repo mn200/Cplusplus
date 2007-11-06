@@ -68,8 +68,10 @@ val _ = Hol_datatype `
      locmap   : addr -> byte ;
                 (* memory.  Domain might also be ( void * ) words *)
 
-     stack    : (environment # CExpr option # (addr->bool)) list ;
-                (* stack of (environment, this, and allocation info)
+     stack    : (environment # CExpr option # 
+                 (addr->bool) # (addr#CPP_ID) list) list ;
+                (* stack of (environment, this, allocation map, and objects
+                   that need to have their destructors called)
                    Updated as blocks are entered and left *)
      rvstk    : (addr # CPP_ID) option list ;
                 (* optional return addresses for object r-values). *)
@@ -77,15 +79,6 @@ val _ = Hol_datatype `
      thisvalue: CExpr option ;
                 (* the value (i.e., this will always be an ECompVal
                    with a pointer value) of the this expression *)
-
-     blockclasses : constructed list list ;
-     exprclasses  : (construction_locn list # (addr -> bool)) list
-       (* Stacks of objects that need to have destructors
-          called.  First field is for automatic objects that have
-          block-delimited lifetimes.  Second is for temporary
-          objects that need to be destroyed at the end of the
-          full enclosing expression *)
-     ;
 
      current_exns : CExpr list
                     (* stack of exceptions that might be subjected
@@ -107,10 +100,9 @@ val initial_state_def = Define`
 
                      stack := [];
                      rvstk := [];
-                     thisvalue := NONE ;
+                     thisvalue := NONE ; 
 
-                     blockclasses := [];
-                     exprclasses := [] |>
+                     current_exns := [] |>
 `
 
 (* function that updates memory with a value *)
