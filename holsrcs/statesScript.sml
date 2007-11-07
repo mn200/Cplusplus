@@ -68,13 +68,15 @@ val _ = Hol_datatype `
      locmap   : addr -> byte ;
                 (* memory.  Domain might also be ( void * ) words *)
 
-     stack    : (environment # CExpr option # 
+     stack    : (environment # CExpr option #
                  (addr->bool) # (addr#CPP_ID) list) list ;
                 (* stack of (environment, this, allocation map, and objects
                    that need to have their destructors called)
                    Updated as blocks are entered and left *)
-     rvstk    : (addr # CPP_ID) option list ;
-                (* optional return addresses for object r-values). *)
+     rvstk    : (num # addr # CPP_ID) option list ;
+                (* optional return addresses for object r-values, also
+                   identifying the allocation level for the r-value along with
+                   the type of the object being constructed. *)
 
      thisvalue: CExpr option ;
                 (* the value (i.e., this will always be an ECompVal
@@ -100,7 +102,7 @@ val initial_state_def = Define`
 
                      stack := [];
                      rvstk := [];
-                     thisvalue := NONE ; 
+                     thisvalue := NONE ;
 
                      current_exns := [] |>
 `

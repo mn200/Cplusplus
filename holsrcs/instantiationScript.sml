@@ -1253,10 +1253,12 @@ val expr_inst_def = Define`
      OP2CMB New (type_inst sigma ty) (exprlop_inst sigma args_opt)) /\
   (expr_inst sigma (FnApp_sqpt rvrt e args) =
      case rvrt of
-        NONE -> OP2CMB (FnApp_sqpt NONE) (expr_inst sigma e) (exprl_inst sigma args)
-     || SOME (a,cid) -> (case cppID_inst sigma cid of
-                            NONE -> NONE
-                         || SOME cid' -> OP2CMB (FnApp_sqpt (SOME (a,cid')))
+        NONE -> OP2CMB (FnApp_sqpt NONE) (expr_inst sigma e)
+                       (exprl_inst sigma args)
+     || SOME (alvl,a,cid) ->
+            (case cppID_inst sigma cid of
+                NONE -> NONE
+             || SOME cid' -> OP2CMB (FnApp_sqpt (SOME (alvl,a,cid')))
                                                 (expr_inst sigma e)
                                                 (exprl_inst sigma args))) /\
   (expr_inst sigma (LVal ad ty nms) =

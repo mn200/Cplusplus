@@ -296,10 +296,10 @@ val bad_cast_name_def = Define`
 
 (* example:
      C : B1, B2 : A1, A2
-  
-   constructor for C calls constructor for B1 and B2, latter of which calls 
-   constructor for A1 and A2.  Say C's a-level is 4.  
-   If we're in constructor for A2 (having successfully completed construction 
+
+   constructor for C calls constructor for B1 and B2, latter of which calls
+   constructor for A1 and A2.  Say C's a-level is 4.
+   If we're in constructor for A2 (having successfully completed construction
    of A1), and it looks like
 
      A2::A2(argsA2) mem-inits { localdecs; ... }
@@ -309,16 +309,16 @@ val bad_cast_name_def = Define`
    that order.  Then, we pop out to the B2 constructor.  Assume this
    looks like:
 
-     B2::B2(argsB2) : A1(params1), A2(params2) { .... } 
+     B2::B2(argsB2) : A1(params1), A2(params2) { .... }
 
-   at this point, A1 should be killed (_not_, argsB2).  Then the args 
-   should be killed followed by popping out to C's constructor, which 
+   at this point, A1 should be killed (_not_, argsB2).  Then the args
+   should be killed followed by popping out to C's constructor, which
    looks like
 
      C::C(argsC) : B1(paramsB1), B2(paramsB2) { ... }
 
    then we should kill B1, followed by argsC.  And that will be the extent
-   of the killing that's necessary.  
+   of the killing that's necessary.
 
    This will be implemented by putting all objects into potentially
    two positions within the stack, one at its a-level, and two at its
@@ -327,12 +327,29 @@ val bad_cast_name_def = Define`
  *)
 
 
+val exceptional_destructors_def = Define`
+  exceptional_destructors (h :: t) =
+    let dest_these = sel4 h in
+    let t' = MAP (upd4 (FILTER (\e. ~MEM e dest_these))) t
+  in
+    (dest_these,upd4 (K []) h :: t')
+`
+
+val normal_destructors_def = Define`
+  normal_destructors (h :: t) =
+    let d0 = sel4 h in
+    let d = FILTER (\e. ~EXISTS (EXISTS ((=) e) o sel4) t) d0
+  in
+    (d,upd4 (K []) h::t)
+`;
+
+
 val realise_destructor_calls_def = Define`
   (* parameters
       exp           : T iff we are leaving a block because of an exception
       s0            : starting state, where there is a non-empty list
-                      of things to destroy as the (addr#CPP_ID) list 
-                      component of s.stack.  If this is not an exceptional 
+                      of things to destroy as the (addr#CPP_ID) list
+                      component of s.stack.  If this is not an exceptional
                       exit, then objects that appear twice in the stack
                       are not destroyed at this level.  If this is, the
                       object gets destroyed (and also pulled out of the
@@ -341,32 +358,19 @@ val realise_destructor_calls_def = Define`
       destcals      : list of statements with explicit destructor
                       calls for those objects that need destroying
       s             : resulting state, with updated stack lists (but with
-                      the top element still un-popped). 
+                      the top element still un-popped).
   *)
   realise_destructor_calls exp s0 =
     let destwrap = if exp then
                      (\s. Catch s [(NONE, Standalone
                                             (EX ^callterminate base_se))])
                    else (\s. s) in
-    let cloc2call (a, cnm, pth) =
+    let cloc2call (a, cnm) =
           destwrap (Standalone (EX (DestructorCall a cnm) base_se)) in
-    let (ign1,ign2,ign3,destroy_these) = HD s0.stack in
-    let findobj_in_finfo e (ign1,ign2,ign3,dests) = FINDL ((=) e) dests in
-    let foldthis (a,cid) (here, escape) =
-        case FINDL (\ (ign1,ign2,ign3,dests). ~(
-          case c of
-             NormalConstruct cloc -> (cloc2call cloc :: here, escape)
-          || SubObjConstruct cloc -> if exp then
-                                       (cloc2call cloc :: here, escape)
-                                     else (here, cloc :: escape) in
-    let (destcalls, escapees) = FOLDR foldthis ([],[]) destroy_these
+    let (dests,stk') = if exp then exceptional_destructors s0.stack
+                       else normal_destructors s0.stack
     in
-        (destcalls,
-         s0 with <|
-           blockclasses := [] :: TL s0.blockclasses ;
-           exprclasses := hd_update (\ (objs,amap). (escapees ++ objs, amap))
-                                    s0.exprclasses
-                 |>)
+        (MAP cloc2call dests, s0 with stack := stk')
 `;
 
 
@@ -1208,10 +1212,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: new-simple-class *)
 (* TODO: handle other forms in 5.3.4 para 15 *)
-(* The T F parameters to the ConstructorFVal constructor indicate
+(* The T 0 parameters to the ConstructorFVal constructor indicate
     1. the object produced is most-derived, and
-    2. it is not a sub-object (neither base, nor member) of some other
-       object
+    2. it is not stack-allocated
 *)
 (!cnm s0 se s ty a sz args ptrval.
      (Class cnm = strip_const ty) /\
@@ -1224,7 +1227,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (SOME ptrval = ptr_encode s0 a ty [cnm])
    ==>
      mng (s0, EX (New ty (SOME args)) se)
-         (s, EX (CommaSep (FnApp (ConstructorFVal T F a cnm) args)
+         (s, EX (CommaSep (FnApp (ConstructorFVal T 0 a cnm) args)
                           (ECompVal ptrval (Ptr ty)))
                 se)
 )
@@ -1262,7 +1265,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: allocate-rvrt *)
-(* allocates space for a function call so that it can return an object r-value *)
+(* allocates space for a function call so that it can return an object r-value
+*)
 (!s0 fnid ftype thisobj args se0 rtype params body a sz cnm.
      find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body /\
      (strip_const rtype = Class cnm) /\
@@ -1270,11 +1274,9 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      sizeof T (sizeofmap s0) rtype sz
    ==>
      mng (s0, EX (FnApp_sqpt NONE (FVal fnid ftype thisobj) args) se0)
-         (s0 with <| allocmap updated_by (UNION) (range_set a sz) ;
-                     exprclasses updated_by
-                        (hd_update
-                           (\ (objs,amap). ((a,cnm,[cnm]) :: objs, amap))) |>,
-          EX (FnApp_sqpt (SOME (a, dest_class (strip_const rtype)))
+         (s0 with allocmap updated_by (UNION) (range_set a sz),
+          EX (FnApp_sqpt (SOME (LENGTH s0.stack, a,
+                                dest_class (strip_const rtype)))
                          (FVal fnid ftype thisobj)
                          args)
              se0)
@@ -1285,7 +1287,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 (* RULE-ID: function-call *)
 (* FVal's third argument determines whether or not this is a global function *)
 (* TODO: handle return type casting *)
-(!ftype rvrt args pdecls params se s0 fnid rtype body thisobj thisval thisaddr.
+(!ftype rvrt args pdecls params se s0 fnid rtype body thisobj
+  thisval thisaddr.
      (find_best_fnmatch s0 fnid (MAP valuetype args) rtype params body) /\
      ((rvrt = NONE) ==> ~class_type (strip_const rtype)) /\
      (case thisobj of
@@ -1299,11 +1302,12 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                    (ZIP (params, args)))
    ==>
      mng (s0, EX (FnApp_sqpt rvrt (FVal fnid ftype thisobj) args) se)
-         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue, s0.allocmap));
-                     rvstk updated_by (CONS rvrt);
-                     thisvalue := thisval;
-                     blockclasses updated_by stackenv_newscope ;
-                     env := empty_env |>,
+         (s0 with <|
+            stack updated_by (CONS (s0.env, s0.thisvalue, s0.allocmap, []));
+            rvstk updated_by (CONS rvrt);
+            thisvalue := thisval;
+            env := empty_env
+          |>,
           ST (Block T pdecls [body]) (return_cont se rtype))
 )
 
@@ -1317,7 +1321,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
                                            (CopyInit (EX a base_se)))
                    (ZIP (params, args))) /\
      (SOME this = ptr_encode s0 a (Class cnm) [cnm]) /\
-     (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits) /\
+     (cpfx = construct_ctor_pfx s0 mdp (LENGTH s0.stack) a cnm mem_inits) /\
      (newstmt =
         if is_catch body then
           let (bod,handlers) = dest_catch body
@@ -1330,9 +1334,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    ==>
      mng (s0, EX (FnApp_sqpt NONE (ConstructorFVal mdp subp a cnm) args) se0)
          (s0 with <| thisvalue := SOME (ECompVal this (Ptr (Class cnm))) ;
-                     stack updated_by (CONS (s0.env, s0.thisvalue, s0.allocmap)) ;
+                     stack updated_by (CONS (s0.env, s0.thisvalue, s0.allocmap, [])) ;
                      rvstk updated_by (CONS NONE) ;
-                     blockclasses updated_by stackenv_newscope ;
                      env := empty_env |>,
           ST newstmt (RVC (\e. ConstructedVal subp a cnm) se0))
 )
@@ -1390,36 +1393,45 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: ret-construct-rvalue *)
-(!s a' cnm c e0 se0 se.
-     (HD s.rvstk = SOME (a',cnm)) /\
-     ~(e0 = ConstructedVal T a' cnm)
+(!s alvl a' cnm c e0 se0 se.
+     (HD s.rvstk = SOME (alvl, a',cnm)) /\
+     ~(e0 = ConstructedVal alvl a' cnm)
    ==>
      mng (s, ST (Ret (EX e0 se0)) (RVC c se))
-         (s, ST (Ret (EX (FnApp (ConstructorFVal T F a' cnm) [e0]) se0))
+         (s, ST (Ret (EX (FnApp (ConstructorFVal T alvl a' cnm) [e0]) se0))
                 (RVC c se))
 )
 
    /\
 
 (* RULE-ID: ret-class-rvalue *)
-(!s e0 se0 se c a cnm.
-     (HD s.rvstk = SOME (a,cnm)) /\
-     (e0 = ConstructedVal T a cnm)
+(* if alvl is zero, indicating a heap-allocated object, then the stack will not
+   get updated at all.  Though the guard of the if has an undeterminable value
+   in that case, in both branches the expression is provably equal to stk. *)
+(!s e0 se0 se c alvl a cnm.
+     (HD s.rvstk = SOME (alvl,a,cnm)) /\
+     (e0 = ConstructedVal alvl a cnm)
    ==>
      mng (s, ST (Ret (EX e0 se0)) (RVC c se))
-         (s with rvstk updated_by TL, EX (c e0) se)
+         (s with <|
+            rvstk updated_by TL;
+            stack updated_by
+             (\stk. if MEM (a,cnm) (sel4 (REV_EL alvl stk)) then stk
+                    else update_nth_rev alvl (upd4 (CONS (a,cnm))) stk)
+          |>,
+          EX (c e0) se)
 )
 
    /\
 
 (* RULE-ID: ret-pass-rvrt *)
-(!s se fnc fnid ftype thisobj args cnm a params body c.
+(!s se fnc fnid ftype thisobj args cnm alvl a params body c.
      (fnc = FVal fnid ftype thisobj) /\
      find_best_fnmatch s fnid (MAP valuetype args) (Class cnm) params body /\
-     (HD s.rvstk = SOME (a, cnm))
+     (HD s.rvstk = SOME (alvl, a, cnm))
    ==>
      mng (s, ST (Ret (EX (FnApp_sqpt NONE fnc args) se)) c)
-         (s, ST (Ret (EX (FnApp_sqpt (SOME(a,cnm)) fnc args) se)) c)
+         (s, ST (Ret (EX (FnApp_sqpt (SOME(alvl, a,cnm)) fnc args) se)) c)
 )
 
    /\
@@ -1749,9 +1761,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      T
    ==>
      mng (s, ST (Block F vds sts) c)
-         (s with <| stack updated_by
-                      (CONS (s.env, s.thisvalue, s.allocmap));
-                    blockclasses updated_by stackenv_newscope |>,
+         (s with stack updated_by (CONS (s.env, s.thisvalue, s.allocmap, [])),
           ST (Block T vds sts) c)
 )
 
@@ -1759,8 +1769,8 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: block-exit-destructors-to-call *)
 (* normally constructed objects at this level are always destroyed here *)
-(!s0 s c st  bcs destroy_these destcalls.
-     (s0.blockclasses = destroy_these :: bcs) /\ ~(destroy_these = []) /\
+(!s0 s c st destroy_these destcalls.
+     (sel4 (HD s0.stack) = destroy_these) /\ ~(destroy_these = []) /\
      final_stmt st c /\
      ((destcalls, s) = realise_destructor_calls (exception_stmt st) s0)
    ==>
@@ -1778,28 +1788,25 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      find_destructor_info s0 cnm body
    ==>
      mng (s0, EX (DestructorCall a cnm) se0)
-         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue,s0.allocmap));
+         (s0 with <| stack updated_by (CONS (s0.env, s0.thisvalue,s0.allocmap,[]));
                      rvstk updated_by (CONS NONE) ;
                      env := empty_env;
-                     thisvalue := SOME (ECompVal this (Ptr (Class cnm)));
-                     blockclasses updated_by stackenv_newscope |>,
+                     thisvalue := SOME (ECompVal this (Ptr (Class cnm))) |>,
           ST (Block T [] [body]) (return_cont se0 Void))
 )
 
    /\
 
 (* RULE-ID: block-exit *)
-(!st s c env stk' this amap bcs.
-     (s.stack = (env,this,amap) :: stk') /\
-     final_stmt st c /\
-     (s.blockclasses = []::bcs)
+(!st s c env stk' this amap.
+     (s.stack = (env,this,amap,[]) :: stk') /\
+     final_stmt st c
    ==>
      mng (s, ST (Block T [] [st]) c)
          (s with <| stack := stk';
                     allocmap := amap;
                     env := env;
-                    thisvalue := this;
-                    blockclasses := bcs |>,
+                    thisvalue := this |>,
           ST st c)
 )
 

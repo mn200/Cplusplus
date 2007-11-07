@@ -61,11 +61,16 @@ val _ = Hol_datatype
          (* these are "fake expression constructors" *)
 
 
-            (* this represents the point where all arguments and function
-               have been evaluated, it optionally includes the address of space
-               allocated for a class of type name CPP_ID.  This space can be filled
-               in by the return value of a function that returns a class value  *)
-         | FnApp_sqpt of (addr # CPP_ID) option => CExpr => CExpr list
+            (* this represents the point where all arguments and
+               function have been evaluated, it optionally includes
+               the address of space allocated for a class of type name
+               CPP_ID.  This space can be filled in by the return
+               value of a function that returns a class value of the
+               given type; the allocation level of the space is also
+               recorded so that a destructor can be called at the
+               right point. *)
+
+         | FnApp_sqpt of (num # addr # CPP_ID) option => CExpr => CExpr list
 
             (* this is an object lvalue, the string list is the sub-object
                path a la Wasserab et al for values of class type.  Elsewhere
@@ -82,7 +87,7 @@ val _ = Hol_datatype
                designator position.  They don't need to encode any information
                about types and object identities because this is all
                elsewhere.  The arguments are mdp (T iff constructing a
-               most-derived object), subobjp (the allocation level of the 
+               most-derived object), subobjp (the allocation level of the
                object), the address where the object is
                being constructed, and the name of the class. *)
          | ConstructorFVal of bool => num => addr => CPP_ID

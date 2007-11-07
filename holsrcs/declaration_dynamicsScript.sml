@@ -22,6 +22,14 @@ val _ = new_theory "declaration_dynamics";
 
 val _ = set_trace "inddef strict" 1
 
+val upd4_def = Define`
+  upd4 f (a,b,c,d) = (a,b,c,f d)
+`;
+val sel4_def = Define`
+  sel4 (a,b,c,d) = d
+`;
+
+
 val lval2rval_def = Define`
   lval2rval (s0,e0,se0) (s,e,se) =
        (s0 = s) /\
@@ -507,7 +515,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                       (strip_array ty)
                       (ObjPlace (a + n * sz))
                       (DirectInit
-                         (EX (FnApp (ConstructorFVal T 
+                         (EX (FnApp (ConstructorFVal T
                                        (LENGTH s0.stack)
                                        (a + n * sz) cnm)
                                     [])
@@ -542,7 +550,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
              ([VDecInitA ty
                  (ObjPlace a)
                  (DirectInit
-                    (EX (FnApp (ConstructorFVal T (LENGTH s1.stack) a cnm) 
+                    (EX (FnApp (ConstructorFVal T (LENGTH s1.stack) a cnm)
                                args)
                         base_se))],
               s1)
@@ -573,7 +581,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                   (ObjPlace a)
                   (DirectInit
                   (EX
-                     (FnApp (ConstructorFVal T (LENGTH s0.stack) a cnm) 
+                     (FnApp (ConstructorFVal T (LENGTH s0.stack) a cnm)
                             [arg])
                      se))],
               s0))
@@ -624,7 +632,8 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 (!ty loc e0 se0 s0 s e se f.
      lval2rval (s0,e0,se0) (s,e,se) /\
      ~ref_type ty /\
-     ((f = CopyInit) \/ (f = DirectInit))
+     ((f = CopyInit) /\ ~class_type (strip_const ty) \/
+      (f = DirectInit))
    ==>
      declmng mng (VDecInitA ty loc (f (EX e0 se0)), s0)
                  ([VDecInitA ty loc (f (EX e se))], s)
@@ -675,13 +684,16 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
        done by the constructor
 *)
 (!cnm alvl a se0 s0.
-     is_null_se se0 
+     is_null_se se0
    ==>
      declmng mng
        (VDecInitA (Class cnm) (ObjPlace a)
                   (DirectInit (EX (ConstructedVal alvl a cnm) se0)),
         s0)
-       ([], s0)
+       ([],
+        s0 with stack updated_by
+          (\stk. if MEM (a,cnm) (sel4 (REV_EL alvl stk)) then stk
+                 else update_nth_rev alvl (upd4 (CONS (a,cnm))) stk))
 )
 
    /\
@@ -711,8 +723,10 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
                   (CopyInit (EX (FnApp_sqpt NONE fnc args) se)),
         s0)
        ([VDecInitA (Class cnm) (ObjPlace a)
-                   (CopyInit (EX (FnApp_sqpt (SOME(a,cnm)) fnc
-                                             args)
+                   (CopyInit (EX (FnApp_sqpt
+                                      (SOME(LENGTH s0.stack,a,cnm))
+                                      fnc
+                                      args)
                                  se))],
         s0)
 )
@@ -726,10 +740,32 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
        (VDecInitA (Class cnm) (ObjPlace a) (CopyInit (EX e se)), s)
-       ([], s)
+       ([],
+        s with stack updated_by
+          (\stk. if MEM (a,cnm) (sel4 (REV_EL alvl stk)) then stk
+                 else update_nth_rev alvl (upd4 (CONS (a,cnm))) stk))
 )
 
-(* TODO: add a rule for performing class based CopyInit updates *)
+   /\
+
+(* RULE-ID: decl-class-copy-call-copy *)
+(!s se e a cnm.
+     final_value (EX e se) /\
+     (!alvl. ~(e = ConstructedVal alvl a cnm))
+   ==>
+     declmng mng
+       (VDecInitA (Class cnm) (ObjPlace a) (CopyInit (EX e se)), s)
+       ([VDecInitA (Class cnm) (ObjPlace a)
+                   (CopyInit (EX (FnApp_sqpt NONE
+                                    (ConstructorFVal T
+                                       (LENGTH s.stack)
+                                       a
+                                       cnm)
+                                    [e])
+                                 base_se))],
+        s)
+)
+
 `
 
 val declmng_MONO = store_thm(

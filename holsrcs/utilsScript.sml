@@ -106,6 +106,46 @@ val mapPartial_SOME = store_thm(
 val _ = export_rewrites ["mapPartial_SOME"]
 
 (* ----------------------------------------------------------------------
+    update_nth : num -> ('a -> 'a) -> 'a list -> 'a list
+
+     Update the nth element of a list using the provided function.  If
+     the list isn't long enough to have an nth element, leave it as
+     is.  Count defining "nth" starts at 1 (!) with the left-most
+     element.
+
+    update_nth_rev : num -> ('a -> 'a) -> 'a list -> 'a list
+
+     The same, but the first element is the right-most (last) element
+     of the list.
+
+    REV_EL : num -> 'a list -> 'a
+
+     Return the nth element of the list, starting from 1 and counting from
+     the back of the list.
+   ---------------------------------------------------------------------- *)
+
+val update_nth_def = Define`
+  (update_nth n f [] = []) /\
+  (update_nth n f (h::t) = if n = (1:num) then f h :: t
+                           else h :: update_nth (n - 1) f t)
+`;
+val _ = export_rewrites ["update_nth_def"]
+
+val update_nth_unchanged = store_thm(
+  "update_nth_unchanged",
+  ``!l n. (n = 0) \/ LENGTH l < n ==> (update_nth n f l = l)``,
+  Induct_on `l` THEN SRW_TAC [ARITH_ss][] THEN SRW_TAC [ARITH_ss][]);
+
+val update_nth_rev_def = Define`
+  update_nth_rev n f l = update_nth (LENGTH l + 1 - n) f l
+`;
+
+val REV_EL_def = Define`
+  REV_EL n l = if n > LENGTH l then EL n l
+               else EL (LENGTH l - n) l
+`;
+
+(* ----------------------------------------------------------------------
     EVERYi : (num -> 'a -> bool) -> 'a list -> bool
 
     checks that every element of a list satisfies a predicate, but where

@@ -330,13 +330,13 @@ languages.  They are defined in a style that resembles
 \texttt{datatype} declarations in functional languages such as Haskell
 or SML.  For example, the definition of the type for a small language
 of arithmetic expressions might be:
-\begin{alltt}
+\begin{stdrule}
    ArithExp = Number of int
             | Variable of string
             | Plus of ArithExp # ArithExp
             | Times of ArithExp # ArithExp
             | FnCall of string # ArithExp list
-\end{alltt}
+\end{stdrule}
 In HOL's data type definitions, the string to the left of the
 \texttt{=} (\texttt{ArithExp} here) is the name of the new type.
 After the equals sign, there is then a list of different possible
@@ -1752,7 +1752,7 @@ causes undefined behaviour.)
      allocmap : addr -> bool ;  (* the set of stack-allocated addresses *)
      hallocmap: addr -> bool ;  (* the set of heap-allocated addresses *)
      constmap : addr -> bool ;  (* the set of read-only addresses *)
-     initmap  : addr -> bool ;  (* the set of initialized addresses *)
+     initmap  : addr -> bool ;  (* the set of initialised addresses *)
 
      fnmap    : CPP_ID |-> fn_info ;
                 (* map from function 'names' to type information about
@@ -1769,24 +1769,19 @@ causes undefined behaviour.)
      locmap   : addr -> byte ;
                 (* memory.  Domain might also be ( void * ) words *)
 
-     stack    : (environment # CExpr option # (addr->bool)) list ;
-                (* stack of environment, this and allocation info.
+     stack    : (environment # CExpr option #
+                 (addr->bool) # (addr#CPP_ID) list) list ;
+                (* stack of (environment, this, allocation map, and objects
+                   that need to have their destructors called)
                    Updated as blocks are entered and left *)
-     rvstk    : (addr # CPP_ID) option list ;
-                (* optional return addresses for object r-values). *)
+     rvstk    : (num # addr # CPP_ID) option list ;
+                (* optional return addresses for object r-values, also
+                   identifying the allocation level for the r-value along with
+                   the type of the object being constructed. *)
 
      thisvalue: CExpr option ;
                 (* the value (i.e., this will always be an ECompVal
                    with a pointer value) of the this expression *)
-
-     blockclasses : constructed list list ;
-     exprclasses  : (construction_locn list # (addr->bool)) list
-       (* the stack of objects that need to have destructors
-          called.  First field is for automatic objects that have
-          block-delimited lifetimes.  Second is for temporary
-          objects that need to be destroyed at the end of the
-          full enclosing expression *)
-     ;
 
      current_exns : CExpr list
                     (* stack of exceptions that might be subjected
@@ -2577,10 +2572,9 @@ constructors are set up a little differently, see
    \(\Rightarrow\)
      mng (s0, EX (FnApp_sqpt rvrt (FVal fnid ftype thisobj) args) se)
          (s0 with <| stack updated_by
-                        (CONS (s0.env, s0.thisvalue, s0.allocmap));
+                        (CONS (s0.env, s0.thisvalue, s0.allocmap, []));
                      rvstk updated_by (CONS rvrt);
                      thisvalue := thisval;
-                     blockclasses updated_by stackenv_newscope ;
                      env := empty_env |>,
           ST (Block T pdecls [body]) (return_cont se rtype))
 \end{stdrule}
@@ -2901,51 +2895,39 @@ the constant \texttt{Block}, with type
 \end{verbatim}
 The initial boolean field is used to record whether or not a block has
 been entered.  It starts as false (\texttt{F}).  The rule for entering
-a block is
-\begin{center}
-\begin{minipage}{\textwidth}
-\index{rule (dynamic)!block-entry@\texttt{block-entry}}
-\begin{alltt}
+a block is%
+\index{rule (dynamic)!block-entry@\texttt{block-entry}}%
+\begin{stdrule}
 (* RULE-ID: block-entry *)
      T
    \(\Rightarrow\)
      mng (s, ST (Block F vds sts) c)
-         (s with <| stack updated_by
-                      (CONS (s.env, s.thisvalue, s.allocmap));
-                    blockclasses updated_by
-                      stackenv_newscope ;
-                    exprclasses updated_by
-                      stackenv_newscope |>,
+         (s with stack updated_by
+                       (CONS (s.env, s.thisvalue, s.allocmap, [])),
           ST (Block T vds sts) c)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \index{stack (state field)@\texttt{stack} (\texttt{state} field)}%
 \index{env (state field)@\texttt{env} (\texttt{state} field)}%
-The \texttt{blockclasses} and \texttt{exprclasses} fields are to do
-with pending destructor calls, and are further explained in
-Section~\ref{sec:exceptions}.  The field \texttt{stack} is a stack of
-local environments, coupled with a stack of values for the
-\texttt{this} pointer.  When a block is entered, the old value for
-the environment needs to be stored so that it can be restored on block
-exit.  Recall that the field \texttt{env} stores all of the
-information about \emph{local} entities.  Information on non-local
-entities is all recorded in the \texttt{genv} field.
+The field \texttt{stack} is a stack of local environments, a value for
+the \texttt{this} pointer, a value recording the allocated memory map,
+and a list of class-objects that have been allocated at this
+allocation level, and will need destroying later.  When a block is
+entered, the old value for the environment needs to be stored so that
+it can be restored on block exit.  Recall that the field \texttt{env}
+stores all of the information about \emph{local} entities.
+Information on non-local entities is all recorded in the \texttt{genv}
+field.
 
 After a block is entered, its variable declarations must be executed.
 This is handled by the rule \ruleid{block-declmng}:
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!block-declmng@\texttt{block-declmng}}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: block-declmng *)
      declmng mng (d0, s0) (ds, s)
    \(\Rightarrow\)
      mng (s0, ST (Block T (d0 :: vds) sts) c)
          (s, ST (Block T (ds ++ vds) sts) c)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \index{declmng relation@\texttt{declmng} relation}%
 The auxiliary \texttt{declmng} (which takes \texttt{mng} as a
 parameter, allowing it to recurse back to it) has type
@@ -2998,11 +2980,9 @@ evaluate, then the \texttt{EmptyStmt} can be discarded:
 \index{exceptions}
 Alternatively, if the head statement is an exception or interruption
 form, and it is followed by other statements, then it causes all
-following statements to disappear:
-\begin{center}
-\begin{minipage}{\textwidth}
-\index{rule (dynamic)!block-interrupted@\texttt{block-interrupted}}
-\begin{alltt}
+following statements to disappear:%
+\index{rule (dynamic)!block-interrupted@\texttt{block-interrupted}}%
+\begin{stdrule}
 (* RULE-ID: block-interrupted *)
      final_stmt exstmt c \(\land\)
      \(\neg\)(exstmt = EmptyStmt) \(\land\)
@@ -3010,42 +2990,31 @@ following statements to disappear:
    \(\Rightarrow\)
      mng (s, ST (Block T [] (exstmt::sts)) c)
          (s, ST (Block T [] [exstmt]) c)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 
 Then, when a final statement is the only thing remaining in a block,
 the block itself can exit, clearing its local stack frame in the
 environment, and propagating the final statement upwards.  This gives
 us \ruleid{block-exit}, in Figure~\ref{fig:block-exit}.
 \begin{figure}
-\begin{center}
-\begin{minipage}{\textwidth}
 \index{rule (dynamic)!block-exit@\texttt{block-exit}}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: block-exit *)
-     (s.stack = (env,this,amap) :: stk') \(\land\)
+     (s.stack = (env,this,amap,[]) :: stk') \(\land\)
      final_stmt st c \(\land\)
-     (s.blockclasses = []::bcs) \(\land\)
-     (s.exprclasses = []::ecs)
    \(\Rightarrow\)
      mng (s, ST (Block T [] [st]) c)
          (s with <| stack := stk';
                     allocmap := amap;
                     env := env;
-                    thisvalue := this;
-                    blockclasses := bcs;
-                    exprclasses := ecs |>,
+                    thisvalue := this |>,
           ST st c)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \caption{Exiting a block}
 \label{fig:block-exit}
 \end{figure}
-\index{blockclasses (state field)@\texttt{blockclasses} (\texttt{state} field)}%
-By requiring that the \texttt{blockclasses} and \texttt{exprclasses}
-components of the state be empty at their heads, we require that all
+By requiring that the last component of the 4-tuple at the head of the
+\texttt{stack} component of the state be empty, we require that all
 local objects have had their destructors called (for more on this, see
 Section~\ref{sec:object-lifetimes}).  If this condition is met, the
 various stacks can be popped, and the final statement lifted up a
@@ -3151,11 +3120,9 @@ allocate any space, but will record a type for the new name.)
 The rule for the \texttt{CopyInit} form is similar: there is a
 transition to the \texttt{VDecInitA} form and a call to
 \texttt{vdeclare}. (As it happens this rule can be applied for the
-declaration and initialization of class objects too.)
-\begin{center}
-\begin{minipage}{\textwidth}
+declaration and initialization of class objects too.)%
 \index{rule (declaration dynamics)!decl-init-start-eval-copy@\texttt{decl-init-start-eval-copy}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: decl-init-start-eval-copy *)
      vdeclare s0 ty name s \(\land\)
      (SOME (a,pth) = lookup_addr s name) \(\land\)
@@ -3165,45 +3132,39 @@ declaration and initialization of class objects too.)
      declmng mng
              (VDecInit ty name (CopyInit arg), s0)
              ([VDecInitA ty loc (CopyInit arg)], s)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 
 Once a \texttt{VDecInitA} form has been achieved, the initializing
-expression can be evaluated.
-\begin{center}
-\begin{minipage}{\textwidth}
+expression can be evaluated.%
 \index{rule (declaration dynamics)!decl-vdecinit-evaluation@\texttt{decl-vdecinit-evaluation}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: decl-vdecinit-evaluation *)
      mng (s0, exte) (s, exte') \(\land\)
      ((f = CopyInit) \(\lor\) (f = DirectInit))
    \(\Rightarrow\)
      declmng mng (VDecInitA ty loc (f exte), s0)
                  ([VDecInitA ty loc (f exte')], s)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 Note that the initializer form \texttt{f} can only be a
 \texttt{DirectInit} when initializing classes.  All non-class objects
 will be a \texttt{CopyInit} form by this point.
 
 When initializing a non-reference, expressions that yield l-values
-must be allowed to undergo the ``l-value to r-value'' conversion:
-\begin{center}
-\begin{minipage}{\textwidth}
+must be allowed to undergo the ``l-value to r-value'' conversion:%
 \index{rule (declaration dynamics)!decl-vdecinit-lval2rval@\texttt{decl-vdecinit-lval2rval}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: decl-vdecinit-lval2rval *)
      lval2rval (s0,e0,se0) (s,e,se) \(\land\)
      \(\neg\)ref_type ty \(\land\)
-     ((f = CopyInit) \(\lor\) (f = DirectInit))
+     ((f = CopyInit) \(\land\) \(\neg\)class_type (strip_const ty) \(\lor\)
+      (f = DirectInit))
    \(\Rightarrow\)
      declmng mng (VDecInitA ty loc (f (EX e0 se0)), s0)
                  ([VDecInitA ty loc (f (EX e se))], s)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
+The extra condition on the \texttt{CopyInit} case reflects the fact
+that there may be a copy-constructor for the class type that requires a
+reference type as a parameter.
 
 \paragraph{Finishing an Initialization}
 When a non-class, non-reference initialization is ready, the rule
@@ -3218,10 +3179,9 @@ process.  The fact that the location attached to the
 the variable being initialized is not a reference.%
 \index{initmap (state field)@\texttt{initmap} (\texttt{state} field)}%
 \begin{figure}
-\begin{minipage}{\textwidth}
 \index{rule (declaration dynamics)!decl-vdecinit-finish@\texttt{decl-vdecinit-finish}}%
 \index{nonclass_conversion@\texttt{nonclass_conversion}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: decl-vdecinit-finish *)
      nonclass_conversion s0 (v,ty) (v',dty) \(\land\)
      is_null_se se \(\land\)
@@ -3234,8 +3194,7 @@ the variable being initialized is not a reference.%
                             (ObjPlace a)
                             (f (EX (ECompVal v ty) se)), s0)
                  ([], s)
-\end{alltt}
-\end{minipage}
+\end{stdrule}
 \caption[Finishing Initialization of a Non-class, Non-reference
   Variable]{Completing the Initialization of a Non-class, Non-reference
   Variable}
@@ -3687,13 +3646,21 @@ result of a call to this constructor.  One is the parameter
 \texttt{b1} and \texttt{b2} should live on, unless $\mathit{body}$ or
 $e$ cause an exception to be raised.
 
-To get this situation to work in the model, the state's
-\texttt{blockclasses} field has to record two sorts of object
-construction (which are to be unwound later), sub-object creation and
-normal object creation.  When a block exits normally, sub-object
-destructors are not called, but instead delayed so that they can be
-recorded as having the same lifetime as the enclosing object.  For
-more on this, see Section~\ref{sec:object-lifetimes}.
+To get this situation to work in the model, the state's \texttt{stack}
+field records object creations \emph{twice}.  All object creations are
+associated with a particular allocation level or depth of the
+\texttt{stack}.  One creation is recorded at the top of the stack, and
+the other is recorded at the (lower) level where the enclosing object
+is being created.  If an exception is being propagated out of a block,
+the destructor is called for objects when they first appear
+(higher/later in the stack).  Otherwise, objects that have creations
+recorded deeper in the stack (which will happen if they are
+sub-objects), don't get their destructors called until that level is
+topmost.
+
+For more on this, see Section~\ref{sec:object-lifetimes}, and the
+definition of \texttt{realise_destructor_calls} in
+\HOLfile{dynamics}.
 \index{exceptions|)}
 
 \subsection{Basic Object-Orientation}
@@ -4383,21 +4350,18 @@ initializing expression must be an l-value.  But normal
 initializations need to be able to turn l-values into r-values so
 there is an ``lvalue-to-rvalue'' rule for variable declarations that
 are accompanied by initializations (this rule earlier appeared in
-Section~\ref{sec:simple-declarations}):
-\begin{center}
-\begin{minipage}{\textwidth}
+Section~\ref{sec:simple-declarations}):%
 \index{rule (declaration dynamics)!decl-vdecinit-lval2rval@\texttt{decl-vdecinit-lval2rval}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: decl-vdecinit-lval2rval *)
      lval2rval (s0,e0,se0) (s,e,se) \(\land\)
      \(\neg\)ref_type ty \(\land\)
-     ((f = CopyInit) \(\lor\) (f = DirectInit))
+     ((f = CopyInit) \(\land\) \(\neg\)class_type (strip_const ty) \(\lor\)
+      (f = DirectInit))
    \(\Rightarrow\)
      declmng mng (VDecInitA ty loc (f (EX e0 se0)), s0)
                  ([VDecInitA ty loc (f (EX e se))], s)
-\end{alltt}
-  \end{minipage}
-\end{center}
+\end{stdrule}
 
 A variable declaration of reference type is ready to ``fire'' when its
 initializing expression has reduced to an l-value, and when there are
@@ -4797,12 +4761,12 @@ entered.
 
 The other form of initializer is constructed by the function
 \texttt{CopyInit}.  This corresponds to the syntax
-\begin{verbatim}
-{
+\begin{stdrule}
+\{
   type varname = expression;
   ...
-}
-\end{verbatim}
+\}
+\end{stdrule}
 which is a
 copy-initialization~\cite[\emph{ibid}]{cpp-standard-iso14882}.  When
 the type of the new object is not a class, there is no difference
@@ -4829,30 +4793,33 @@ This takes four parameters:
 \begin{itemize}
 \item a boolean indicating whether or not the constructor is being
   called for a most-derived object or not;
-\item a boolean indicating whether or not the constructor is being
-  called for a sub-object or not;
+\item a natural number recording the allocation level of the
+  creation.  This allocation level is the same for the class and any
+  of its sub-classes, and is a count from the \emph{bottom} of the
+  stack;
 \item the address of the space which the constructor is to operate
   over; and
 \item the name of the class that is being constructed
 \end{itemize}
 So, if a declaration is made of the form
-\begin{verbatim}
-{
+\begin{stdrule}
+\{
    class v(x);
-}
-\end{verbatim}
+\}
+\end{stdrule}
 then, once sufficient space is allocated for the new object \texttt{v}
 (at address \texttt{a}, say), the abstract syntax will look like
-\begin{alltt}
+\begin{stdrule}
    VDecInitA (Class (Base "class"))
              (ObjPlace a)
              (DirectInit
-                (EX (FnApp (ConstructorFVal T F a (Base "class"))
+                (EX (FnApp (ConstructorFVal T n a (Base "class"))
                            [Var "x"])
                     base_se))
-\end{alltt}
-Note how the name \texttt{v} has disappeared, subsumed into the
-allocated address at \texttt{a}.
+\end{stdrule}
+where the number \texttt{n} records the allocation level for this
+creation.  Note how the name \texttt{v} has disappeared, subsumed into
+the allocated address at \texttt{a}.
 
 The \texttt{ObjPlace} constructor is used to distinguish this from the
 situation where a reference is being initialized.  The \texttt{EX}
@@ -4876,7 +4843,8 @@ Figure~\ref{fig:constructor-function-call}.
                                     (CopyInit (EX a base_se)))
                    (ZIP (params, args))) \(\land\)
      (SOME this = ptr_encode s0 a (Class cnm) [cnm]) \(\land\)
-     (cpfx = construct_ctor_pfx s0 mdp a cnm mem_inits) \(\land\)
+     (cpfx = construct_ctor_pfx s0 mdp (LENGTH s0.stack) a
+                                cnm mem_inits) \(\land\)
      (newstmt =
         if is_catch body then
           let (bod,handlers) = dest_catch body
@@ -4890,13 +4858,13 @@ Figure~\ref{fig:constructor-function-call}.
    \(\Rightarrow\)
      mng (s0, EX (FnApp_sqpt (ConstructorFVal mdp subp a cnm)
                              args) se0)
-         (s0 with <| thisvalue :=
-                       SOME (ECompVal this (Ptr (Class cnm)));
-                     stack updated_by
-                       (CONS (s0.env, s0.thisvalue));
-                     rvstk updated_by (CONS NONE);
-                     blockclasses updated_by stackenv_newscope;
-                     env := empty_env |>,
+         (s0 with <|
+           thisvalue := SOME (ECompVal this (Ptr (Class cnm)));
+           stack updated_by
+                 (CONS (s0.env, s0.thisvalue, s0.allocmap, []));
+           rvstk updated_by (CONS NONE);
+           env := empty_env
+          |>,
           ST newstmt (RVC (\(\lambda\)e. ConstructedVal subp a cnm)
                           se0))
 \end{stdrule}
@@ -4996,14 +4964,14 @@ of the members (given as \texttt{Boff}, \texttt{ptroff} and
 \texttt{szoff} in the figure.
 
 \begin{figure}[hbtp]
-\begin{verbatim}
+\begin{stdrule}
   VDecInit (char *) cptr (CopyInit (NormE xval base_se))
   VDecInit int      i    (CopyInit (NormE yval base_se))
 
   VDecInitA B (ObjPlace (a + Boff))
               (DirectInit
                  (NormE
-                    (FnApp (ConstructorFVal F T (a + Boff) B)
+                    (FnApp (ConstructorFVal F 1 (a + Boff) B)
                            [Deref(Plus (Var "cptr")
                                        (Var "i"))])
                     base_se))
@@ -5014,11 +4982,14 @@ of the members (given as \texttt{Boff}, \texttt{ptroff} and
                      (CopyInit (NormE (FnApp (Var "strlen")
                                              [Var "cptr"])
                                       base_se))
-\end{verbatim}
+\end{stdrule}
   \caption[Variable Declarations Generated from
   Figure~\ref{fig:mem-inits}]{The variable declarations constructed to
     precede the body of \texttt{C}'s constructor (from
-    Figure~\ref{fig:mem-inits}).}
+    Figure~\ref{fig:mem-inits}).  Assume that the enclosing class
+    \texttt{C} is being created at allocation level 1.  This in turn
+    makes \texttt{B} be created at that level too (witness the second
+    parameter of the \texttt{ConstructorFVal} constructor). }
 \label{fig:constructor-vdecs}
 \end{figure}
 
@@ -5158,10 +5129,9 @@ pointer to the object can be returned.
 \index{rule (dynamic)!new-simple-class@\texttt{new-simple-class}}
 \begin{stdrule}
 (* RULE-ID: new-simple-class *)
-(* The T F parameters to the ConstructorFVal constructor indicate
+(* The T 0 parameters to the ConstructorFVal constructor indicate
     1. the object produced is most-derived, and
-    2. it is not a sub-object (neither base, nor member) of some
-       other object
+    2. it is not stack-allocated
 *)
      (Class cnm = strip_const ty) \(\land\)
      malloc s0 ty a \(\land\)
@@ -5175,7 +5145,7 @@ pointer to the object can be returned.
      (SOME ptrval = ptr_encode s0 a ty [cnm])
    \(\Rightarrow\)
      mng (s0, EX (New ty (SOME args)) se)
-         (s, EX (CommaSep (FnApp (ConstructorFVal T F a cnm) args)
+         (s, EX (CommaSep (FnApp (ConstructorFVal T 0 a cnm) args)
                           (ECompVal ptrval (Ptr ty)))
                 se)
 \end{stdrule}
@@ -5249,7 +5219,7 @@ Figure~\ref{fig:allocate-rvrt}.
    object r-value *)
      find_best_fnmatch s0 fnid (MAP valuetype args)
                        rtype params body \(\land\)
-     class_type (strip_const rtype) \(\land\)
+     (strip_const rtype = Class cnm) \(\land\)
      malloc s0 rtype a \(\land\)
      sizeof T (sizeofmap s0) rtype sz
    \(\Rightarrow\)
@@ -5257,15 +5227,10 @@ Figure~\ref{fig:allocate-rvrt}.
                              (FVal fnid ftype thisobj)
                              args)
                  se0)
-         (s0 with <|
-            allocmap updated_by (UNION) (range_set a sz) ;
-            exprclasses updated_by
-              (hd_update
-                (\(\lambda\)(objs,amap). ((a,cnm,[cnm]) :: objs,
-                amap)))
-          |>,
+         (s0 with allocmap updated_by (UNION) (range_set a sz),
           EX (FnApp_sqpt (SOME
-                           (a, dest_class (strip_const rtype)))
+                           (LENGTH s0.stack, a,
+                            dest_class (strip_const rtype)))
                          (FVal fnid ftype thisobj)
                          args)
              se0)
@@ -5281,15 +5246,11 @@ is \texttt{NONE} (as it is initially, thanks to rule
 The call to \texttt{find_best_fnmatch} is used to calculate the type
 of value returned by the function.  If that type is a class type, then
 space is allocated for a value of the right size, and this type and
-the space's address is recorded in the first argument slot.
-Naturally, if the return type of the function call is not a class
-type, then the first argument slot will remain \texttt{NONE}.
-
-The resulting state uses the \texttt{exprclasses} field %
-\index{exprclasses (state field)@\texttt{exprclasses} (\texttt{state} field)}%
-of the state to record that a new object is being constructed.  This
-information will then allow the created temporary to have its
-destructor called as appropriate.
+the space's address and the allocation level is recorded in the first
+argument slot.  (The allocation level information ensures that the
+object will have its destructor called at this level.) Naturally, if
+the return type of the function call is not a class type, then the
+first argument slot will remain \texttt{NONE}.
 
 We have already seen how
 \ruleid{function-call}~(p\pageref{fig:function-call}) subsequently
@@ -5334,11 +5295,11 @@ to do so.  This is done in the rule
 \index{rule (dynamic)!ret-construct-rvalue@\texttt{ret-construct-rvalue}}
 \begin{stdrule}
 (* RULE-ID: ret-construct-rvalue *)
-     (HD s.rvstk = SOME (a,cnm)) \(\land\)
-     \(\neg\)(e0 = ConstructedVal F a cnm)
+     (HD s.rvstk = SOME (alvl, a,cnm)) \(\land\)
+     \(\neg\)(e0 = ConstructedVal alvl a cnm)
    \(\Rightarrow\)
      mng (s, ST (Ret (EX e0 se0)) (RVC c se))
-         (s, ST (Ret (EX (FnApp (ConstructorFVal T F a cnm) [e0])
+         (s, ST (Ret (EX (FnApp (ConstructorFVal T alvl a cnm) [e0])
                          se0))
                 (RVC c se))
 \end{stdrule}
@@ -5365,8 +5326,8 @@ When the call to the constructor returns it will be with a
 \index{rule (dynamic)!ret-class-rvalue@\texttt{ret-class-rvalue}}%
 \begin{stdrule}
 (* RULE-ID: ret-class-rvalue *)
-     (HD s.rvstk = SOME (a,cnm)) \(\land\)
-     (e0 = ConstructedVal F a cnm)
+     (HD s.rvstk = SOME (alvl,a,cnm)) \(\land\)
+     (e0 = ConstructedVal alvl a cnm)
    \(\Rightarrow\)
      mng (s, ST (Ret (EX e0 se0)) (RVC c se))
          (s with rvstk updated_by TL, EX (c e0) se)
@@ -5463,7 +5424,7 @@ execution of a function can begin).
 If a class r-value has been passed as a parameter, the abstract syntax
 will look like:
 \begin{stdrule}
-   VDecInit ty nm (CopyInit (EX (ConstructedVal F a cnm) se))
+   VDecInit ty nm (CopyInit (EX (ConstructedVal alvl a cnm) se))
 \end{stdrule}
 If the \texttt{ty} is equal to \texttt{Class~cnm}, then the space
 already allocated for the r-value can be used for the local variable.
@@ -5476,7 +5437,7 @@ This behaviour is captured in rule
    \(\Rightarrow\)
      declmng mng
        (VDecInit (Class cnm) nm
-                 (CopyInit (EX (ConstructedVal F a cnm)
+                 (CopyInit (EX (ConstructedVal alvl a cnm)
                                base_se)),
         s0)
        ([], new_addr_binding nm NONE (a,cnm,[cnm])
@@ -5502,8 +5463,10 @@ behaviour is \ruleid{decl-fncall-copy-elision}:
                   (CopyInit (EX (FnApp_sqpt NONE fnc args) se)),
         s0)
        ([VDecInitA (Class cnm) (ObjPlace a)
-                   (CopyInit (EX (FnApp_sqpt (SOME(a,cnm)) fnc
-                                             args)
+                   (CopyInit (EX (FnApp_sqpt
+                                    (SOME(LENGTH s0.stack,a,cnm))
+                                    fnc
+                                    args)
                                  se))],
         s0)
 \end{stdrule}
@@ -5516,12 +5479,24 @@ allocated.  This is rule \ruleid{decl-class-copy-finishes}:%
 \begin{stdrule}
 (* RULE-ID: decl-class-copy-finishes *)
      is_null_se se \(\land\)
-     (e = ConstructedVal F a cnm)
+     (e = ConstructedVal alvl a cnm)
    \(\Rightarrow\)
      declmng mng
-       (VDecInitA (Class cnm) (ObjPlace a) (CopyInit (EX e se)), s)
-       ([], s)
+       (VDecInitA (Class cnm) (ObjPlace a)
+                  (CopyInit (EX e se)), s)
+       ([],
+        s with stack updated_by
+          (\(\lambda\)stk.
+             if MEM (a,cnm) (sel4 (REV_EL alvl stk)) then stk
+             else
+               update_nth_rev alvl (upd4 (CONS (a,cnm))) stk)))
 \end{stdrule}
+Note how the \texttt{alvl} variable is not constrained, but we can
+argue that it will in fact be the length of the stack at this point.
+This is because copy-initialisation is not used for sub-object
+construction, and this rule does not get a chance to fire if the
+allocation level is from ealier in the stack (as happens in
+\ruleid{decl-parameter-copy-elision}).
 
 \index{class r-values!as initializers|)}
 
