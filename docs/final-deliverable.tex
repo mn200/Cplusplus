@@ -77,7 +77,7 @@ HOL syntax that appears throughout the report (in
 Section~\ref{sec:reading-HOL}), and then gives a high-level picture of
 the \cpp{} semantics in Section~\ref{sec:intro-three-phases}.
 
-Section~\ref{sec:basic-types} describes the basic types that underly
+Section~\ref{sec:basic-types} describes the basic types that underlie
 the semantics.  Here, for example, are discussions of how \cpp{}'s
 hierarchical namespaces are modelled with a custom data type in
 HOL. Sections~\ref{sec:phase1}--\ref{sec:phase3} describe each of the
@@ -90,7 +90,7 @@ future work to help rectify known and any as-yet undiscovered faults.
 
 
 \vspace{1ex}
-\noindent This document supercedes all previous deliverables.
+\noindent This document supersedes all previous deliverables.
 
 \subsection{Reading  HOL Source Code}
 \label{sec:reading-HOL}
@@ -149,7 +149,7 @@ function) will be
 \begin{alltt}
    :xty # yty -> result\_ty
 \end{alltt}
-(where \texttt{\#} is the cartesian product type operator).  In the
+(where \texttt{\#} is the Cartesian product type operator).  In the
 second term, the type of \texttt{f} is
 \begin{alltt}
    :xty -> (yty -> result\_ty)
@@ -347,7 +347,7 @@ optionally accompanied by data (following the \texttt{of} keyword).
 If the arithmetic expression is an addition, for example, then it
 consists of (recursively) two arithmetic expressions representing the
 left and right arguments (the \texttt{\#} symbol is the type operator
-for cartesian products).
+for Cartesian products).
 
 \index{constructors, of algebraic types}
 As a result of a definition like the above, the new type is
@@ -473,7 +473,7 @@ take tuples of arguments, though the original \texttt{EX} and
 \LaTeX{} spacing commands, all in an attempt to lay the rule out in an
 aesthetically pleasing way.  Unfortunately, this sort of effort does
 not scale to very large rules. It is also entirely manual (at least in
-HOL4; constrast Isabelle's support for automatic generation of
+HOL4; contrast Isabelle's support for automatic generation of
 ``reasonable'' \LaTeX).  The Ott tool~\cite{Sewell:OTT2007} might also
 represent a way to solve this problem. If a translation is manual, it
 is inherently error-prone.\hfill{\textit{(End Aside)}}
@@ -662,7 +662,7 @@ indicating whether or not this is an ``absolute'' identifier
 (represented in the concrete syntax by prefixing it with \texttt{::}),
 a list of ID components and one final ID component.  We will
 frequently see ``bare'' names that are not absolute, and which do not
-have any outer namespaces attched.  To abbreviate this common case, we
+have any outer namespaces attached.  To abbreviate this common case, we
 define the \texttt{Base} function:%
 \index{Base function@\texttt{Base} function}%
 %
@@ -787,7 +787,7 @@ trie data structure.  Like lists and other ``container'' types, the
 \texttt{fmaptree} is polymorphic, here both in the type of keys, and
 the type of values.
 
-The operation to lookup up the sub-tree at a particular key list position
+The operation to lookup the sub-tree at a particular key list position
 is \texttt{apply_path}:
 \begin{alltt}
   (apply_path [] ft = SOME ft) \(\land\)
@@ -988,7 +988,7 @@ Phase~1.
 
 One significant issue is the resolution of names in templates.  When a
 template definition is instantiated, it is important to specify how
-the names occuring in the template are bound.  Typically, such names
+the names occurring in the template are bound.  Typically, such names
 might bind to global names that are in scope at the point of the
 template's definition, or to member functions associated with the
 template argument.
@@ -1908,6 +1908,36 @@ represent the occurrence of undefined behaviour within an expression.
 
 \subsection{Simple Expression Rules}
 \label{sec:simple-expr-rules}
+
+\paragraph{Introducing Scopes for Expressions}
+Because \cpp{} expressions can cause the creation of object r-values
+(for which, see Section~\ref{sec:class-rvalues}), it is necessary that
+the internal stack be extended by a new entry when the evaluation of
+an expression within a statement begins.  This new element on the
+stack records the creation of objects during the evaluation of the
+expression, and also records the state of the \texttt{allocmap} that
+held when the expression began, so that it can be returned to on
+finishing the expression's evaluation.
+
+The model assumes that all expressions within statements are initially
+wrapped inside the \texttt{NoScope} constructor, of type
+\begin{stdrule}
+   : CExpr -> CExpr
+\end{stdrule}
+This wrapper is dissolved once for every whole expression, in the rule
+\ruleid{noscope}:\index{rule (dynamic)!noscope@\texttt{noscope}}
+\begin{stdrule}
+(* RULE-ID: noscope *)
+     T
+   ==>
+     mng (s, EX (NoScope e) se)
+         (s with stack updated_by
+                   CONS (s.env,s.thisvalue,s.allocmap,[]),
+          EX e se)
+\end{stdrule}
+The rules for standalone and conditional statements, and for
+declarations with initialisors pop this extra ``frame'' off the stack
+when expression evaluation terminates.
 
 \paragraph{Literals} We begin with two rules for literals.  We don't
 have any rules for other literal forms, such as floating point
