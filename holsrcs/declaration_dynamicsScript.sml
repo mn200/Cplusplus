@@ -483,6 +483,111 @@ val record_creation_def = Define`
         stk'
 `;
 
+(* example:
+     C : B1, B2 : A1, A2
+
+   constructor for C calls constructor for B1 and B2, latter of which calls
+   constructor for A1 and A2.  Say C's a-level is 4.
+   If we're in constructor for A2 (having successfully completed construction
+   of A1), and it looks like
+
+     A2::A2(argsA2) mem-inits { localdecs; ... }
+
+   and something raises an exception in the ..., then the objects in
+   localdecs, mem-inits and argsA2 will need to be destroyed first in
+   that order.  Then, we pop out to the B2 constructor.  Assume this
+   looks like:
+
+     B2::B2(argsB2) : A1(params1), A2(params2) { .... }
+
+   at this point, A1 should be killed (_not_, argsB2).  Then the args
+   should be killed followed by popping out to C's constructor, which
+   looks like
+
+     C::C(argsC) : B1(paramsB1), B2(paramsB2) { ... }
+
+   then we should kill B1, followed by argsC.  And that will be the extent
+   of the killing that's necessary.
+
+   This will be implemented by putting all objects into potentially
+   two positions within the stack, one at its a-level, and two at its
+   "actual level", i.e., that block level where it was allocated "for
+   real".  This is then used if an exception is raised.
+ *)
+
+
+val exceptional_destructors_def = Define`
+  exceptional_destructors (h :: t) =
+    let dest_these = sel4 h in
+    let t' = MAP (upd4 (FILTER (\e. ~MEM e dest_these))) t
+  in
+    (dest_these,upd4 (K []) h :: t')
+`
+
+val normal_destructors_def = Define`
+  normal_destructors (h :: t) =
+    let d0 = sel4 h in
+    let d = FILTER (\e. ~EXISTS (EXISTS ((=) e) o sel4) t) d0
+  in
+    (d,upd4 (K []) h::t)
+`;
+
+
+val realise_destructor_calls_def = Define`
+  (* parameters
+      exp           : T iff we are leaving a block because of an exception
+      s0            : starting state, where there is a non-empty list
+                      of things to destroy as the (addr#CPP_ID) list
+                      component of s.stack.  If this is not an exceptional
+                      exit, then objects that appear twice in the stack
+                      are not destroyed at this level.  If this is, the
+                      object gets destroyed (and also pulled out of the
+                      stack at its a-level).
+     outputs
+      destcals      : list of statements with explicit destructor
+                      calls for those objects that need destroying
+      s             : resulting state, with updated stack lists (but with
+                      the top element still un-popped).
+  *)
+  realise_destructor_calls exp s0 =
+    let cloc2call (a, cnm) = DestructorCall a cnm in
+    let (dests,stk') = if exp then exceptional_destructors s0.stack
+                       else normal_destructors s0.stack
+    in
+        (MAP cloc2call dests, s0 with stack := stk')
+`;
+
+val callterminate_def = Define`
+  callterminate =
+    FnApp (Var  (IDConstant T [IDName "std"] (IDName "terminate"))) []
+`;
+
+(* sets up destructor calls for an expression that has finished evaluating and
+   has created rvalue objects along the way *)
+val expression_destruction_def = Define`
+  expression_destruction (s0,e0,se0) (s,e) =
+     ?destcalls.
+        ~(sel4 (HD s0.stack) = []) /\
+        final_value (EX e0 se0) /\
+        ((destcalls,s) = realise_destructor_calls F s0) /\
+        (e = FOLDR CommaSep e destcalls)
+`;
+
+(* sets up destructor calls for a piece of expression syntax that has become
+   a exception statement, but which has created rvalue objects along the way *)
+val exception_destruction_def = Define`
+  exception_destruction (s0, exst) (s, newst) =
+    ?st c' destcalls wrap.
+       is_exnval exst /\
+       (exst = ST st c') /\
+       ~(sel4 (HD s0.stack) = []) /\
+       ((destcalls,s) = realise_destructor_calls T s0) /\
+       (wrap = (\e. Catch (Standalone (EX e base_se))
+                          [(NONE, Standalone (EX callterminate base_se))])) /\
+       (newst = Block T [] (MAP wrap destcalls ++ [st]))
+`;
+
+
 
 val _ = print "Defining (utility) declaration relation\n"
 (* this relation performs the various manipulations on declaration syntax
@@ -654,37 +759,39 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
 
 (* RULE-ID: decl-vdecinit-finish *)
 (* for non-class, non-reference types *)
-(!s0 s v ty dty v' se a rs f.
+(!s0 s e v ty dty v' se a rs f amap env rest thisv.
+     (e = ECompVal v ty) /\
      nonclass_conversion s0 (v,ty) (v',dty) /\
      is_null_se se /\
      ~class_type dty /\
      (s = val2mem (s0 with initmap updated_by (UNION) rs) a v') /\
      (rs = range_set a (LENGTH v')) /\
-     ((f = CopyInit) \/ (f = DirectInit))
+     ((f = CopyInit) \/ (f = DirectInit)) /\
+     (s.stack = (env,thisv,amap,[]) :: rest)
    ==>
-     declmng mng (VDecInitA dty
-                            (ObjPlace a)
-                            (f (EX (ECompVal v ty) se)), s0)
-                 ([], s)
+     declmng mng
+        (VDecInitA dty (ObjPlace a) (f (EX e se)), s0)
+        ([], s with <| stack := rest; allocmap := amap|>)
 )
 
    /\
 
 (* RULE-ID: decl-vdecinit-finish-ref *)
 (* if isSome, aopt is the address of a containing class *)
-(!s0 ty1 refnm a aopt ty2 p p' s se f.
+(!s0 ty1 refnm a aopt ty2 p p' s se f env thisv amap rest.
      is_null_se se /\
      ((f = CopyInit) \/ (f = DirectInit)) /\
      (if class_type ty1 then
         (s0,{}) |- dest_class ty1 casts p into p'
       else (p' = p)) /\
-     (s = new_addr_binding refnm aopt (a,dest_class ty2,p') s0)
+     (s = new_addr_binding refnm aopt (a,dest_class ty2,p') s0) /\
+     (s.stack = (env,thisv,amap,[]) :: rest)
    ==>
      declmng mng
              (VDecInitA (Ref ty1)
                         (RefPlace aopt refnm)
                         (f (EX (LVal a ty2 p) se)), s0)
-             ([], s)
+             ([], s with <| stack := rest; allocmap := amap |>)
 )
 
    /\
@@ -694,14 +801,16 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
      * no need to update memory, or init_map as this will have all been
        done by the constructor
 *)
-(!cnm alvl a se0 s0.
-     is_null_se se0
+(!cnm alvl a se0 s0 s env thisv amap rest.
+     is_null_se se0 /\
+     (s0.stack = (env,thisv,amap,[]) :: rest) /\
+     (s = s0 with <| stack := rest; allocmap := amap |>)
    ==>
      declmng mng
        (VDecInitA (Class cnm) (ObjPlace a)
                   (DirectInit (EX (ConstructedVal alvl a cnm) se0)),
         s0)
-       ([], s0 with stack updated_by record_creation alvl a cnm)
+       ([], s with stack updated_by record_creation alvl a cnm)
 )
 
    /\
@@ -712,7 +821,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
        (VDecInit (Class cnm) nm
-                 (CopyInit (EX (ConstructedVal alvl a cnm) base_se)),
+                 (CopyInit (EX (NoScope (ConstructedVal alvl a cnm)) base_se)),
         s0)
        ([], new_addr_binding nm NONE (a,cnm,[cnm])
               (new_type_binding nm (Class cnm) s0))
@@ -742,13 +851,15 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    /\
 
 (* RULE-ID: decl-class-copy-finishes *)
-(!se e a alvl cnm s.
+(!se e a alvl cnm s s' env thisv amap rest.
      is_null_se se /\
-     (e = ConstructedVal alvl a cnm)
+     (e = ConstructedVal alvl a cnm) /\
+     (s.stack = (env,thisv,amap,[]) :: rest) /\
+     (s' = s with <| stack := rest; allocmap := amap |>)
    ==>
      declmng mng
        (VDecInitA (Class cnm) (ObjPlace a) (CopyInit (EX e se)), s)
-       ([], s with stack updated_by record_creation alvl a cnm)
+       ([], s' with stack updated_by record_creation alvl a cnm)
 )
 
    /\
@@ -771,6 +882,18 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
         s)
 )
 
+   /\
+
+(* RULE-ID: decl-expr-destroys-rvalues *)
+(!f ty pl e0 se0 s0 e s.
+     ((f = CopyInit) \/ (f = DirectInit)) /\
+     expression_destruction (s0,e0,se0) (s,e)
+   ==>
+     declmng mng
+        (VDecInitA ty pl (f (EX e0 se0)), s0)
+        ([VDecInitA ty pl (f (EX e se0))], s)
+)
+
 `
 
 val declmng_MONO = store_thm(
@@ -778,7 +901,7 @@ val declmng_MONO = store_thm(
   ``(!x y. P x y ==> Q x y) ==>
     (declmng P s1 s2 ==> declmng Q s1 s2)``,
   STRIP_TAC THEN MAP_EVERY Q.ID_SPEC_TAC [`s2`, `s1`] THEN
-  HO_MATCH_MP_TAC declmng_ind THEN SIMP_TAC (srw_ss()) [declmng_rules] THEN
+  HO_MATCH_MP_TAC declmng_ind THEN
   REPEAT STRIP_TAC THEN
   FIRST (map (fn th => MATCH_MP_TAC th THEN SRW_TAC [][] THEN METIS_TAC [])
              (CONJUNCTS

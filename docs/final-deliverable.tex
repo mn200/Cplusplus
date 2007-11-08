@@ -474,8 +474,9 @@ take tuples of arguments, though the original \texttt{EX} and
 aesthetically pleasing way.  Unfortunately, this sort of effort does
 not scale to very large rules. It is also entirely manual (at least in
 HOL4; constrast Isabelle's support for automatic generation of
-``reasonable'' \LaTeX).  If a translation is manual, it is inherently
-error-prone.\hfill{\textit{(End Aside)}}
+``reasonable'' \LaTeX).  The Ott tool~\cite{Sewell:OTT2007} might also
+represent a way to solve this problem. If a translation is manual, it
+is inherently error-prone.\hfill{\textit{(End Aside)}}
 
 In the ASCII rendering, we see that the rule has three premises
 (separated by $\land$), and that its conclusion defines the constant
@@ -2575,9 +2576,8 @@ constructors are set up a little differently, see
                                       (Ptr (Class cnm))))
       || _ -> (thisval = NONE)) \(\land\)
      (pdecls = MAP (\(\lambda\)((n,ty),a).
-                          VDecInit ty
-                                   (Base n)
-                                   (CopyInit (EX a base_se)))
+                          VDecInit ty (Base n)
+                             (CopyInit (EX (NoScope a) base_se)))
                    (ZIP (params, args)))
    \(\Rightarrow\)
      mng (s0, EX (FnApp_sqpt rvrt
@@ -2753,19 +2753,20 @@ branches.
 \index{rule (dynamic)!if-true@\texttt{if-true}}%
 \index{rule (dynamic)!if-false@\texttt{if-false}}%
 \index{CIf@\texttt{CIf}}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: standalone-evaluates *)
      mng (s1, exte) (s2, exte')
    \(\Rightarrow\)
      mng (s1, ST (Standalone exte) c)
          (s2, ST (Standalone exte') c)
 
-
 (* RULE-ID: standalone-finishes *)
-     is_null_se se \(\land\)
-     final_value e
+     is_null_se se \(\land\) final_value e \(\land\)
+     (s.stack = (env,thisv,amap,[]) :: rest)
    \(\Rightarrow\)
-     mng (s, ST (Standalone e) c) (s, ST EmptyStmt c)
+     mng (s, ST (Standalone e) c)
+         (s with <| stack := rest; allocmap := amap |>,
+          ST EmptyStmt c)
 
 
 (* RULE-ID: if-eval-guard *)
@@ -2776,22 +2777,22 @@ branches.
 
 
 (* RULE-ID: if-true *)
-     scalar_type t \(\land\)
-     is_null_se se \(\land\)
-     \(\neg\)is_zero t v
+     scalar_type t \(\land\) is_null_se se \(\land\) \(\neg\)is_zero t v \(\land\)
+     (s.stack = (env,thisv,amap,[]) :: rest)
    \(\Rightarrow\)
      mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c)
-         (s, ST thenstmt c)
+         (s with <| stack := rest; allocmap := amap |>,
+          ST thenstmt c)
 
 
 (* RULE-ID: if-false *)
-     scalar_type t \(\land\)
-     is_null_se se \(\land\)
-     is_zero t v
+     scalar_type t \(\land\) is_null_se se \(\land\) is_zero t v \(\land\)
+     (s.stack = (env,thisv,amap,[]) :: rest)
    \(\Rightarrow\)
      mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c)
-         (s, ST elsestmt c)
-\end{alltt}
+         (s with <| stack := rest; allocmap := amap |>,
+          ST elsestmt c)
+\end{stdrule}
 \caption{Statement Rules for Expression and If Statements}
 \label{fig:simple-stmts}
 \end{figure}
@@ -2802,19 +2803,16 @@ branches.
 were in my thesis~\cite[\S3.4.5]{Norrish98}, as syntactic sugar for
 forms involving one loop and different arrangements of the
 \texttt{Trap}, \texttt{continue} and \texttt{break} primitives.
-This allows just one, unconditional rule for all loops:
-\begin{center}
-  \begin{minipage}{\textwidth}
-\begin{alltt}
+This allows just one, unconditional rule for all loops:%
+\index{rule (dynamic)!loop@\texttt{loop}}
+\begin{stdrule}
 (* RULE-ID: loop *)
      T
    \(\Rightarrow\)
      mng (s, ST (CLoop guard bdy) c)
          (s, ST (CIf guard (Block F [] [bdy; CLoop guard bdy])
                            EmptyStmt) c)
-\end{alltt}
-  \end{minipage}
-\end{center}
+\end{stdrule}
 
 \paragraph{Traps, and Loop Interruptions}
 \index{Trap@\texttt{Trap}}%
@@ -3199,17 +3197,18 @@ the variable being initialized is not a reference.%
 \index{nonclass_conversion@\texttt{nonclass_conversion}}%
 \begin{stdrule}
 (* RULE-ID: decl-vdecinit-finish *)
+     (e = ECompVal v ty) \(\land\)
      nonclass_conversion s0 (v,ty) (v',dty) \(\land\)
      is_null_se se \(\land\)
      ~class_type dty \(\land\)
      (s = val2mem (s0 with initmap updated_by (UNION) rs) a v') \(\land\)
      (rs = range_set a (LENGTH v')) \(\land\)
-     ((f = CopyInit) \(\lor\) (f = DirectInit))
+     ((f = CopyInit) \(\lor\) (f = DirectInit)) \(\land\)
+     (s.stack = (env,thisv,amap,[]) :: rest)
    \(\Rightarrow\)
-     declmng mng (VDecInitA dty
-                            (ObjPlace a)
-                            (f (EX (ECompVal v ty) se)), s0)
-                 ([], s)
+     declmng mng
+         (VDecInitA dty (ObjPlace a) (f (EX e se)), s0)
+         ([], s with <| stack := rest; allocmap := amap |>)
 \end{stdrule}
 \caption[Finishing Initialization of a Non-class, Non-reference
   Variable]{Completing the Initialization of a Non-class, Non-reference
@@ -3296,48 +3295,42 @@ for exiting a block (\ruleid{block-exit}, page~\pageref{fig:block-exit}).
 
 There is also rule \ruleid{trap-exn-passes} for exception statements
 escaping the \texttt{Trap} form (which is used for handling
-\texttt{continue} and \texttt{break}):
-\begin{center}
-\begin{minipage}{\textwidth}
+\texttt{continue} and \texttt{break}):%
 \index{rule (dynamic)!trap-exn-passes@\texttt{trap-exn-passes}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: trap-exn-passes *)
      exception_stmt exn
    \(\Rightarrow\)
      mng (s, ST (Trap tt exn) c) (s, ST exn c)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 
 \medskip
 Because exceptions arise from expressions, the statement level rules
 need to acknowledge this possibility.  Thus, this rule for
-\texttt{if} (\ruleid{if-exception}):
-\begin{center}
-\begin{minipage}{\textwidth}
+\texttt{if} (\ruleid{if-exception}):%
 \index{rule (dynamic)!if-exception@\texttt{if-exception}}%
 \index{CIf@\texttt{CIf}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: if-exception *)
-     is_exnval guard
+     is_exnval guard \(\land\)
+     (s.stack = (env,thisv,ampa,[]) :: rest)
    \(\Rightarrow\)
      mng (s, ST (CIf guard thenstmt elsestmt) c)
-         (s, mk_exn guard c)
-\end{alltt}
-\end{minipage}
-\end{center}
+         (s with <| stack := rest; allocmap := amap |>,
+          mk_exn guard c)
+\end{stdrule}
 where the definition of \texttt{is_exnval} is (from
 \HOLfile{statements})\index{is_exnval@\texttt{is_exnval}}
-\begin{alltt}
+\begin{stdrule}
    (is_exnval (ST (Throw (SOME e)) c) = final_value e) \(\land\)
    (is_exnval _ = F)
-\end{alltt}
+\end{stdrule}
 The function \texttt{mk_exn} takes an exception value and
 replaces its continuation information with something appropriate for
 the level of the containing statement: \index{mk_exn@\texttt{mk_exn}}
-\begin{verbatim}
+\begin{stdrule}
    mk_exn (ST (Throw (SOME e)) c0) c = ST (Throw (SOME e)) c
-\end{verbatim}
+\end{stdrule}
 
 Of course, exceptions can arise in all the other expressions that
 appear within statement forms, so there are similar rules for the
@@ -3673,7 +3666,7 @@ topmost.
 
 For more on this, see Section~\ref{sec:object-lifetimes}, and the
 definition of \texttt{realise_destructor_calls} in
-\HOLfile{dynamics}.
+\HOLfile{declaration_dynamics}.
 \index{exceptions|)}
 
 \subsection{Basic Object-Orientation}
@@ -4373,10 +4366,8 @@ of the name the same as the type of the l-value.
 This step is controlled by the rule \ruleid{decl-vdecinit-finish-ref},
 for which see Figure~\ref{fig:decl-vdecinit-finish-ref}.
 \begin{figure}[hbtp]
-\begin{center}
-  \begin{minipage}{\textwidth}
 \index{rule (declaration dynamics)!decl-vdecinit-finish-ref@\texttt{decl-vdecinit-finish-ref}}%
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: decl-vdecinit-finish-ref *)
 (* if isSome, aopt is the address of a containing class *)
      is_null_se se \(\land\)
@@ -4384,16 +4375,15 @@ for which see Figure~\ref{fig:decl-vdecinit-finish-ref}.
      (if class_type ty1 then
         (s0,\lbr\rbr) |- dest_class ty1 casts p into p'
       else (p' = p)) \(\land\)
-     (s = new_addr_binding refnm aopt (a,dest_class ty2,p') s0)
+     (s = new_addr_binding refnm aopt (a,dest_class ty2,p') s0) \(\land\)
+     (s.stack = (env,thisv,amap,[]) :: rest)
    \(\Rightarrow\)
      declmng mng
              (VDecInitA (Ref ty1)
                         (RefPlace aopt refnm)
                         (f (EX (LVal a ty2 p) se)), s0)
-             ([], s)
-\end{alltt}
-  \end{minipage}
-\end{center}
+             ([], s with <| stack := rest; allocmap := amap |>)
+\end{stdrule}
 \caption{How References are Initialized}
 \label{fig:decl-vdecinit-finish-ref}
 \end{figure}
@@ -4841,7 +4831,7 @@ Figure~\ref{fig:constructor-function-call}.
      find_constructor_info s0 cnm args params mem_inits body \(\land\)
      (pdecls = MAP (\(\lambda\)((n,ty),a).
                         VDecInit ty (Base n)
-                                    (CopyInit (EX a base_se)))
+                           (CopyInit (EX (NoScope a) base_se)))
                    (ZIP (params, args))) \(\land\)
      (SOME this = ptr_encode s0 a (Class cnm) [cnm]) \(\land\)
      (cpfx = construct_ctor_pfx s0 mdp (LENGTH s0.stack) a
@@ -5463,8 +5453,8 @@ This behaviour is captured in rule
    \(\Rightarrow\)
      declmng mng
        (VDecInit (Class cnm) nm
-                 (CopyInit (EX (ConstructedVal alvl a cnm)
-                               base_se)),
+          (CopyInit (EX (NoScope (ConstructedVal alvl a cnm))
+                     base_se)),
         s0)
        ([], new_addr_binding nm NONE (a,cnm,[cnm])
               (new_type_binding nm (Class cnm) s0))
@@ -5506,15 +5496,18 @@ allocated.  This is rule \ruleid{decl-class-copy-finishes}:%
 \begin{stdrule}
 (* RULE-ID: decl-class-copy-finishes *)
      is_null_se se \(\land\)
-     (e = ConstructedVal alvl a cnm)
+     (e = ConstructedVal alvl a cnm) \(\land\)
+     (s.stack = (env,thisv,amap,[]) :: rest) \(\land\)
+     (s' = s with <| stack := rest; allocmap := amap |>)
    \(\Rightarrow\)
      declmng mng
        (VDecInitA (Class cnm) (ObjPlace a)
                   (CopyInit (EX e se)), s)
-       ([], s with stack updated_by record_creation alvl a cnm)
+       ([], s' with stack updated_by record_creation alvl a cnm)
 \end{stdrule}
 Note how the \texttt{alvl} variable is not constrained, but we can
-argue that it will in fact be the length of the stack at this point.
+argue that it will in fact be the length of the stack once it is
+popped of the information that pertained to the initializer expression.
 This is because copy-initialisation is not used for sub-object
 construction, and this rule does not get a chance to fire if the
 allocation level is from ealier in the stack (as happens in

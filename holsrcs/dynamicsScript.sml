@@ -287,91 +287,12 @@ val construct_ctor_pfx_def = Define`
     virtuals ++ bases ++ nsds
 `;
 
-val callterminate =
-    ``FnApp (Var  (IDConstant T [IDName "std"] (IDName "terminate"))) []``
-
 val bad_cast_name_def = Define`
   bad_cast_name = IDConstant T [IDName "std"] (IDName "bad_cast")
 `;
 
-(* example:
-     C : B1, B2 : A1, A2
-
-   constructor for C calls constructor for B1 and B2, latter of which calls
-   constructor for A1 and A2.  Say C's a-level is 4.
-   If we're in constructor for A2 (having successfully completed construction
-   of A1), and it looks like
-
-     A2::A2(argsA2) mem-inits { localdecs; ... }
-
-   and something raises an exception in the ..., then the objects in
-   localdecs, mem-inits and argsA2 will need to be destroyed first in
-   that order.  Then, we pop out to the B2 constructor.  Assume this
-   looks like:
-
-     B2::B2(argsB2) : A1(params1), A2(params2) { .... }
-
-   at this point, A1 should be killed (_not_, argsB2).  Then the args
-   should be killed followed by popping out to C's constructor, which
-   looks like
-
-     C::C(argsC) : B1(paramsB1), B2(paramsB2) { ... }
-
-   then we should kill B1, followed by argsC.  And that will be the extent
-   of the killing that's necessary.
-
-   This will be implemented by putting all objects into potentially
-   two positions within the stack, one at its a-level, and two at its
-   "actual level", i.e., that block level where it was allocated "for
-   real".  This is then used if an exception is raised.
- *)
 
 
-val exceptional_destructors_def = Define`
-  exceptional_destructors (h :: t) =
-    let dest_these = sel4 h in
-    let t' = MAP (upd4 (FILTER (\e. ~MEM e dest_these))) t
-  in
-    (dest_these,upd4 (K []) h :: t')
-`
-
-val normal_destructors_def = Define`
-  normal_destructors (h :: t) =
-    let d0 = sel4 h in
-    let d = FILTER (\e. ~EXISTS (EXISTS ((=) e) o sel4) t) d0
-  in
-    (d,upd4 (K []) h::t)
-`;
-
-
-val realise_destructor_calls_def = Define`
-  (* parameters
-      exp           : T iff we are leaving a block because of an exception
-      s0            : starting state, where there is a non-empty list
-                      of things to destroy as the (addr#CPP_ID) list
-                      component of s.stack.  If this is not an exceptional
-                      exit, then objects that appear twice in the stack
-                      are not destroyed at this level.  If this is, the
-                      object gets destroyed (and also pulled out of the
-                      stack at its a-level).
-     outputs
-      destcals      : list of statements with explicit destructor
-                      calls for those objects that need destroying
-      s             : resulting state, with updated stack lists (but with
-                      the top element still un-popped).
-  *)
-  realise_destructor_calls exp s0 =
-    let destwrap = if exp then
-                     (\s. Catch s [(NONE, Standalone
-                                            (EX ^callterminate base_se))])
-                   else (\s. s) in
-    let cloc2call (a, cnm) =
-          destwrap (Standalone (EX (DestructorCall a cnm) base_se)) in
-    let (dests,stk') = if exp then exceptional_destructors s0.stack
-                       else normal_destructors s0.stack
-    in
-        (MAP cloc2call dests, s0 with stack := stk')
-`;
 
 
 val _ = new_constant("typeid_info", ``:state -> CPP_Type -> CExpr -> bool``)
@@ -444,6 +365,8 @@ val derive_objid_def = Define`
   (derive_objid (ConstructedVal b a cnm) = SOME(a,Class cnm,[cnm])) /\
   (derive_objid _ = NONE)
 `;
+
+
 
 val _ = print "About to define meaning relation\n"
 val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
@@ -655,6 +578,18 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      lval2rval (s0,e0,se0) (s,e,se)
    ==>
      mng (s0, EX (f e0) se0) (s, EX (f e) se)
+)
+
+   /\
+
+(* RULE-ID: noscope *)
+(!e s se.
+     T
+   ==>
+     mng (s, EX (NoScope e) se)
+         (s with stack updated_by
+                   CONS (s.env,s.thisvalue,s.allocmap,[]),
+          EX e se)
 )
 
    /\
@@ -1298,7 +1233,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
       || _ -> (thisval = NONE)) /\
      (pdecls = MAP (\ ((n,ty),a). VDecInit ty
                                            (Base n)
-                                           (CopyInit (EX a base_se)))
+                                           (CopyInit (EX (NoScope a) base_se)))
                    (ZIP (params, args)))
    ==>
      mng (s0, EX (FnApp_sqpt rvrt (FVal fnid ftype thisobj) args) se)
@@ -1318,7 +1253,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      find_constructor_info s0 cnm args params mem_inits body /\
      (pdecls = MAP (\ ((n,ty),a). VDecInit ty
                                            (Base n)
-                                           (CopyInit (EX a base_se)))
+                                           (CopyInit (EX (NoScope a) base_se)))
                    (ZIP (params, args))) /\
      (SOME this = ptr_encode s0 a (Class cnm) [cnm]) /\
      (cpfx = construct_ctor_pfx s0 mdp (LENGTH s0.stack) a cnm mem_inits) /\
@@ -1529,7 +1464,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      (s0.current_exns = [])
    ==>
      mng (s0, ST (Throw NONE) ct)
-         (s0, ST (Standalone (EX ^callterminate base_se)) ct)
+         (s0, ST (Standalone (EX callterminate base_se)) ct)
 )
 
    /\
@@ -1683,21 +1618,46 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
-(* RULE-ID: standalone-finishes *)
-(!e se c s.
-     is_null_se se /\
-     final_value e
+(* RULE-ID: standalone-destroys-rvalues *)
+(!s0 e0 se s e c.
+     expression_destruction (s0, e0, se) (s, e)
    ==>
-     mng (s, ST (Standalone e) c) (s, ST EmptyStmt c)
+     mng (s0, ST (Standalone (EX e0 se)) c)
+         (s, ST (Standalone (EX e se)) c)
+)
+
+   /\
+
+(* RULE-ID: standalone-exn-destroys-rvalues *)
+(!s0 s exte newst c.
+     exception_destruction (s0, exte) (s,newst)
+   ==>
+     mng (s0, ST (Standalone exte) c)
+         (s, ST newst c)
+)
+
+   /\
+
+(* RULE-ID: standalone-finishes *)
+(!e se c s rest env thisv amap.
+     is_null_se se /\ final_value e /\
+     (s.stack = (env,thisv,amap,[]) :: rest)
+   ==>
+     mng (s, ST (Standalone e) c)
+         (s with <| stack := rest; allocmap := amap |>,
+          ST EmptyStmt c)
 )
 
    /\
 
 (* RULE-ID: standalone-exception *)
-(!e c s.
-     is_exnval e
+(!e c s rest env thisv amap.
+     is_exnval e /\
+     (s.stack = (env,thisv,amap,[]) :: rest)
    ==>
-     mng (s, ST (Standalone e) c) (s, mk_exn e c)
+     mng (s, ST (Standalone e) c)
+         (s with <| stack := rest; allocmap := amap |>,
+          mk_exn e c)
 )
 
    /\
@@ -1711,32 +1671,58 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
    /\
 
+(* RULE-ID: if-destroy-rvalues *)
+(!s0 s e se newe thenstmt elsestmt c.
+     expression_destruction (s0,e,se) (s,newe)
+   ==>
+     mng (s0, ST (CIf (EX e se) thenstmt elsestmt) c)
+         (s, ST (CIf (EX newe se) thenstmt elsestmt) c)
+)
+
+   /\
+
+(* RULE-ID: if-exn-destroy-rvalues *)
+(!s0 s c exte newst thenst elsest.
+     exception_destruction (s0, exte) (s, newst)
+   ==>
+     mng (s0, ST (CIf exte thenst elsest) c)
+         (s, ST newst c)
+)
+
+   /\
+
 (* RULE-ID: if-true *)
-(!v t se thenstmt elsestmt c s.
-     scalar_type t /\ is_null_se se /\ ~is_zero t v
+(!v t se thenstmt elsestmt c s rest amap thisv env.
+     scalar_type t /\ is_null_se se /\ ~is_zero t v /\
+     (s.stack = (env,thisv,amap,[]) :: rest)
    ==>
      mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c)
-         (s, ST thenstmt c)
+         (s with <| stack := rest ; allocmap := amap |>,
+          ST thenstmt c)
 )
 
    /\
 
 (* RULE-ID: if-false *)
-(!v t se thenstmt elsestmt c s.
-     scalar_type t /\ is_null_se se /\ is_zero t v
+(!v t se thenstmt elsestmt c s rest amap thisv env.
+     scalar_type t /\ is_null_se se /\ is_zero t v /\
+     (s.stack = (env,thisv,amap,[]) :: rest)
    ==>
      mng (s, ST (CIf (EX (ECompVal v t) se) thenstmt elsestmt) c)
-         (s, ST elsestmt c)
+         (s with <| stack := rest ; allocmap := amap |>,
+          ST elsestmt c)
 )
 
    /\
 
 (* RULE-ID: if-exception *)
-(!guard thenstmt elsestmt c s.
-     is_exnval guard
+(!guard thenstmt elsestmt c s rest env amap thisv.
+     is_exnval guard /\
+     (s.stack = (env,thisv,amap,[]) :: rest)
    ==>
      mng (s, ST (CIf guard thenstmt elsestmt) c)
-         (s, mk_exn guard c)
+         (s with <| stack := rest; allocmap := amap |>,
+          mk_exn guard c)
 )
 
    /\
@@ -1767,10 +1753,15 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
 
 (* RULE-ID: block-exit-destructors-to-call *)
 (* normally constructed objects at this level are always destroyed here *)
-(!s0 s c st destroy_these destcalls.
+(!s0 s c st destroy_these destcalls0 destcalls wrap.
      (sel4 (HD s0.stack) = destroy_these) /\ ~(destroy_these = []) /\
      final_stmt st c /\
-     ((destcalls, s) = realise_destructor_calls (exception_stmt st) s0)
+     (wrap = if (exception_stmt st) then
+               (\s. Catch s [(NONE, Standalone
+                                        (EX callterminate base_se))])
+             else (\s. s)) /\
+     ((destcalls0, s) = realise_destructor_calls (exception_stmt st) s0) /\
+     (destcalls = MAP (\e. wrap (Standalone (EX e base_se))) destcalls0)
    ==>
      mng (s0, ST (Block T [] [st]) c)
          (s, ST (Block T [] (destcalls ++ [st])) c)
@@ -1851,14 +1842,12 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
    /\
 
 (* RULE-ID: block-declmng-exception *)
-(!d0 s0 s f e ex ty loc c c' sts vds.
+(!s0 s f e ty loc c newst sts vds.
      ((f = CopyInit) \/ (f = DirectInit)) /\
-     declmng mng (d0, s0) ([VDecInitA ty loc (f e)], s) /\
-     is_exnval e /\
-     (e = ST (Throw (SOME ex)) c')
+     exception_destruction (s0,e) (s,newst)
    ==>
-     mng (s0, ST (Block T (d0 :: vds) sts) c)
-         (s, ST (Block T [] [Throw (SOME ex)]) c)
+     mng (s0, ST (Block T (VDecInitA ty loc (f e) :: vds) sts) c)
+         (s, ST (Block T [] [newst]) c)
 )
 
    /\
