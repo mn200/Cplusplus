@@ -473,6 +473,17 @@ val (value_init_rules, value_init_ind, value_init_cases) = Hol_reln`
      value_init s mdp alvl ty a inits)
 `;
 
+val record_creation_def = Define`
+  record_creation alvl a cnm stk =
+    let stk' = update_nth_rev (LENGTH stk) (upd4 (CONS (a,cnm))) stk
+    in
+      if alvl < LENGTH stk /\ ~MEM (a,cnm) (sel4 (REV_EL alvl stk)) then
+        update_nth_rev alvl (upd4 (CONS (a,cnm))) stk'
+      else
+        stk'
+`;
+
+
 val _ = print "Defining (utility) declaration relation\n"
 (* this relation performs the various manipulations on declaration syntax
    that are independent of the rest of the meaning relation *)
@@ -690,10 +701,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
        (VDecInitA (Class cnm) (ObjPlace a)
                   (DirectInit (EX (ConstructedVal alvl a cnm) se0)),
         s0)
-       ([],
-        s0 with stack updated_by
-          (\stk. if MEM (a,cnm) (sel4 (REV_EL alvl stk)) then stk
-                 else update_nth_rev alvl (upd4 (CONS (a,cnm))) stk))
+       ([], s0 with stack updated_by record_creation alvl a cnm)
 )
 
    /\
@@ -740,10 +748,7 @@ val (declmng_rules, declmng_ind, declmng_cases) = Hol_reln`
    ==>
      declmng mng
        (VDecInitA (Class cnm) (ObjPlace a) (CopyInit (EX e se)), s)
-       ([],
-        s with stack updated_by
-          (\stk. if MEM (a,cnm) (sel4 (REV_EL alvl stk)) then stk
-                 else update_nth_rev alvl (upd4 (CONS (a,cnm))) stk))
+       ([], s with stack updated_by record_creation alvl a cnm)
 )
 
    /\

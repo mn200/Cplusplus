@@ -1415,9 +1415,7 @@ val (meaning_rules, meaning_ind, meaning_cases) = Hol_reln`
      mng (s, ST (Ret (EX e0 se0)) (RVC c se))
          (s with <|
             rvstk updated_by TL;
-            stack updated_by
-             (\stk. if MEM (a,cnm) (sel4 (REV_EL alvl stk)) then stk
-                    else update_nth_rev alvl (upd4 (CONS (a,cnm))) stk)
+            stack updated_by record_creation alvl a cnm
           |>,
           EX (c e0) se)
 )

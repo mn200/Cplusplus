@@ -545,15 +545,15 @@ Section~\ref{sec:basic-types} below.
 of ascribing meaning, is to do what I refer to as ``name resolution''.
 In this phase, bare names are resolved into fully-qualified names
 wherever possible.  For example, this phase turns a program such as
-\begin{verbatim}
+\begin{stdrule}
    int x;
-   int f(int i) { return i + x; }
-\end{verbatim}
+   int f(int i) \{ return i + x; \}
+\end{stdrule}
 into
-\begin{verbatim}
+\begin{stdrule}
    int ::x;
-   int ::f(int i) { return i + ::x; }
-\end{verbatim}
+   int ::f(int i) \{ return i + ::x; \}
+\end{stdrule}
 where the names declared in the top, global namespace (\texttt{x} and
 \texttt{f}) have been replaced with unambiguous versions of their
 names wherever they occur.  Note that the result is no longer valid
@@ -850,7 +850,7 @@ necessary because classes can be constructed from template calls
 
 The information attached to each node of a \texttt{class_env} is the
 following record type:
-\begin{verbatim}
+\begin{stdrule}
    class_envinfo = <|
       (* ironically, the location of the static variables is
          only available dynamically, as classes are
@@ -859,7 +859,7 @@ following record type:
       info     : state_class_info ;
       refs     : string # addr |-> addr # CPP_ID # CPP_ID list
    |>
-\end{verbatim}
+\end{stdrule}
 The \texttt{statvars} field records the same information for a class's
 static variables as the \texttt{envinfo} records for normal
 variables.  The \texttt{refs} field records per-class information
@@ -907,11 +907,11 @@ need to transform the body of \texttt{ns1::f} to include the correct
 reference to \texttt{::x}.  The rest of this section of the report
 will describe the relation that turns the program in
 Figure~\ref{fig:name-res-separate-phase} into
-\begin{verbatim}
+\begin{stdrule}
    int ::x = 3;
-   int ::ns1::f(int n) { return n + ::x; }
+   int ::ns1::f(int n) \{ return n + ::x; \}
    int ::ns1::x = 2;
-\end{verbatim}
+\end{stdrule}
 
 \bigskip\noindent The main relation in Phase~1 is called
 \texttt{phase1}, and is defined in \HOLfile{name_resolution}.  In the
@@ -1134,12 +1134,12 @@ There are three cases depending on the form of the variable.  The
 first is when the variable is an ``absolute'' name, with a leading
 \texttt{::}.  This might still be a member reference, as in the
 following
-\begin{verbatim}
-   class C {
+\begin{stdrule}
+   class C \{
      int x;
-     int f() { return ::C::x; }
-   };
-\end{verbatim}
+     int f() \{ return ::C::x; \}
+   \};
+\end{stdrule}
 If this possibility is ruled out, then the name can be left
 unchanged.  (If it's a static member, the name must be fine on its
 own.)
@@ -1216,13 +1216,13 @@ defining a local name, this component would be \texttt{F} instead.)
 level of declarations comes with classes.  Here scopes are twisted in
 order to allow member functions to refer to member names that have
 actually been declared later in the class.  For example, in
-\begin{verbatim}
+\begin{stdrule}
    int x;
-   class C {
-     int f(int i) { return i + x; }
+   class C \{
+     int f(int i) \{ return i + x; \}
      int x;
-   }
-\end{verbatim}
+   \}
+\end{stdrule}
 the reference to \texttt{x} in the body of \texttt{C::f} is to
 \texttt{C::x}, not to the global \texttt{x}.  This special
 dispensation only extends as far as the bodies of member functions.
@@ -1230,13 +1230,13 @@ Sub-classes and their names are not so lucky; there the rule is that
 the class declaration must come first.  If there is a conflict with an
 external type-name, this is an error.  For example, the
 following is an error:
-\begin{verbatim}
-   struct B { int x; };
-   struct C {
+\begin{stdrule}
+   struct B \{ int x; \};
+   struct C \{
      B b;
-     struct B { int j; };
-   };
-\end{verbatim}
+     struct B \{ int j; \};
+   \};
+\end{stdrule}
 To make this correct, one should either explicitly qualify the type in
 the declaration of member \texttt{b} (one could write \texttt{::B~b;}
 to refer to the external class), or reorder so that the declaration of
@@ -1247,7 +1247,7 @@ This analysis is illustrated in the definition of
 \texttt{phase1_gclassdefn}, one clause of which is given in
 Figure~\ref{fig:phase1-gclassdefn}.
 \begin{figure}[htbp]
-\begin{alltt}
+\begin{stdrule}
    phase1_gclassdefn avds cnm (SOME ci) ps =
      let ancs' = MAP (\(\lambda\)(id,b,p). (resolve_classid ps id, b, p))
                      ci.ancestors in
@@ -1284,7 +1284,7 @@ Figure~\ref{fig:phase1-gclassdefn}.
                      (SOME <| ancestors := ancs' ;
                               fields := flds' |>))])
        |>
-\end{alltt}
+\end{stdrule}
 \caption{Name Resolution for a Global Class Declaration}
 \label{fig:phase1-gclassdefn}
 \end{figure}
@@ -1305,7 +1305,7 @@ worth illustating comes with the constant
 which handles resolution for top-level function definitions.  This is
 another large definition, presented in Figure~\ref{fig:phase1-fndefn}.
 \begin{figure}[htbp]
-\begin{alltt}
+\begin{stdrule}
    phase1_fndefn avds retty fnm pms body ps =
      let retty' = rewrite_type avds ps retty in
      let pms' =
@@ -1336,7 +1336,7 @@ another large definition, presented in Figure~\ref{fig:phase1-fndefn}.
        declared_ps with
          accdecls := (declared_ps.accdecls ++
                       [FnDefn retty' fnm' pms' body'])
-\end{alltt}
+\end{stdrule}
 \caption{Name Resolution for a Global Function Definition}
 \label{fig:phase1-fndefn}
 \end{figure}
@@ -1349,13 +1349,13 @@ has already been declared (usually in a class).)
 The \texttt{body_ps} is the name information that needs to be used
 when the body of the function is analysed.  For example, consider the
 following:
-\begin{verbatim}
-   namespace ns {
+\begin{stdrule}
+   namespace ns \{
      int x;
-     class C { int f(); int i; };
-   }
-   int ns::C::f() { return x + i; }
-\end{verbatim}
+     class C \{ int f(); int i; \};
+   \}
+   int ns::C::f() \{ return x + i; \}
+\end{stdrule}
 When one comes to analyse the function \texttt{f}, both the global
 variable \texttt{ns::x}, and the member variable \texttt{C::i} are in
 scope.  This adjustment of scopes is done by the calls to
@@ -1395,21 +1395,21 @@ pre-compiling templates, so I have adopted an explicit two-phase
 compilation approach.
 
 \begin{figure}
-\begin{verbatim}
-  template <class T> class List {
+\begin{stdrule}
+  template <class T> class List \{
     T item;
     List *next;
     static int node_count;
-  };
+  \};
 
   template<class T> int List<T>::node_count = 0;
 
   int main(void)
-  {
+  \{
     List<int> mylist;
     ...
-  }
-\end{verbatim}
+  \}
+\end{stdrule}
   \caption[A Difficult Program for Template Interpretation]{A program
     demonstrating the difficulty of interpreting templates.}
 \label{fig:templates-not-interpretable}
@@ -1470,10 +1470,10 @@ of the form
 \]
 The partiality arises at the lowest level, as in the following
 example:
-\begin{verbatim}
-   template<class T> void f<T>(int x) { T::staticfield = x; }
-   void g() { f<int>(3); }
-\end{verbatim}
+\begin{stdrule}
+   template<class T> void f<T>(int x) \{ T::staticfield = x; \}
+   void g() \{ f<int>(3); \}
+\end{stdrule}
 This must be an error because it is not sensible to write
 \texttt{int::staticfield}.  (Other type substitutions may also cause
 this to be an error, but this error can be detected as the
@@ -1509,13 +1509,13 @@ This instantiation will result in a template definition (one with free
 variables), which may or may not be required in the rest of the
 program.
 \begin{figure}
-\begin{verbatim}
-   template <class T> class Foo { static int f(); };
-   template <class T> int Foo<T>::f() { return 3; }
+\begin{stdrule}
+   template <class T> class Foo \{ static int f(); \};
+   template <class T> int Foo<T>::f() \{ return 3; \}
 
-   template <class T> class Bar { static int g(); };
-   template <class T> int Bar<T>::g() { return Foo<T*>::f(); }
-\end{verbatim}
+   template <class T> class Bar \{ static int g(); \};
+   template <class T> int Bar<T>::g() \{ return Foo<T*>::f(); \}
+\end{stdrule}
   \caption[A Template Program]{In Siek and Taha's model, the
     definition of class \texttt{Foo<T>} will get instantiated to
     provide a definition of class \texttt{Foo<T*>} when a reference to
@@ -1532,23 +1532,23 @@ definition should be instantiated when processing the definition of
 Taha's model is too eager.
 
 \begin{figure}
-\begin{verbatim}
-   template <class T> struct Foo { static int f(); };
-   template <class T> int Foo<T>::f() { return 3; }
+\begin{stdrule}
+   template <class T> struct Foo \{ static int f(); \};
+   template <class T> int Foo<T>::f() \{ return 3; \}
 
-   template <class T> struct Bar { static int f(); };
-   template <class T> int Bar<T>::f() { return 4; }
+   template <class T> struct Bar \{ static int f(); \};
+   template <class T> int Bar<T>::f() \{ return 4; \}
 
-   template <template <class> class A> struct Baz {
+   template <template <class> class A> struct Baz \{
      static int g();
-   };
+   \};
    template <template <class> class A>
-   int Baz<A>::g() {
+   int Baz<A>::g() \{
      return A<int>::f();
-   }
+   \}
 
-   int main() { return Baz<Foo>::g(); }
-\end{verbatim}
+   int main() \{ return Baz<Foo>::g(); \}
+\end{stdrule}
   \caption[A Template Program that Breaks Siek and Taha's Model]{Siek
     and Taha's model's early instantiation breaks down when it sees
     the definition of \texttt{Baz<A>::g}, and the call to
@@ -1973,9 +1973,9 @@ It may not be clear how a variable may come to have a dynamic type
 that is separate from its static type.  In fact, this is only possible
 in the presence of references, which are treated as aliases for real
 variables.  Thus, in a function such as
-\begin{verbatim}
-   int f(C &c) { return c.memfn(); }
-\end{verbatim}
+\begin{stdrule}
+   int f(C &c) \{ return c.memfn(); \}
+\end{stdrule}
 the variable \texttt{c} is initialized to ``point at'' some existing
 variable, and the address maps are set up so that \texttt{c} is indeed
 a perfect alias for some existing l-value.  But, the argument may in
@@ -2529,16 +2529,16 @@ simultaneous evaluation of the bodies of \texttt{f} and \texttt{g}.
 But the \cpp{} standard explicitly forbids this (\S1.8~fn8), and the C
 standard also hints that it is forbidden.
 \begin{figure}[htbp]
-\begin{verbatim}
+\begin{stdrule}
    int global;
-   int f(int x) { return global * 2 + x; }
-   int g(int y) { while (y > 0) { global += 2; y--; } }
+   int f(int x) \{ return global * 2 + x; \}
+   int g(int y) \{ while (y > 0) \{ global += 2; y--; \} \}
 
-   int main(void) {
+   int main(void) \{
      global = 10;
      return f(6) + g(10);
-   }
-\end{verbatim}
+   \}
+\end{stdrule}
 \caption{Where Functions Must Not Interleave}
 \label{fig:two-functions}
 \end{figure}
@@ -2886,13 +2886,13 @@ Section~\ref{sec:statements-blocks} below.
 \cpp{} allows variables to be declared in the guard positions of loop
 forms and if statements.  This is a syntactic nicety that we can assume
 has been compiled away.  For example, something like
-\begin{verbatim}
-   if (int i = e) { ... }
-\end{verbatim}
+\begin{stdrule}
+   if (int i = e) \{ ... \}
+\end{stdrule}
 can be rewritten into
-\begin{verbatim}
-   { int i = e; if (i) { ... } }
-\end{verbatim}
+\begin{stdrule}
+   \{ int i = e; if (i) \{ ... \} \}
+\end{stdrule}
 I take a similar attitude to \cpp's relaxation of C's rule that
 declarations and statements can intermingle.  Such an intermingling
 can be rewritten to successive nested blocks, all of which respect the
@@ -3624,21 +3624,17 @@ This is not modelled in the dynamic semantics as it can be emulated
 with a compile-time rewriting of the program.  If a function
 \texttt{f} is specified to only raise exceptions X and Y, then it can
 be rewritten to be
-\begin{center}
-\begin{minipage}{\textwidth}
-\begin{verbatim}
+\begin{stdrule}
    f(args)
-   {
-     try {
+   \{
+     try \{
        body
-     }
-     catch (X) { throw; }
-     catch (Y) { throw; }
-     catch (...) { std::unexpected(); }
-   }
-\end{verbatim}
-\end{minipage}
-\end{center}
+     \}
+     catch (X) \{ throw; \}
+     catch (Y) \{ throw; \}
+     catch (...) \{ std::unexpected(); \}
+   \}
+\end{stdrule}
 
 \subsubsection{Exceptions and Object Lifetimes}
 
@@ -5335,8 +5331,37 @@ When the call to the constructor returns it will be with a
      (e0 = ConstructedVal alvl a cnm)
    \(\Rightarrow\)
      mng (s, ST (Ret (EX e0 se0)) (RVC c se))
-         (s with rvstk updated_by TL, EX (c e0) se)
+         (s with <|
+            rvstk updated_by TL;
+            stack updated_by record_creation alvl a cnm
+          |>,
+          EX (c e0) se)
 \end{stdrule}
+The function
+\texttt{record_creation}\index{record_creation@\texttt{record_creation}}
+records the creation of a class in the \texttt{stack} component of the
+state so that it can be destroyed at the appropriate point later.  The
+function is defined in \HOLfile{declaration_dynamics}:
+\begin{stdrule}
+  record_creation alvl a cnm stk =
+    let stk' = update_nth_rev (LENGTH stk)
+                              (upd4 (CONS (a,cnm))) stk
+    in
+      if alvl < LENGTH stk \(\land\)
+         \(\neg\)MEM (a,cnm) (sel4 (REV_EL alvl stk))
+      then
+        update_nth_rev alvl (upd4 (CONS (a,cnm))) stk'
+      else
+        stk'
+\end{stdrule}
+In all cases, the creation of the object is recorded at the top of the
+stack.  The utility function \texttt{update_nth_rev} updates a list at
+the given index, where the elements are counted with the first element
+being \#1 (rather than the typical 0), and from the end of the list
+(the bottom of the stack).  Then, if the allocation level of the
+object is less than the length of the stack, this indicates that the
+object really ``belongs'' to an earlier allocation level.  This will
+happen if the object is a sub-object of some larger object.
 
 \paragraph{Eliding Unnecessary Copy Constructions} In the standard's
 \S12.8, paragraph 15, it is said
@@ -5356,16 +5381,19 @@ optimisation with the rule \ruleid{ret-pass-rvrt}:%
      (fnc = FVal fnid ftype thisobj) \(\land\)
      find_best_fnmatch s fnid (MAP valuetype args)
                        (Class cnm) params body \(\land\)
-     (HD s.rvstk = SOME (a, cnm))
+     (HD s.rvstk = SOME (alvl, a, cnm))
    \(\Rightarrow\)
      mng (s, ST (Ret (EX (FnApp_sqpt NONE fnc args) se)) c)
-         (s, ST (Ret (EX (FnApp_sqpt (SOME(a,cnm)) fnc args)
+         (s, ST (Ret (EX (FnApp_sqpt (SOME(alvl,a,cnm)) fnc args)
                          se))
                 c)
 \end{stdrule}
 As per the standard's language, this rule only fires if the type
 returned by the inner function is the same as the type of the function
-enclosing the \texttt{return} statement.  Nor does this rule stop
+enclosing the \texttt{return} statement.\footnote{If the expected
+  return type is an ancestor of the type of the object actually being
+  returned, then a copy constructor will be called and the return
+  value will be subjected to ``slicing''.}  Nor does this rule stop
 \ruleid{allocate-rvrt} from firing.  If the latter happens, an
 unnecessary copy will be performed, but this reflects the standard's
 permission rather than requirement of the optimisation.
@@ -5490,12 +5518,7 @@ allocated.  This is rule \ruleid{decl-class-copy-finishes}:%
      declmng mng
        (VDecInitA (Class cnm) (ObjPlace a)
                   (CopyInit (EX e se)), s)
-       ([],
-        s with stack updated_by
-          (\(\lambda\)stk.
-             if MEM (a,cnm) (sel4 (REV_EL alvl stk)) then stk
-             else
-               update_nth_rev alvl (upd4 (CONS (a,cnm))) stk)))
+       ([], s with stack updated_by record_creation alvl a cnm)
 \end{stdrule}
 Note how the \texttt{alvl} variable is not constrained, but we can
 argue that it will in fact be the length of the stack at this point.
