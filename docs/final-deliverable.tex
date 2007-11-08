@@ -3637,6 +3637,7 @@ be rewritten to be
 \end{stdrule}
 
 \subsubsection{Exceptions and Object Lifetimes}
+\label{ref:exceptions-object-lifetimes}
 
 Exceptions complicate the story about the construction and destruction
 of objects.  When a constructor runs it will typically cause a
@@ -3647,9 +3648,9 @@ those that haven't yet been constructed shouldn't have destructors
 called.
 
 Consider for example
-\begin{alltt}
+\begin{stdrule}
   Class::Class(objty p1) : b1(3), b2(\(e\)) \{ \(\mathit{body}\) \}
-\end{alltt}
+\end{stdrule}
 There are three objects that have their constructors called as a
 result of a call to this constructor.  One is the parameter
 \texttt{p1}, and the other are the base classes (or data-members)
@@ -5010,56 +5011,40 @@ is clear that the declarations for the parameters must come before the
 base and member initializations.
 \index{rule (dynamic)!constructor-function-call@\texttt{constructor-function-call}|)}
 
-\paragraph{Object Destruction}
+\paragraph{Object Destruction}%
+\index{stack (state component)@\texttt{stack} (\texttt{state} component)}%
 When an object of class type is first declared (with a
 \texttt{VDecInit} form), it has memory allocated sufficient to contain
 the new class in its entirety (including sub-objects).  This
 allocation is reflected in the state's \texttt{allocmap}.  When the
 block in which this declaration was made is left, this allocation is
-forgotten.  At the same time, the destructor for the object must be
-called.  This is modelled with the
-\texttt{blockclasses} field of the state.%
-\index{blockclasses (state field)@\texttt{blockclasses} (\texttt{state} field)}%
-This is of type
-\begin{verbatim}
-   : constructed list list
-\end{verbatim}
-Where the type \texttt{constructed} is defined (see \HOLfile{states})
-as
-\begin{verbatim}
-   constructed = NormalConstruct of construction_locn
-               | SubObjConstruct of construction_locn
-\end{verbatim}
-and \texttt{construction_locn} is an abbreviation for
-\begin{verbatim}
-   :addr # CPP_ID # CPP_ID list
-\end{verbatim}
-The address is the address of the object which is to be destroyed, and
-the two remaining are the class name and path which serve to identify
-the object's type.  The inner list constructor of the type of
-\texttt{blockclasses} reflects the fact that multiple objects may be
-declared at the same scope level.  The outer list constructor appears
-because of the stack discipline necessary for multiple nested scopes.
+forgotten (the \texttt{stack} component of the state is popped).  At
+the same time, the destructor for the object must be called.  These
+required object destructions are recorded in the \texttt{stack} as
+well.
 
-When an object of class type is declared, the rule responsible
-(\ruleid{decl-vdecinit-start-evaluate-direct-class}) both allocates
-the necessary memory, and adds address and type information for all of
-the object's sub-classes and members (not just immediate bases, but
-doing a complete traversal of the inheritance graph) to the
-\texttt{blockclasses} field.  This is done by the
-\texttt{update_blockclasses} relation defined in
-\texttt{class_infoScript}.  The object information has to be added
-to the list in the correct order so that objects will be destroyed in
-reverse order of construction.
+Each element of the \texttt{stack} is a 4-tuple.  The fourth component
+of these tuples is a list of objects to destroy, encoded as a list of
+addresses and class names.  Potentially, one object may appear on the
+\texttt{stack} twice, both at the topmost level and also deeper in the
+stack.  This can occur when sub-objects are created within a
+constructor for an enclosing class.  If an object appears twice, its
+presence at the top of the \texttt{stack} is ignored, except when the
+block is being exitted through an exception (for more on this, see
+Section~\ref{ref:exceptions-object-lifetimes}).  In that circumstance,
+objects and sub-objects alike must be destroyed in the reverse order
+of their construction.
 
-The rule for exitting from a block is then adjusted so that it can
-only occur if the current scope's \texttt{blockclasses} information is
-empty.  As long as it is not empty, the destructor corresponding to
-the object on the top of the stack is set up to be called.  This is
-done in rule \ruleid{block-exit-destructors-to-call}:
+The rule for exitting from a block can only occur if the current
+scope's list of objects needing destruction is empty.  As long as it
+is not empty, the destructor corresponding to the object on the top of
+the stack is set up to be called.  This is done in rule
+\ruleid{block-exit-destructors-to-call}:
 \begin{stdrule}
 (* RULE-ID: block-exit-destructors-to-call *)
-     (s0.blockclasses = destroy_these :: bcs) \(\land\)
+(* normally-constructed objects at this level are always
+   destroyed here *)
+     (sel4 (HD s0.stack) = destroy_these) \(\land\)
      \(\neg\)(destroy_these = []) \(\land\)
      final_stmt st c \(\land\)
      ((destcalls, s) =
@@ -5068,29 +5053,30 @@ done in rule \ruleid{block-exit-destructors-to-call}:
      mng (s0, ST (Block T [] [st]) c)
          (s, ST (Block T [] (destcalls ++ [st])) c)
 \end{stdrule}
-This is another example of evolving syntax: the block that the flow of
-control is about to leave, has this departure deferred with the
-insertion of new statements before the block's final statement.  The
-rule allowing an exit to eventually occur is \ruleid{block-exit}, for
-which see Figure~\ref{fig:block-exit} (page~\pageref{fig:block-exit}).
+(The \texttt{sel4} function%
+\index{sel4 function@\texttt{sel4} function} returns the fourth
+component of a tuple.) This is another example of evolving syntax: the
+block that the flow of control is about to leave, has this departure
+deferred with the insertion of new statements before the block's final
+statement.  The rule allowing an exit to eventually occur is
+\ruleid{block-exit}, for which see Figure~\ref{fig:block-exit}
+(page~\pageref{fig:block-exit}).
 
 Actually calling a destructor is straightforward because there are no
 parameters, nor anything comparable to the mem-initializers.  The
 requirement in the standard that sub-objects be destroyed before the
 body of a destructor is entered is handled by the fact that the
-sub-object information is entered into the \texttt{blockclasses} stack
-ahead of the final encompassing object.
+sub-obje1ct information is entered into the \texttt{stack} ahead of the
+final encompassing object.
 
 \paragraph{Using the Heap}
 Classes, and other types, can be allocated on the heap with the
 \texttt{new} operator.  For non-classes the rule is
 \ruleid{new-nonclass}, in Figure~\ref{fig:new-nonclass}.
 \begin{figure}[htbp]
-\begin{center}
-  \begin{minipage}{\textwidth}
 \index{rule (dynamic)!new-nonclass@\texttt{new-nonclass}}
 \index{New@\texttt{New}}
-\begin{alltt}
+\begin{stdrule}
 (* RULE-ID: new-nonclass *)
      \(\neg\)class_type (strip_array ty) \(\land\)
      malloc s0 ty a \(\land\)
@@ -5108,9 +5094,7 @@ Classes, and other types, can be allocated on the heap with the
    \(\Rightarrow\)
      mng (s0, EX (New ty NONE) se)
          (s, EX (ECompVal ptrval (Ptr result_ty)) se)
-\end{alltt}
-\end{minipage}
-\end{center}
+\end{stdrule}
 \caption{Allocating a Non-Class Object on the Heap with \texttt{new}}
 \label{fig:new-nonclass}
 \end{figure}
@@ -5121,10 +5105,12 @@ used for local objects.  The \texttt{hallocmap} is not affected by
 moving in and out of blocks.
 
 When a class is to be allocated, a constructor must be called.  This
-is reflected in the rule of Figure~\ref{fig:new-simple-class}.   The
+is reflected in the rule of Figure~\ref{fig:new-simple-class}.  The
 hypotheses are very similar to the non-class rule, but the conclusion
 differs because the class's constructor must be called before the
-pointer to the object can be returned.
+pointer to the object can be returned.  The use of allocation level 0
+in this rule ensures that the object's creation will never be recorded
+in the \texttt{stack}.
 \begin{figure}[htbp]
 \index{rule (dynamic)!new-simple-class@\texttt{new-simple-class}}
 \begin{stdrule}
@@ -5195,7 +5181,12 @@ and then does nothing (presumably there were interesting side effects
 incident on its creation).
 
 The rest of this section describes the modelling of five modes of being:
-creation, the three bullet-points above, and eventual destruction.
+creation, the three bullet-points above, and eventual destruction.  In
+fact, r-value destruction is straightforward because it fits into the
+general object lifetime framework as already described.  When a full
+lexical expression finishes its evaluation, the various rules for that
+situation cause the equivalent of a block exit to occur, which first
+requires the destruction of objects from that allocation level.
 
 \subsubsection{R-Value Creation and Function Return}
 \label{sec:r-value-creation}
@@ -5384,7 +5375,8 @@ optimisation with the rule \ruleid{ret-pass-rvrt}:%
      (HD s.rvstk = SOME (alvl, a, cnm))
    \(\Rightarrow\)
      mng (s, ST (Ret (EX (FnApp_sqpt NONE fnc args) se)) c)
-         (s, ST (Ret (EX (FnApp_sqpt (SOME(alvl,a,cnm)) fnc args)
+         (s, ST (Ret (EX (FnApp_sqpt (SOME(alvl,a,cnm)) fnc
+                                     args)
                          se))
                 c)
 \end{stdrule}
@@ -5393,7 +5385,8 @@ returned by the inner function is the same as the type of the function
 enclosing the \texttt{return} statement.\footnote{If the expected
   return type is an ancestor of the type of the object actually being
   returned, then a copy constructor will be called and the return
-  value will be subjected to ``slicing''.}  Nor does this rule stop
+  value will be subjected to ``slicing''%
+\index{object slicing}\index{slicing}.}  Nor does this rule stop
 \ruleid{allocate-rvrt} from firing.  If the latter happens, an
 unnecessary copy will be performed, but this reflects the standard's
 permission rather than requirement of the optimisation.
