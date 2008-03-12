@@ -1,0 +1,47 @@
+\documentclass[compress,dvips,color=usenames,xcolor=dvipsnames]{beamer}
+
+\usepackage{pstricks}
+\usepackage{pst-tree}
+\usepackage{pst-node}
+\usepackage{proof}
+\usepackage{alltt}
+
+
+%% Comment this out to get CM sans-serif
+\usepackage{euler} % like default SM, but with different, nice maths font
+
+%%
+% Use this (Boadilla) if you don't like the right sidebar
+\usetheme{Boadilla}
+%\usetheme{Goettingen} %nice toc sidebar on right
+%%
+% Use default for ultra-minimalist look
+%\usetheme{default}
+
+\useinnertheme{circles}
+\usefonttheme[onlymath]{serif}
+\setbeamertemplate{navigation symbols}{}
+
+\newcommand{\ints}{\ensuremath{\mathbb{Z}}}
+\newcommand{\nats}{\ensuremath{\mathbb{N}}}
+\newcommand{\reals}{\ensuremath{\mathbb{R}}}
+\newcommand{\rats}{\ensuremath{\mathbb{Q}}}
+\newcommand{\bools}{\ensuremath{\mathbb{B}}}
+\newcommand{\cpp}{\mbox{C\hspace{-.1em}+\hspace{-.05em}+}}
+
+\title{Defining a \cpp{} Semantics}
+\author{Michael Norrish}
+\institute[NICTA]{Canberra Research Lab., NICTA}
+\date{March 2008}
+
+\definecolor{nblue}{rgb}{0.0,0.310,0.490}
+\newrgbcolor{nictablue}{0.0 0.310 0.490}
+\setbeamercolor{math text}{fg=nictablue}
+
+\begin{document}
+\frame{\titlepage}
+\section{Introduction}
+\begin{frame}{Outline}\tableofcontents\end{frame}
+
+
+\end{document}

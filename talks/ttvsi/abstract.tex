@@ -1,0 +1,146 @@
+\documentclass{llncs}
+\usepackage{charter}
+\usepackage{url}
+\usepackage{alltt}
+
+\newcommand{\cpp}{\mbox{C\hspace{-.3mm}+\hspace{-.8mm}+}}
+
+\pagestyle{empty}
+\title{Defining a \cpp{} Semantics}
+\author{Michael Norrish}
+\institute{Canberra Research Lab., NICTA}
+\date{}
+
+\begin{document}
+\maketitle
+
+\paragraph{Introduction}
+In 2005, I was approached by QinetiQ to write a semantics for \cpp{}
+in the style of the C semantics I wrote for my PhD~\cite{Norrish98}.
+After some discussion, we decided that I could concentrate on the
+dynamic semantics, and that I might ignore as much of the
+(complicated) static semantics as I liked.  In particular, I decided
+that this allowed me to ignore the complicated rules for operator and
+function overloading.  This overloading is entirely resolved at
+compile-time and might in this way be thought of as a static matter. 
+
+I did commit to describing multiple inheritance, exceptions, templates
+(for all that these are also a ``compile-time'' feature), object
+lifetimes and namespaces.  This abstract highlights some of the issues
+encountered in performing this task.  The result of the commission was
+a document summarising the semantics, and some
+\mbox{12\hspace{.8mm}000} lines of HOL4 sources.
+
+\paragraph{From Na\"\i{}vety to Namespaces}
+One can divide C's variables into two sorts: stack-allocated locals
+and globals of permanent lifetime.  (A variable's visibility is an
+orthogonal issue.)  Dynamically accessing a variable is simple: it
+must either be a local, necessarily masking earlier locals and
+globals, or it is a global.  Because of this, a C semantics can
+maintain two maps for variables, its globals and its current
+variables.  When a function is entered, one sets the current map to be
+the global map, and then subsequently updates this with any further
+local variables (including function parameters) that are encountered,
+masking any other variables of the same name.
+
+In the presence of namespaces (or classes), this simplistic scheme
+falls apart.  Consider Figure~\ref{fig:nspaces}: on entering function
+\texttt{ns1::f}, one cannot simply use the names belonging to
+namespace \texttt{ns1}.  Done incorrectly, this will change the
+\texttt{x} reference in \texttt{f} to point to the wrong variable.
+When one includes the strange things that happen to names in the
+presence of class declarations, the underlying semantics becomes even
+more complicated.  Eventually, this was modelled with an explicit
+``name resolution'' phase.
+\begin{figure}
+\begin{center}
+\begin{minipage}{\textwidth}
+\begin{alltt}
+   int x = 3;                              val x = ref 3
+   namespace ns1 \{                         structure ns1 = struct
+     int f(int n) \{ return n + x; \}          fun f n = n + !x
+     int x = 2;                              val x = ref 2
+   \}                                       end
+\end{alltt}
+\end{minipage}
+\end{center}
+\caption{\cpp{} program (and SML equivalent) illustrating name
+  resolution. }
+\label{fig:nspaces}
+\end{figure}
+
+
+\paragraph{Non-Interleaving Function Calls in a Small-step Style} The
+\cpp{} Standard~\cite{cpp-standard-iso14882} (following C) insists on
+peculiar rules for the order of evaluation for expressions.  These
+effectively require that expression evaluation be defined in a
+small-step style.  Unfortunately, at the same time, the standard
+insists that function calls do not interleave, which is easiest to
+capture in a big-step semantics.  The earlier C semantics
+in~\cite{Norrish98} merged these styles in an ugly way.  The new
+\cpp{} approach uses a mixture of continuations and traditional
+recursion on the syntactic structure of expressions.  This isn't
+without its uglinesses; it's possible that a purely continuation-based
+approach would be cleaner.  Unfortunately, continuations can
+themselves introduce significant clutter, as well as some
+incomprehensibility.
+
+\paragraph{Validation and Proofs: the Ghost at My Banquet} The major
+problem with a semantics as large as this one is that it is hard to
+judge its correctness.  Proofs of type soundness and progression are
+often used to provide some form of validation, but in the absence of a
+good mechanisation of the type system, this option was not available
+with this semantics.  In the case of \cpp, the more important question
+is whether or not the semantics corresponds to the ``real'' definition
+of the language.  There are no deep proofs in the semantics, but there
+are some ``sanity'' theorems of various forms.
+
+\paragraph{Other Features} Two significant pieces of existing work
+enabled important parts of the semantics to be taken ``off the
+shelf''.  In particular, the treatment of multiple inheritance
+followed that given in the paper by Wasserrab \emph{et
+  al}~\cite{wasserrab-nst-OOPSLA06}. The only significant adjustment
+required when incorporating this material was to remove the Java-style
+assumption that ``everything is a pointer to something on the heap''.
+Capturing the layout of objects with \texttt{virtual} ancestors was
+particularly involved.
+
+Secondly, the semantics also drew on the description of templates in
+Siek and Taha~\cite{DBLP:conf/ecoop/SiekT06}.  \cpp{} templates are
+one of the language's most complicated features, and are modelled as a
+separate phase that happens before any dynamic behaviour occurs.
+
+\begin{thebibliography}{1}
+
+\bibitem{cpp-standard-iso14882}
+{\em Programming Languages---C++}, 2003.
+\newblock ISO/IEC 14882:2003(E).
+
+\bibitem{Norrish98}
+Michael Norrish.
+\newblock {\em {C} formalised in {HOL}}.
+\newblock PhD thesis, Computer Laboratory, University of Cambridge, 1998.
+\newblock Also available as Technical Report 453 from \url{ht
+  tp://www.cl.cam.ac.uk/TechReports/UCAM-CL-TR-453.pdf}.
+
+\bibitem{DBLP:conf/ecoop/SiekT06}
+Jeremy Siek and Walid Taha.
+\newblock A semantic analysis of \cpp{} templates.
+\newblock In Dave Thomas, editor, {\em ECOOP}, volume 4067 of {\em Lecture
+  Notes in Computer Science}, pages 304--327. Springer, 2006.
+
+\bibitem{wasserrab-nst-OOPSLA06}
+Daniel Wasserrab, Tobias Nipkow, Gregor Snelting, and Frank Tip.
+\newblock An operational semantics and type safety proof for multiple
+  inheritance in \cpp.
+\newblock In {\em {OOPSLA}~'06: Object oriented programming, systems,
+  languages, and applications}. ACM Press, 2006.
+\newblock Available from
+  \url{http://isabelle.in.tum.de/~nipkow/pubs/oopsla06.html}.
+
+\end{thebibliography}
+
+\end{document}
+
+
+
