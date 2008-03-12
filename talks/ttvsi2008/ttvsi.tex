@@ -12,8 +12,8 @@
 
 %%
 % Use this (Boadilla) if you don't like the right sidebar
-\usetheme{Boadilla}
-%\usetheme{Goettingen} %nice toc sidebar on right
+%\usetheme{Boadilla}
+\usetheme{Goettingen} %nice toc sidebar on right
 %%
 % Use default for ultra-minimalist look
 %\usetheme{default}
@@ -42,6 +42,156 @@
 \frame{\titlepage}
 \section{Introduction}
 \begin{frame}{Outline}\tableofcontents\end{frame}
+
+\begin{frame}{Why? What? How?}
+In 2005, UK company QinetiQ approached me to write a semantics
+  for \cpp{}
+
+\bigskip
+Decided early on to avoid static semantics\\[1mm]
+  \quad\quad\dots {\footnotesize which lets me ignore operator and function overloading}
+
+\bigskip
+Aim to build on my PhD's C semantics
+\end{frame}
+
+\begin{frame}{Result}
+
+A deeper appreciation of \cpp's features.
+
+\bigskip
+Some 12\hspace{.1em}000 lines of HOL4 source code (mainly definitions).
+
+\bigskip
+A report (100pp) describing the above in English.
+
+\bigskip
+Legal back-and-forth squeezed time available: work was done in 9
+increasingly intense months.
+
+\end{frame}
+
+\begin{frame}{The Good, the Bad and the Ugly}
+
+A Conclusion in Advance:
+\begin{itemize}
+\item I produced a good picture of the dynamics of real \cpp
+\item I didn't have time to fill in anything like all the details
+\item The community wants to make \cpp{} even more complicated
+\end{itemize}
+
+\end{frame}
+
+\section{The Structure of an Operational Semantics}
+\begin{frame}{\cpp{} Builds on C}
+
+\cpp{} inherits a great deal from its ancestor C.
+
+\bigskip
+The basic semantics of expression evaluation, and interactions with
+memory are taken from C essentially unchanged.
+
+\bigskip
+Control-flow is complicated by constructors, destructors and
+exceptions, but there are no new statement forms in \cpp.
+
+\bigskip My existing C semantics is a reasonable starting point.
+
+\bigskip \footnotesize
+Bonus:\\
+\quad my 1998 HOL source upgrades to work with the HOL4 of 2007!
+
+\end{frame}
+
+\begin{frame}{Original C Semantics---Expressions}
+
+Annoying Fact \#1:
+\begin{quote}
+   The evaluation of sub-expressions can happen in arbitrary order,
+   possibly interleaving across sub-expressions.
+\end{quote}
+
+\bigskip
+The natural expression of this are the small-step rules
+\[
+\infer{
+  \langle e_1 \oplus e_2, \sigma_0\rangle \rightarrow_e
+  \langle e_1' \oplus e_2, \sigma\rangle
+}{
+  \langle e_1, \sigma_0\rangle \rightarrow_e \langle e_1',\sigma\rangle
+} \qquad
+\infer{
+  \langle e_1 \oplus e_2, \sigma_0\rangle \rightarrow_e
+  \langle e_1 \oplus e_2', \sigma\rangle
+}{
+  \langle e_2, \sigma_0\rangle \rightarrow_e \langle e_2',\sigma\rangle
+}
+\]
+
+\bigskip Apart from the fact that there is a shared state being
+updated ($\sigma_0$ changes to $\sigma$), these are just like rules
+for parallel reduction in CCS or the $\pi$-calculus.
+\end{frame}
+
+\begin{frame}{Original C Semantics---Statements}
+  In 1995, it seemed natural to model statements in a big-step
+  style.\\
+  In 1995, I was young and na\"\i{}ve.
+
+\bigskip
+The big-step style makes handling scopes easy (the semantics itself
+provides you with a free stack):
+\[
+\infer{
+  \langle \textsf{Block}(\mathit{st}), \sigma_0\rangle
+  \rightarrow_s
+  \sigma[\textsf{vars} := \sigma_0.\textsf{vars}]
+}{
+  \langle \mathit{st}, \sigma_0\rangle \rightarrow_s \sigma
+}
+\]
+where the states ($\sigma_0$, $\sigma$) contain a $\textsf{vars}$
+component recording addresses and type information for variables in
+scope.
+
+\end{frame}
+
+\begin{frame}{Original C Semantics---Function Calls}
+
+  In a big-step style, function calls (which are expressions)
+  naturally become ``atomic'':
+  \[
+  \infer{
+    \langle \textsf{Fncall}(f,\mathit{args}), \sigma_0 \rangle \rightarrow_e
+    \langle \textsf{result}(\sigma),
+    \sigma[\textsf{vars} := \sigma_0.\textsf{vars}]
+    \rangle
+  }{
+    \langle \textsf{body}(f), \sigma'\rangle \rightarrow_s \sigma
+  }
+\]
+where $\sigma'$ is like $\sigma_0$ but has extra variables
+corresponding to $f$'s formal parameters with values from
+$\mathit{args}$.
+
+\bigskip
+``Atomic'' function calls are probably what C requires, and are
+\textbf{definitely} what \cpp{} requires.
+
+
+\end{frame}
+
+
+\section{Namespaces}
+
+\section{Building on the Shoulders of Giants}
+\subsection{Multiple Inheritance}
+\subsection{Templates}
+
+\section{Proofs? Theorems?  Validation!?}
+
+
+\section{Exceptions}
 
 
 \end{document}
