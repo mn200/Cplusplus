@@ -12,8 +12,8 @@
 
 %%
 % Use this (Boadilla) if you don't like the right sidebar
-%\usetheme{Boadilla}
-\usetheme{Goettingen} %nice toc sidebar on right
+\usetheme{Boadilla}
+%\usetheme{Goettingen} %nice toc sidebar on right
 %%
 % Use default for ultra-minimalist look
 %\usetheme{default}
@@ -37,6 +37,7 @@
 \definecolor{nblue}{rgb}{0.0,0.310,0.490}
 \newrgbcolor{nictablue}{0.0 0.310 0.490}
 \setbeamercolor{math text}{fg=nictablue}
+\newcommand{\structcol}{\usebeamercolor[fg]{structure}}
 
 \begin{document}
 \frame{\titlepage}
@@ -63,7 +64,7 @@ A deeper appreciation of \cpp's features.
 Some 12\hspace{.1em}000 lines of HOL4 source code (mainly definitions).
 
 \bigskip
-A report (100pp) describing the above in English.
+A report (120pp) describing the above in English.
 
 \bigskip
 Legal back-and-forth squeezed time available: work was done in 9
@@ -143,11 +144,11 @@ The big-step style makes handling scopes easy (the semantics itself
 provides you with a free stack):
 \[
 \infer{
-  \langle \textsf{Block}(\mathit{st}), \sigma_0\rangle
-  \rightarrow_s
+  \langle \textsf{Block}(s), \sigma_0\rangle
+  \;\Downarrow_s\;
   \sigma[\textsf{vars} := \sigma_0.\textsf{vars}]
 }{
-  \langle \mathit{st}, \sigma_0\rangle \rightarrow_s \sigma
+  \langle s, \sigma_0\rangle \;\Downarrow_s\; \sigma
 }
 \]
 where the states ($\sigma_0$, $\sigma$) contain a $\textsf{vars}$
@@ -162,17 +163,17 @@ scope.
   naturally become ``atomic'':
   \[
   \infer{
-    \langle \textsf{Fncall}(f,\mathit{args}), \sigma_0 \rangle \rightarrow_e
+    \langle \textsf{Fncall}(f,\vec{x}), \sigma_0 \rangle \rightarrow_e
     \langle \textsf{result}(\sigma),
     \sigma[\textsf{vars} := \sigma_0.\textsf{vars}]
     \rangle
   }{
-    \langle \textsf{body}(f), \sigma'\rangle \rightarrow_s \sigma
+    \langle \textsf{body}(f), \sigma'\rangle \;\Downarrow_s\; \sigma
   }
 \]
 where $\sigma'$ is like $\sigma_0$ but has extra variables
-corresponding to $f$'s formal parameters with values from
-$\mathit{args}$.
+corresponding to $f$'s formal parameters bound to values from
+$\vec{x}$.
 
 \bigskip
 ``Atomic'' function calls are probably what C requires, and are
@@ -181,6 +182,193 @@ $\mathit{args}$.
 
 \end{frame}
 
+\begin{frame}{Original C Semantics---Statement Uglinesses}
+
+  Expressions embedded inside statements require a call to the
+  reflexive, transitive closure of the $\rightarrow_e$ relation:
+
+\[
+\infer{
+  \langle\textsf{while}\;g \;\textsf{do}\;s,\sigma_0\rangle
+  \;\Downarrow_s\;
+  \sigma
+}{
+  \langle g, \sigma_0 \rangle \rightarrow_e^* \langle 0, \sigma\rangle
+}
+\]
+Ugh!
+
+\bigskip It is also impossible to model programs (like servers) that
+deliberately loop.
+
+\end{frame}
+
+\begin{frame}{Making Statements Small-step}
+
+If the rule-system doesn't give you a stack for free, you have to
+model it explicitly:
+\[
+\infer{
+  \langle \textsf{Block}(s), \sigma_0 \rangle \rightarrow_s
+  \langle s, \sigma\rangle
+}{
+  \sigma =
+  \sigma_0[\textsf{stk} := \sigma_0.\textsf{vars} :: \sigma_0.\textsf{stk}]
+}
+\]
+\onslide<2->
+But wait!  How will we know when to pop the stack?
+
+\onslide<3->
+\bigskip
+One traditional approach to small-step statements is to use a
+$\textsf{Skip}$ statement to mark the successful end of an
+evaluation.
+
+\bigskip But if we evaluate our $S$ all the way to $\textsf{Skip}$,
+how will we know then that there was a requirement to pop?
+
+\end{frame}
+
+\begin{frame}{Explicit Stacks}
+Roughly the way I ended up doing it:
+\[
+\begin{array}{c}
+\infer{
+  \langle \textsf{Block}_\bot(s), \sigma_0 \rangle \rightarrow_s
+  \langle \textsf{Block}_\top(s), \sigma\rangle
+}{
+  \sigma =
+  \sigma_0[\textsf{stk} := \sigma_0.\textsf{vars} :: \sigma_0.\textsf{stk}]
+}\\[5mm]
+\infer{
+  \langle \textsf{Block}_\top(s_0), \sigma_0\rangle \rightarrow_s
+  \langle \textsf{Block}_\top(s), \sigma\rangle
+}{
+  \langle s_0,\sigma_0 \rangle \rightarrow_s \langle s, \sigma\rangle
+}\\[5mm]
+\infer{
+  \langle\textsf{Block}_\top(\textsf{Skip}), \sigma\rangle
+  \rightarrow_s
+  \langle
+     \textsf{Skip},
+     \sigma[\textsf{stk} := t, \textsf{vars} := h]
+  \rangle
+}{\sigma.\textsf{stk} = h :: t}
+\end{array}
+\]
+
+(Have to assume that all $\textsf{Block}$ forms are initially
+$\textsf{Block}_\bot$.)
+
+\bigskip
+But what of ``atomic'' functions?
+\end{frame}
+
+\begin{frame}{Atomic Function Calls}
+
+Scenario to avoid is having the expression
+\[
+f(x) + g(y)
+\]
+take a step inside $f$ followed by a step inside $g$.
+
+\end{frame}
+
+\begin{frame}{Atomic Function Calls with Continuations}
+
+Drop the $s$ and $e$ subscripts on $\rightarrow$.
+
+\medskip
+Instead, have one arrow, and tags on the syntax $\textsf{St}$ and
+$\textsf{Ex}$.
+
+\medskip
+Function call rule:
+\[
+\infer{
+  \langle \textsf{Ex}(\textsf{FnCall}(f,\vec{x})), \sigma_0\rangle
+  \rightarrow
+  \langle \textsf{St}(\textsf{body}(f), (\lambda x. x)), \sigma'\rangle
+}{
+  \mbox{$\sigma'$ has $f$'s parameters installed etc}
+}
+\]
+
+\medskip
+A standard rule for sub-expression evaluation:
+\[
+\infer{
+  \langle \textsf{Ex}(e_1 + e_2), \sigma_0 \rangle
+  \rightarrow
+  \langle \textsf{Ex}(e_1' + e_2), \sigma \rangle
+}{
+  \langle \textsf{Ex}(e_1), \sigma_0\rangle
+  \rightarrow
+  \langle \textsf{Ex}(e_1'), \sigma \rangle
+}
+\]
+
+
+\end{frame}
+
+\begin{frame}{Atomic Function Calls with Continuations}
+If a sub-expression involved a function call:
+\[
+\infer{
+  \langle \textsf{Ex}(e_1 + e_2), \sigma_0 \rangle
+  \rightarrow
+  \langle \textsf{St}(s, (\lambda x.\, c(x) + e_2)), \sigma\rangle
+}{
+  \langle \textsf{Ex}(e_1), \sigma_0 \rangle
+  \rightarrow
+  \langle \textsf{St}(s, c), \sigma \rangle
+}
+\]
+$c$ is also a ``context''.  $(\lambda x.\,c(x) + e_2)$ is a function
+on syntax.
+
+\bigskip
+When a $\textsf{St}(s,c)$ form becomes
+$\textsf{St}(\texttt{return}(v),c)$, can pass the return value $v$ to
+the containing expression by moving to $c(v)$.
+
+\end{frame}
+
+\begin{frame}{Teetering on the Knife-edge of Madness}
+Getting this far makes the whole enterprise feel disastrously
+complicated.
+
+\bigskip
+Perhaps a ``pure continuation'' system is possible.\\
+{\structcol Slogan:}
+\parbox[t]{0.8\textwidth}{replace recursion within syntax with
+  a ``list'' of steps still to perform.}
+
+\bigskip
+For example,
+\[
+\infer{
+  \langle \textsf{St}(\textsf{Block}(s), c), \sigma_0\rangle
+  \rightarrow
+  \langle \textsf{St}(s \;\textbf{;}\;\textsf{Pop}, c), \sigma\rangle
+}{
+  \sigma = \sigma_0[\textsf{stk} :=
+       \sigma_0.\textsf{vars} :: \sigma_0.\textsf{stk}]
+}
+\]
+($\textsf{Pop}$ is a new piece of ``syntax'' invented
+specially)
+
+\bigskip
+\textbf{\structcol Against:}
+\begin{itemize}
+\item Handling interleaving of sub-expression evaluation looks
+  complicated
+\item The semantics grows ever harder for the reader to appreciate
+\end{itemize}
+
+\end{frame}
 
 \section{Namespaces}
 
