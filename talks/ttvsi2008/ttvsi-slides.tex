@@ -8,7 +8,7 @@
 
 
 %% Comment this out to get CM sans-serif
-\usepackage{euler} % like default SM, but with different, nice maths font
+\usepackage{euler} % like default CM, but with different, nice maths font
 
 %%
 % Use this (Boadilla) if you don't like the right sidebar
@@ -29,9 +29,15 @@
 \newcommand{\bools}{\ensuremath{\mathbb{B}}}
 \newcommand{\cpp}{\mbox{C\hspace{-.1em}+\hspace{-.05em}+}}
 
+\newcommand{\strong}[1]{{\structcol #1}}
+\newcommand{\stronger}[1]{\emph{\structcol #1}}
+\newcommand{\strongest}[1]{\textbf{\structcol #1}}
+
 \title{Defining a \cpp{} Semantics}
+\subtitle{Topics in Operational Confusion}
 \author{Michael Norrish}
 \institute[NICTA]{Canberra Research Lab., NICTA}
+\titlegraphic{\includegraphics[width=0.2\textwidth]{Nicta_vert.eps}}
 \date{March 2008}
 
 \definecolor{nblue}{rgb}{0.0,0.310,0.490}
@@ -177,7 +183,7 @@ $\vec{x}$.
 
 \bigskip
 ``Atomic'' function calls are probably what C requires, and are
-\textbf{definitely} what \cpp{} requires.
+\strong{definitely} what \cpp{} requires.
 
 
 \end{frame}
@@ -225,8 +231,8 @@ One traditional approach to small-step statements is to use a
 $\textsf{Skip}$ statement to mark the successful end of an
 evaluation.
 
-\bigskip But if we evaluate our $S$ all the way to $\textsf{Skip}$,
-how will we know then that there was a requirement to pop?
+\bigskip But if $s$ is evaluated all the way to $\textsf{Skip}$,
+how will we then know that there was a requirement to pop?
 
 \end{frame}
 
@@ -336,14 +342,15 @@ the containing expression by moving to $c(v)$.
 \end{frame}
 
 \begin{frame}{Teetering on the Knife-edge of Madness}
-Getting this far makes the whole enterprise feel disastrously
+Getting even this far makes the whole enterprise feel disastrously
 complicated.
 
 \bigskip
 Perhaps a ``pure continuation'' system is possible.\\
-{\structcol Slogan:}
-\parbox[t]{0.8\textwidth}{replace recursion within syntax with
-  a ``list'' of steps still to perform.}
+{\structcol
+\strongest{Slogan:}
+\parbox[t]{0.7\textwidth}{\itshape replace recursion within syntax with
+  a ``list'' of steps still to perform.}}
 
 \bigskip
 For example,
@@ -361,7 +368,7 @@ For example,
 specially)
 
 \bigskip
-\textbf{\structcol Against:}
+\strongest{Against:}
 \begin{itemize}
 \item Handling interleaving of sub-expression evaluation looks
   complicated
@@ -371,6 +378,22 @@ specially)
 \end{frame}
 
 \section{Namespaces}
+
+\begin{frame}{Variable-tracking the Young and Na\"\i{}ve Way}
+
+This works for C:
+  \begin{itemize}
+  \item Maintain \strong{global} and \strong{current} maps for
+    variables
+    \begin{itemize}
+    \item these are maps from names to types and addresses
+    \end{itemize}
+  \item When entering a function, initialise \strong{current} with
+    \strong{global} map
+  \item When a variable is declared, update \strong{current}.
+  \end{itemize}
+
+\end{frame}
 
 \section{Building on the Shoulders of Giants}
 \subsection{Multiple Inheritance}
