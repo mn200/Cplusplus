@@ -84,12 +84,15 @@ A Conclusion in Advance:
 \begin{itemize}
 \item I produced a good picture of the dynamics of real \cpp
 \item I didn't have time to fill in anything like all the details
+\item I have no theorems to show you
 \item The community wants to make \cpp{} even more complicated
 \end{itemize}
 
 \end{frame}
 
 \section{The Structure of an Operational Semantics}
+\begin{frame}{Outline}\tableofcontents[current]\end{frame}
+
 \begin{frame}{\cpp{} Builds on C}
 
 \cpp{} inherits a great deal from its ancestor C.
@@ -336,7 +339,7 @@ on syntax.
 
 \bigskip
 When a $\textsf{St}(s,c)$ form becomes
-$\textsf{St}(\texttt{return}(v),c)$, can pass the return value $v$ to
+$\textsf{St}(\textsf{Return}(v),c)$, can pass the return value $v$ to
 the containing expression by moving to $c(v)$.
 
 \end{frame}
@@ -378,6 +381,7 @@ specially)
 \end{frame}
 
 \section{Namespaces}
+\begin{frame}{Outline}\tableofcontents[current]\end{frame}
 
 \begin{frame}{Variable-tracking the Young and Na\"\i{}ve Way}
 
@@ -395,9 +399,228 @@ This works for C:
 
 \end{frame}
 
+\begin{frame}[containsverbatim]{Namespaces}
+
+Superficially, a \cpp{} namespace is just like an SML structure.
+
+\bigskip
+The task is to come up with a semantics that correctly handles both
+
+\bigskip
+\quad\begin{minipage}{0.4\textwidth}
+\structcol
+\begin{alltt}
+val x = 3
+structure S1 = struct
+  val x = 4
+  fun f y = x + y
+end
+\end{alltt}
+\end{minipage}
+and\hspace{1cm}
+\begin{minipage}{0.4\textwidth}
+\structcol
+\begin{alltt}
+val x = 3
+structure S2 = struct
+  fun f y = x + y
+  val x = 4
+end
+\end{alltt}
+\end{minipage}
+
+\bigskip
+When ``entering'' {\structcol\texttt{S2.f}}, it is not correct to
+overlay the global environment with that belonging to
+{\structcol\texttt{S2}}.
+
+\end{frame}
+
+\begin{frame}[containsverbatim]{Name Resolution as a Separate Phase}
+
+  Before the dynamics can be allowed to fire, all names have to be
+  resolved.
+
+\bigskip
+My semantics models this as a source-to-source transformation.
+
+\bigskip
+For example,
+{\structcol
+\begin{alltt}
+   int x = 3;
+   namespace ns1 \{
+     int f(int n) \{ return n + x; \}
+     int x = 4;
+   \}
+\end{alltt}}
+needs to become (strictly, ill-formed)
+{\structcol
+\begin{alltt}
+   int ::x = 3;
+   int ::ns1::f(int n) \{ return n + ::x; \}
+   int ::ns1::x = 4;
+\end{alltt}}
+
+\end{frame}
+
+\begin{frame}[containsverbatim]{Namespaces Can be Extended Later}
+
+Existing namespace contents take precedence when names are resolved:
+{\structcol
+\begin{alltt}
+   namespace ns \{ int {\red{}x}; \}
+
+   int x;
+
+   namespace ns \{
+     int f(int n) \{ return n + {\red{}x}; \}
+   \}
+\end{alltt}}
+
+\end{frame}
+
+\begin{frame}[containsverbatim]{Classes Mean Complication}
+Name resolution gets worse when classes are involved.
+
+\bigskip
+Most egregiously,
+{\structcol
+\begin{alltt}
+   int x;
+
+   class C \{
+     int f(int n) \{ return n + {\red{}x}; \}
+     int {\red{}x};
+   \};
+\end{alltt}
+}
+The \texttt{\red x} in \texttt{\structcol f} refers to
+the \texttt{\red x} below it.
+
+\end{frame}
+
+\begin{frame}{More Class-based Horror}
+
+\begin{itemize}
+\item Classes' member variables (\emph{eg} \texttt{\red x}) are not a global
+  variables of fixed location
+\begin{itemize}
+\item they are names that must be dynamically
+  evaluated with respect to a particular class instance/value.
+\end{itemize}
+
+\medskip
+\item Classes can be nested within other classes
+  \begin{itemize}
+  \item but inner classes must be ordered so their names will mask
+    external classes of the same name
+  \end{itemize}
+
+\medskip
+\item Classes themselves may be declared (`dynamically') within a
+  function body
+  \begin{itemize}
+  \item but their free names must resolve statically
+  \end{itemize}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{\cpp{} Name Resolution in Brief}
+
+My semantics does not attempt
+\begin{itemize}
+\item to describe interactions with \texttt{\structcol friend} declarations;
+\item to handle namespace renaming; nor
+\item to model the equivalent of SML's \texttt{\structcol open}
+\end{itemize}
+
+\bigskip
+Even then, it's quite complicated enough!
+
+\bigskip
+I did validate it on some examples though...
+
+
+\end{frame}
+
 \section{Building on the Shoulders of Giants}
+\begin{frame}{Outline}\tableofcontents[current]\end{frame}
+
 \subsection{Multiple Inheritance}
+\begin{frame}{Multiple Inheritance Done Right}
+
+Multiple inheritance is a scary, scary thing.
+
+\bigskip
+Stroustrup argues its case quite well in his books.
+
+\bigskip
+And luckily, \\[1em]
+\quad\begin{minipage}{0.9\textwidth}
+Daniel Wasserrab, Tobias Nipkow, Gregor Snelting and Frank Tip.\\
+{\structcol An operational semantics and type safety proof for
+  multiple inheritance in \cpp{}.} In \emph{OOPSLA~'06}.
+\end{minipage}\\[1em]
+explains it beautifully.
+
+\end{frame}
+
+\begin{frame}{Multiple Inheritance}
+
+A funny thing about OO-polymorphism:
+\begin{itemize}
+\item An object's \strong{dynamic} type never changes
+\item An object's \strong{static} type changes all the time
+\end{itemize}
+
+\bigskip
+The Wasserrab-method represents an object's types as a path through
+an inheritance tree
+\[
+\langle \textit{most-derived}, \textit{its-parent}, \cdots,
+\textit{least-derived}\rangle
+\]
+The \strong{dynamic} type is the first element of the path.\\
+\medskip
+The \strong{static} type is the last element of the path.
+
+\bigskip
+The whole path is necessary to handle multiple ancestors of the same
+type.  Special magic also handles shared (= \texttt{\structcol
+  virtual}) ancestors.
+
+\end{frame}
+
+\begin{frame}{Advantage of Theft Over Honest Toil}
+
+  The \emph{OOPSLA} paper presents a simplified model (and proves
+  theorems).
+
+  \bigskip
+  I adopted it wholesale, and then added complications.
+
+  \bigskip\bigskip
+  \strongest{Object Layout}\\[1em]
+  Class members occur inside classes, not on the end of pointers to
+  the heap.
+
+  \medskip
+  Ancestor classes actually live inside derived classes.
+
+  \medskip
+  A class in memory may not occupy contiguous memory.
+
+  \medskip
+  Members of a class can have their address taken.
+
+\end{frame}
+
 \subsection{Templates}
+\begin{frame}{Templates}
+
+\end{frame}
 
 \section{Proofs? Theorems?  Validation!?}
 
