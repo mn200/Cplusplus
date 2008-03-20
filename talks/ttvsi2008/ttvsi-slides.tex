@@ -6,6 +6,7 @@
 \usepackage{proof}
 \usepackage{alltt}
 
+\newcommand{\ctt}[1]{\texttt{\structcol #1}}
 
 %% Comment this out to get CM sans-serif
 \usepackage{euler} % like default CM, but with different, nice maths font
@@ -38,7 +39,7 @@
 \author{Michael Norrish}
 \institute[NICTA]{Canberra Research Lab., NICTA}
 \titlegraphic{\includegraphics[width=0.2\textwidth]{Nicta_vert.eps}}
-\date{March 2008}
+\date{26 March 2008}
 
 \definecolor{nblue}{rgb}{0.0,0.310,0.490}
 \newrgbcolor{nictablue}{0.0 0.310 0.490}
@@ -205,7 +206,6 @@ $\vec{x}$.
   \langle g, \sigma_0 \rangle \rightarrow_e^* \langle 0, \sigma\rangle
 }
 \]
-Ugh!
 
 \bigskip It is also impossible to model programs (like servers) that
 deliberately loop.
@@ -292,20 +292,8 @@ Drop the $s$ and $e$ subscripts on $\rightarrow$.
 Instead, have one arrow, and tags on the syntax $\textsf{St}$ and
 $\textsf{Ex}$.
 
-\medskip
-Function call rule:
-\[
-\infer{
-  \langle \textsf{Ex}(\textsf{FnCall}(f,\vec{x})), \sigma_0\rangle
-  \rightarrow
-  \langle \textsf{St}(\textsf{body}(f), (\lambda x. x)), \sigma'\rangle
-}{
-  \mbox{$\sigma'$ has $f$'s parameters installed etc}
-}
-\]
-
-\medskip
-A standard rule for sub-expression evaluation:
+\bigskip
+The revised rule for sub-expression evaluation on the left:
 \[
 \infer{
   \langle \textsf{Ex}(e_1 + e_2), \sigma_0 \rangle
@@ -315,6 +303,18 @@ A standard rule for sub-expression evaluation:
   \langle \textsf{Ex}(e_1), \sigma_0\rangle
   \rightarrow
   \langle \textsf{Ex}(e_1'), \sigma \rangle
+}
+\]
+
+\bigskip
+Function call rule:
+\[
+\infer{
+  \langle \textsf{Ex}(\textsf{FnCall}(f,\vec{x})), \sigma_0\rangle
+  \rightarrow
+  \langle \textsf{St}(\textsf{body}(f), (\lambda x. x)), \sigma'\rangle
+}{
+  \mbox{$\sigma'$ has $f$'s parameters installed etc}
 }
 \]
 
@@ -429,10 +429,8 @@ end
 \end{alltt}
 \end{minipage}
 
-\bigskip
-When ``entering'' {\structcol\texttt{S2.f}}, it is not correct to
-overlay the global environment with that belonging to
-{\structcol\texttt{S2}}.
+\bigskip When ``entering'' \ctt{S2.f}, it is not correct to overlay
+the global environment with that belonging to \ctt{S2}.
 
 \end{frame}
 
@@ -442,7 +440,8 @@ overlay the global environment with that belonging to
   resolved.
 
 \bigskip
-My semantics models this as a source-to-source transformation.
+My semantics models this as a source-to-source transformation (a
+partial function).
 
 \bigskip
 For example,
@@ -478,6 +477,9 @@ Existing namespace contents take precedence when names are resolved:
    \}
 \end{alltt}}
 
+Similar things happen with classes and delayed definitions of member
+functions.
+
 \end{frame}
 
 \begin{frame}[containsverbatim]{Classes Mean Complication}
@@ -495,8 +497,7 @@ Most egregiously,
    \};
 \end{alltt}
 }
-The \texttt{\red x} in \texttt{\structcol f} refers to
-the \texttt{\red x} below it.
+The \texttt{\red x} in \ctt{f} refers to the \texttt{\red x} below it.
 
 \end{frame}
 
@@ -513,7 +514,7 @@ the \texttt{\red x} below it.
 \medskip
 \item Classes can be nested within other classes
   \begin{itemize}
-  \item but inner classes must be ordered so their names will mask
+  \item but inner classes must be ordered so their names mask
     external classes of the same name
   \end{itemize}
 
@@ -531,9 +532,9 @@ the \texttt{\red x} below it.
 
 My semantics does not attempt
 \begin{itemize}
-\item to describe interactions with \texttt{\structcol friend} declarations;
+\item to describe interactions with \ctt{friend} declarations;
 \item to handle namespace renaming; nor
-\item to model the equivalent of SML's \texttt{\structcol open}
+\item to model the equivalent of SML's \ctt{open}
 \end{itemize}
 
 \bigskip
@@ -560,8 +561,8 @@ Stroustrup argues its case quite well in his books.
 And luckily, \\[1em]
 \quad\begin{minipage}{0.9\textwidth}
 Daniel Wasserrab, Tobias Nipkow, Gregor Snelting and Frank Tip.\\
-{\structcol An operational semantics and type safety proof for
-  multiple inheritance in \cpp{}.} In \emph{OOPSLA~'06}.
+{\structcol An Operational Semantics and Type Safety Proof for
+  Multiple Inheritance in \cpp{}.} In \emph{OOPSLA~'06}.
 \end{minipage}\\[1em]
 explains it beautifully.
 
@@ -588,8 +589,7 @@ The \strong{static} type is the last element of the path.
 
 \bigskip
 The whole path is necessary to handle multiple ancestors of the same
-type.  Special magic also handles shared (= \texttt{\structcol
-  virtual}) ancestors.
+type.  Special magic also handles shared (= \ctt{virtual}) ancestors.
 
 \end{frame}
 
@@ -603,29 +603,315 @@ type.  Special magic also handles shared (= \texttt{\structcol
 
   \bigskip\bigskip
   \strongest{Object Layout}\\[1em]
-  Class members occur inside classes, not on the end of pointers to
+\begin{itemize}
+\item  Class members occur inside classes, not on the end of pointers to
   the heap.
 
   \medskip
-  Ancestor classes actually live inside derived classes.
+\item  Ancestor classes actually live inside derived classes.
 
   \medskip
-  A class in memory may not occupy contiguous memory.
+\item  A class in memory may not occupy contiguous memory.
 
   \medskip
-  Members of a class can have their address taken.
+\item  Members of a class can have their address taken.
+\end{itemize}
 
 \end{frame}
 
 \subsection{Templates}
 \begin{frame}{Templates}
 
+Templates are like SML functors on steroids:
+\begin{itemize}
+\item provide parametric polymorphism: \ctt{List<int>},
+  \ctt{List<char *>} etc
+\item can be recursive and higher-order
+\item multiple ``functor'' definitions are chosen from depending on
+  the specificity of the argument match
+\item no signatures on arguments (makes debugging a pain!)
+\end{itemize}
+
+\bigskip
+Template instantiation happens as part of ``compilation''.
+
+\medskip
+\quad\quad \textit{(How might a \cpp{} interpreter handle templates?)}
+
+\bigskip
+Here, the inspiration was
+
+\medskip
+\quad\begin{minipage}{0.9\textwidth}
+Jeremy Siek and Walid Taha.\\
+{\structcol A Semantic Analysis of \cpp{} Templates}.  In \emph{ECOOP}~2006.
+\end{minipage}\\[1em]
+
 \end{frame}
+
+\begin{frame}[containsverbatim]{Interpreting Templates?}
+
+Template instantiation must occur before dynamic behaviours are
+executed:
+{\structcol
+\begin{alltt}
+  template <class T> class List \{
+    T item;
+    List *next;
+    static int node_count;
+  \};
+  template<class T> int List<T>::node_count = 0;
+
+  int main(void)
+  \{
+    List<int> mylist;
+    {\magenta// \textit{List<int>::node_count must exist and be}}
+    {\magenta// \textit{initialised before main is entered}}
+  \}
+\end{alltt}}
+
+\end{frame}
+
+\begin{frame}[containsverbatim]{Templates as Name Resolution}
+
+  Templates are instantiated on a need-to-use basis.
+
+  \bigskip
+  If a member function is never used for a particular instantiation, the
+  code for that function mustn't be instantiated.
+
+  \bigskip
+  This makes a difference if the uninstantiated function calls a
+  function on the argument type that doesn't exist.
+{\structcol
+\begin{alltt}
+   int List<T>::foo(T *tptr)
+   \{
+     return tptr->bar();
+     {\magenta// \textit{T had better be a class type with a member}}
+     {\magenta// \textit{function with name bar}}
+   \}
+\end{alltt}}
+
+\end{frame}
+
+\begin{frame}{The Theoretically Interesting Bit About Templates}
+
+\begin{itemize}
+\item Template instantiation (of argument patterns) defines a weak partial
+  order
+  \begin{itemize}
+  \item $\tau_1 \preceq \tau_2$ if $\exists \sigma. \;\;\sigma(\tau_1) = \tau_2$
+  \end{itemize}
+
+\bigskip
+\item Validation Proof Opportunity!  Prove reflexivity, anti-symmetry
+  and transitivity.
+\begin{itemize}
+\item A long, tedious proof.
+\item Complicated by partiality of
+  instantiation.
+\item Made tedious by many syntactic forms of \cpp{}
+  types.
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Adding to Siek and Taha}
+
+Siek and Taha don't handle template arguments to templates.
+
+{\small\structcol
+\begin{alltt}
+  template <template <class, int> class U> struct X
+  \{
+    U<int,4> data;
+  \};
+
+  template <class T, int N> struct Array
+  \{
+    T array[N];
+  \};
+
+  int main()
+  \{
+    X<Array> foo;
+    foo.data.array[0] = 3;
+  \}
+\end{alltt}}
+
+\bigskip
+Adding these requires a slightly different instantiation process.
+
+\end{frame}
+
+\section{Object Lifetimes and Exceptions---Painful Interactions}
+\begin{frame}{Outline}\tableofcontents[current]\end{frame}
+\begin{frame}{Object Lifetimes}
+\begin{itemize}
+\item User-supplied constructors are run when classes are created
+  \begin{itemize}
+  \item Constructors for sub-objects and ancestors also run
+  \end{itemize}
+
+\bigskip
+\item User-supplied destructors are run on all objects in the \strong{reverse}
+  order of their construction.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[containsverbatim]{Object Lifetime in a Normal Evaluation}
+
+{\structcol
+\begin{alltt}
+   struct Base \{
+     int x;
+     Base(int y) : x(y) \{\}
+   \};
+
+   struct Member \{
+     char c[100];
+     Member(char d) \{ SomeClass s; ... \}
+   \};
+
+   struct Derived : public Base \{
+     Member m;
+     ...
+     Derived(int i, char c) : Base(i), m(c) \{ ... \}
+   \};
+\end{alltt}}
+
+\end{frame}
+
+\defverbatim[colored]\myprog{%
+\begin{center}
+\begin{minipage}{0.45\textwidth}
+\structcol\scriptsize
+\begin{alltt}
+struct Base \{
+  int x;
+  Base(int y) : x(y) \{\}
+\};
+\end{alltt}
+\end{minipage}
+\begin{minipage}{0.45\textwidth}
+\structcol\scriptsize
+\begin{alltt}
+struct Member \{
+  char c[100];
+  Member(char d) \{ SomeClass s; ... \}
+\};
+\end{alltt}
+\end{minipage}\\[3ex]
+\begin{minipage}{0.75\textwidth}
+\scriptsize\structcol
+\begin{alltt}
+struct Derived : public Base \{
+  Member m;
+  ...
+  Derived(int i, char c) : Base(i), m(c) \{ ... \}
+\}
+\end{alltt}
+\end{minipage}
+\end{center}
+}
+
+\begin{frame}
+\frametitle{Object Lifetime in a Normal Evaluation}
+
+\myprog
+
+\begin{overprint}
+\onslide<1>
+In the block
+{\structcol
+\begin{alltt}
+   \{ Derived d(3,'c'); ... \}
+\end{alltt}}
+the local variable \ctt{s} in constructor
+\ctt{Member} will be destroyed after that constructor
+finishes.
+
+\bigskip At the end of the block, \ctt{Member}, \ctt{Base} and then
+\ctt{Derived} will have their destructors called in that order.
+\onslide<2> ...
+
+\bigskip
+At the end of the block, \ctt{Member}, \ctt{Base} and then
+\ctt{Derived} will have their destructors called in that order.
+
+\bigskip
+This is easy enough to implement: part of the stack-frame for a block
+records a stack of objects as they are created.
+\end{overprint}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Exceptions}
+
+Similar to SML exceptions.
+
+\bigskip
+Exceptions can carry data of any type.
+
+\bigskip
+Handlers can match on the type of the carried data. Thus:
+
+{\structcol
+\begin{alltt}
+  int main(void)
+  \{
+    try \{ throw 3; \}
+    catch (int x) \{ return x; \}
+    catch (...) \{ return -1; \}
+    return 0;
+  \}
+\end{alltt}}
+
+(Not that using \ctt{int} as the exception type is good practice.)
+
+\end{frame}
+
+\begin{frame}{Modelling Exceptions}
+
+Exceptions seem easy to model:
+
+\bigskip
+\begin{itemize}
+\item C semantics handled \ctt{break} and \ctt{return}, and
+  exceptions' effect on control-flow is similar
+
+\bigskip
+\item \cpp{} semantics already carries types of everything around, so
+  dynamically examining types in handlers is straightforward
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{Exceptions Cause Pain}
+\myprog
+
+If the body of \ctt{Member} raises an exception:
+\begin{enumerate}
+\item At the end of \ctt{Member}, \ctt{s} has its destructor called
+\begin{itemize}
+  \item this is the usual time for its destruction
+\end{itemize}
+\item Body of \ctt{Derived} is skipped
+\item Ancestral \ctt{Base} has its destructor called
+  \begin{itemize}
+  \item this is \stronger{not} \ctt{Base}'s scheduled time for destruction
+  \end{itemize}
+\end{enumerate}
+
+\end{frame}
+
+
 
 \section{Proofs? Theorems?  Validation!?}
 
 
-\section{Exceptions}
 
 
 \end{document}
