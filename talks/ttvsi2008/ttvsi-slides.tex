@@ -909,7 +909,55 @@ If the body of \ctt{Member} raises an exception:
 
 
 
-\section{Proofs? Theorems?  Validation!?}
+\begin{frame}{Proofs? Theorems?  Validation!?}
+
+Yes.
+
+\bigskip
+But they're not very interesting:
+\begin{itemize}
+\item ground evaluation of name resolution on a simple program
+\item a number of small sanity check theorems
+  \begin{itemize}
+  \item \emph{eg}. the ``what is this type's alignment'' relation is
+    deterministic
+  \item converting an l-value to its ``value'' is deterministic and
+    doesn't change the state
+  \end{itemize}
+  \item the template pattern subsumption relation is a partial order
+\end{itemize}
+\end{frame}
+
+\begin{frame}{What's the Take-home Message?}
+
+It's possible to write a big, complicated operational semantics that
+purports to describe aspects of big complicated languages like \cpp{}.
+
+\onslide<2->
+\bigskip
+Validation of big, complicated semantics is a major issue; I've barely
+scraped the surface of what might be done.
+
+\onslide<3->
+\bigskip
+It's possible to capture the ghastlinesses that ``pramatists'' come
+up with.  
+\begin{itemize}
+\item Given time and smarts, it's possible to do this moderately
+elegantly. 
+\end{itemize}
+
+\onslide<4->
+\bigskip
+There may be interesting theorems to be proved about aspects of
+\cpp{}. 
+\begin{itemize}
+\item demonstrated already by the work I drew on
+\item may be possible to say something smart about object lifetimes
+\end{itemize}
+  
+
+\end{frame}
 
 
 
