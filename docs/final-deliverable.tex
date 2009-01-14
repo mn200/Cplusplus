@@ -1724,12 +1724,13 @@ requiring that all other contenders be instantiable to it.
 \section{Phase 3: Dynamics}
 \label{sec:phase3}
 
-\index{dynamic semantics|(}
-Much of the core semantics in this section is based on the C semantics
-presented in my PhD thesis~\cite{Norrish98}.  In particular, details
-of the way in which side effects are created and applied remain the
-same, as does the use of an evaluation context, and the way in
-unspecified order of evaluation is handled.
+\index{dynamic semantics|(} Much of the core semantics in this section
+is based on the C semantics presented in my PhD
+thesis~\cite{Norrish98}.  In particular, details of the way in which
+side effects are created and applied remain the same,%
+\index{side effects}%
+as does the use of an evaluation context, and the way in unspecified
+order of evaluation is handled.
 
 \subsection{Dynamic States}
 \label{sec:dynamic-states}
@@ -1819,7 +1820,9 @@ making it a binary relation on pairs of states and \emph{extended
   expressions}.  An extended expression is either
 \begin{itemize}
 \item a syntactic expression coupled with a side effect information
-  record (containing the three fields, \texttt{update\_map},
+  record %
+  \index{side effects}%
+  (containing the three fields, \texttt{update\_map},
   \texttt{ref\_map} and \texttt{pending\_ses}, ($R$, $\Upsilon$ and
   $\Pi$ in the terminology of my thesis)); or
 \item a statement coupled with a continuation, which latter is a
@@ -2104,6 +2107,55 @@ Otherwise, if the l-value denotes an object not of class type, the
 l-value turns into a list of bytes (an \texttt{ECompVal}), ready for
 further manipulations to occur.
 
+\index{side effects!application to memory} 
+\paragraph{Applying Side Effects}
+As in the original C model, pending side effects are stored in a side
+effect information record that accompanies expression evaluation (it
+is the second argument to the \texttt{EX} constructor).  These side
+effects actually affect memory through the action of rule
+\ruleid{apply-se}:
+\index{rule (dynamic)!apply-se@\texttt{apply-se}}%
+\begin{alltt}
+(* RULE-ID: apply-se *)
+     apply_se (se0, s0) (se, s)
+   \(\Rightarrow\)
+     mng (s0, EX e se0) (s, EX e se)
+\end{alltt}
+
+\index{apply_se relation@\texttt{apply_se} relation} The
+\texttt{apply_se} relation non-deterministically picks a pending
+update from the initial side effect information record (the
+\texttt{se0} variable above), and applies it to memory using the
+\texttt{val2mem} relation.%
+\index{val2mem relation@\texttt{val2mem} relation}%
+This updates the starting state \texttt{s0} to \texttt{s}. 
+For the full formal details, see \HOLfile{side_effects}. 
+
+\index{side effects!causing undefined behaviour}
+Again, as in the original C model, it is possible for side effect
+application to fail.  This can happen 
+\begin{itemize}
+\item if the memory to be updated has already been updated in the current
+  phase of execution;
+\item if the memory to be updated is not allocated; or
+\item if the memory to be updated was allocated as the result of a
+  \texttt{const}\index{const@\texttt{const}} variable definition
+\end{itemize}
+The relevant rule is \ruleid{apply-se-fails}:
+\index{rule (dynamic)!apply-se-fails@\texttt{apply-se-fails}}%
+\begin{alltt}
+(* RULE-ID: apply-se-fails *)
+     (\(\forall\)se s. \(\neg\)apply_se (se0, s0) (se, s)) \(\land\)
+     \(\neg\)is_null_se se0 \(\land\)
+     \(\neg\)(e = UndefinedExpr)
+   \(\Rightarrow\)
+     mng (s0, EX e se0) (s0, EX UndefinedExpr se0)
+\end{alltt}
+The first two premisses check that there are pending side effects, but
+that there is no possible way to apply any of them.  The third
+condition prevents a loop once the given expression has evolved to
+\texttt{UndefinedExpr}.
+  
 \paragraph{Operators} The rules governing the behaviour of the
 standard operators are as in the original C semantics.  The rules for
 the standard computational binary operators (arithmetic and shift
@@ -3215,9 +3267,10 @@ When a non-class, non-reference initialization is ready, the rule
 will apply.  The value of the initializing expression is first
 converted to be of the appropriate type, and the resulting value
 (\texttt{v'}, a list of bytes), is copied into memory using the
-\texttt{val2mem}\index{val2mem@\texttt{val2mem}} relation.  Note that
-the state's \texttt{initmap} is also initialized in the
-process.  The fact that the location attached to the
+\texttt{val2mem}%
+\index{val2mem relation@\texttt{val2mem} relation}%
+relation.  Note that the state's \texttt{initmap} is also initialized
+in the process.  The fact that the location attached to the
 \texttt{VDecInitA} constructor is an \texttt{ObjPlace} ensures that
 the variable being initialized is not a reference.%
 \index{initmap (state field)@\texttt{initmap} (\texttt{state} field)}%
@@ -4797,9 +4850,10 @@ moves from a \texttt{DirectInit0} to a \texttt{CopyInit} initializer.
 When a \texttt{CopyInit} initializer completes its evaluation,
 yielding a value, that value be copied across into the space earlier
 allocated for the object.  For non-class types this is done with the
-same \texttt{val2mem} helper function that is used to apply side
-effects.  For class types, this copying must be performed by a call to
-the copy constructor.
+same \texttt{val2mem}%
+\index{val2mem relation@\texttt{val2mem} relation}%
+helper function that is used to apply side effects.  For class types,
+this copying must be performed by a call to the copy constructor.
 
 \paragraph{Constructor Calls}
 The expression form corresponding to a constructor call uses the
