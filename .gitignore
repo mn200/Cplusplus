@@ -8,6 +8,12 @@
 *.snm
 *.toc
 *.vrb
+*.bbl
+*.blg
+*.idx
+*.ilg
+*.ind
+*.lof
 *~
 .HOLMK
 *Theory.sig
