@@ -9,12 +9,12 @@
 \usepackage{pstricks}
 \usepackage{pst-node}
 \usepackage{makeidx}
-\usepackage[square]{natbib}
-\usepackage[nofancy]{svninfo}
+\usepackage[square,numbers]{natbib}
+%\usepackage[nofancy]{svninfo}
 
 \renewcommand{\bibsection}{\section{Annotated
     Bibliography}\label{sec:bibliography}}
-\newcommand{\bibpreamble}{These sources were either used directly in
+\renewcommand{\bibpreamble}{These sources were either used directly in
   the development of the \cpp{} model, or provide useful background reading.}
 \include{cpp-macros}
 
@@ -29,13 +29,12 @@
 
 \title{A Formal Semantics for \cpp}
 \author{Michael Norrish\\{\small \texttt{Michael.Norrish@nicta.com.au}}\\
-{\footnotesize (Version \svnInfoRevision)}}
+{\footnotesize (Version ??)}}
 \date{}
 
 \makeindex
 
 \begin{document}
-\svnKeyword $Revision$
 \maketitle
 \begin{abstract}
   This document describes a formal operational model of the dynamic
@@ -2107,7 +2106,7 @@ Otherwise, if the l-value denotes an object not of class type, the
 l-value turns into a list of bytes (an \texttt{ECompVal}), ready for
 further manipulations to occur.
 
-\index{side effects!application to memory} 
+\index{side effects!application to memory}
 \paragraph{Applying Side Effects}
 As in the original C model, pending side effects are stored in a side
 effect information record that accompanies expression evaluation (it
@@ -2128,12 +2127,12 @@ update from the initial side effect information record (the
 \texttt{se0} variable above), and applies it to memory using the
 \texttt{val2mem} relation.%
 \index{val2mem relation@\texttt{val2mem} relation}%
-This updates the starting state \texttt{s0} to \texttt{s}. 
-For the full formal details, see \HOLfile{side_effects}. 
+This updates the starting state \texttt{s0} to \texttt{s}.
+For the full formal details, see \HOLfile{side_effects}.
 
 \index{side effects!causing undefined behaviour}
 Again, as in the original C model, it is possible for side effect
-application to fail.  This can happen 
+application to fail.  This can happen
 \begin{itemize}
 \item if the memory to be updated has already been updated in the current
   phase of execution;
@@ -2155,7 +2154,7 @@ The first two premisses check that there are pending side effects, but
 that there is no possible way to apply any of them.  The third
 condition prevents a loop once the given expression has evolved to
 \texttt{UndefinedExpr}.
-  
+
 \paragraph{Operators} The rules governing the behaviour of the
 standard operators are as in the original C semantics.  The rules for
 the standard computational binary operators (arithmetic and shift
