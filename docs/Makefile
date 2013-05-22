@@ -9,4 +9,4 @@ final-deliverable:
         ps2pdf final-deliverable.ps
 
 clean:
-	rm *.aux *.bbl *.blg *.dvi *.lof *.log *.pdf *.ps *.ilg *.ind *.toc
+	-rm -f *.aux *.bbl *.blg *.dvi *.lof *.log *.pdf *.ps *.ilg *.ind *.toc
