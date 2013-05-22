@@ -9,3 +9,8 @@
 *.toc
 *.vrb
 *~
+.HOLMK
+*Theory.sig
+*Theory.sml
+*.ui
+*.uo
