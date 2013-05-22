@@ -135,12 +135,11 @@ val dest_sfname_def = Define`
 val _ = export_rewrites ["dest_sfname_def"]
 
 
-val ptrdiff_t = Rsyntax.new_specification {
-  consts = [{const_name = "ptrdiff_t", fixity = Prefix}],
-  name = "ptrdiff_t",
-  sat_thm = CONV_RULE SKOLEM_CONV (prove(
+val ptrdiff_t = new_specification (
+  "ptrdiff_t", ["ptrdiff_t"],
+  CONV_RULE SKOLEM_CONV (prove(
     ``?t. t IN {Signed Char; Signed Short; Signed Int; Signed Long}``,
-    SIMP_TAC (srw_ss()) [EXISTS_OR_THM]))};
+    SIMP_TAC (srw_ss()) [EXISTS_OR_THM])));
 
 val const_type_def = Define`
   (const_type (Const ty) = T) /\
@@ -372,10 +371,7 @@ local
     intLib.ARITH_TAC)
   fun s2c str = {const_name = str, fixity = Prefix}
 in
-  val sizes = Rsyntax.new_specification {
-    consts = map (s2c o #1) humdinger,
-    name = "type_size_constants",
-    sat_thm = sat_thm}
+  val sizes = new_specification ("type_size_constants", map #1 humdinger, sat_thm)
 end;
 
 fun crossprod l1 l2 =

@@ -29,8 +29,8 @@ val cc_case_MONO = store_thm(
   "cc_case_MONO",
   ``(!s ty. nsf s ty ==> nsf' s ty) /\ (!n. bf n ==> bf' n) /\
     (!n. vf n ==> vf' n) ==>
-    (class_constituent_case nsf bf vf v ==>
-     class_constituent_case nsf' bf' vf' v)``,
+    (class_constituent_CASE v nsf bf vf ==>
+     class_constituent_CASE v nsf' bf' vf')``,
   Cases_on `v` THEN SRW_TAC [][]);
 val _ = export_mono "cc_case_MONO"
 
@@ -63,9 +63,9 @@ val empty_base_align_def = new_specification(
 val (empty_class_rules, empty_class_ind, empty_class_cases) = Hol_reln`
   (!cnm.
        EVERY (\cc. case cc of
-                      DBase n -> empty_class s F n
-                   || VirtualBase n -> empty_class s F n
-                   || NSD nm ty -> F)
+                      DBase n => empty_class s F n
+                   | VirtualBase n => empty_class s F n
+                   | NSD nm ty => F)
              (s mdp ' cnm)
    ==>
        empty_class s mdp cnm)
@@ -170,7 +170,7 @@ val align_det = store_thm(
   HO_MATCH_MP_TAC align_ind THEN REPEAT CONJ_TAC THEN
   REPEAT GEN_TAC THEN
   ((Q.MATCH_ABBREV_TAC `align U X Y Z ==> P` THEN
-    Q.UNABBREV_ALL_TAC THEN
+    markerLib.UNABBREV_ALL_TAC THEN
     ONCE_REWRITE_TAC [align_cases]) ORELSE
    (STRIP_TAC THEN ONCE_REWRITE_TAC [align_cases])) THEN
   SRW_TAC [][] THEN
@@ -182,8 +182,8 @@ val align_det = store_thm(
                                   ccs
                                   als' ==>
                           (als = als')` THEN1 METIS_TAC [] THEN
-  HO_MATCH_MP_TAC listTheory.listRel_ind THEN SRW_TAC [][] THEN
-  FULL_SIMP_TAC (srw_ss()) [listTheory.listRel_CONS]);
+  Induct_on `listRel` THEN SRW_TAC [][] THEN
+  FULL_SIMP_TAC (srw_ss()) [listTheory.LIST_REL_CONS1]);
 
 (* SANITY: cc_alignment on NSDs is the same as align *)
 val ccalign_NSD = store_thm(

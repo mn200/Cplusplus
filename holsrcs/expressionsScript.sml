@@ -176,7 +176,6 @@ val rec_expr_P_def = Define`
     (rec_expr_opt NONE P = T) /\
     (rec_expr_opt (SOME e) P = rec_expr_P e P)`;
 
-open SingleStep
 val rec_expr_simple = store_thm(
   "rec_expr_simple",
   (--`!P e. rec_expr_P e P ==> P e`--),

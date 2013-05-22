@@ -66,8 +66,8 @@ val FDOM_deNONE_SUBSET = store_thm(
 
 val mapPartial_def = Define`
   (mapPartial f [] = []) /\
-  (mapPartial f (h::t) = case f h of SOME x -> x :: mapPartial f t
-                                  || NONE -> mapPartial f t)
+  (mapPartial f (h::t) = case f h of SOME x => x :: mapPartial f t
+                                  | NONE => mapPartial f t)
 `
 val _ = export_rewrites ["mapPartial_def"]
 
@@ -89,7 +89,8 @@ val MAP_mapPartial = store_thm(
 
 val mapPartial_mapPartial = store_thm(
   "mapPartial_mapPartial",
-  ``mapPartial f (mapPartial g l) = mapPartial (option_case NONE f o g) l``,
+  ``mapPartial f (mapPartial g l) =
+    mapPartial (λe. case g e of NONE => NONE | SOME v => f v) l``,
   Induct_on `l` THEN SRW_TAC [][] THEN Cases_on `g h` THEN
   SRW_TAC [][])
 
@@ -203,8 +204,8 @@ val LFINDi_def = Define`
   (LFINDi P [] = NONE) /\
   (LFINDi P (h::t) = if P h then SOME 0n
                      else case LFINDi P t of
-                             NONE -> NONE
-                          || SOME i -> SOME (i + 1))
+                            NONE => NONE
+                          | SOME i => SOME (i + 1))
 `
 val _ = export_rewrites ["LFINDi_def"]
 
@@ -264,8 +265,8 @@ val olmap_def = Define`
   (olmap f [] = SOME []) /\
   (olmap f (h::t) =
      case f h of
-        NONE -> NONE
-     || SOME h -> OPTION_MAP (CONS h) (olmap f t))
+        NONE => NONE
+      | SOME h => OPTION_MAP (CONS h) (olmap f t))
 `;
 val _ = export_rewrites ["olmap_def"]
 
@@ -282,7 +283,7 @@ val _ = DefnBase.export_cong "olmap_CONG"
 
 val option_case_EQ_SOME = store_thm(
   "option_case_EQ_SOME",
-  ``(option_case NONE f v = SOME v0) =
+  ``(option_CASE v NONE f = SOME v0) =
         ?v0'. (v = SOME v0') /\ (f v0' = SOME v0)``,
   Cases_on `v` THEN SRW_TAC [][]);
 val _ = export_rewrites ["option_case_EQ_SOME"]
@@ -322,10 +323,10 @@ val olmap_APPEND = store_thm(
   "olmap_APPEND",
   ``olmap f (l1 ++ l2) =
       case olmap f l1 of
-         NONE -> NONE
-      || SOME l1' -> case olmap f l2 of
-                        NONE -> NONE
-                     || SOME l2' -> SOME (l1' ++ l2')``,
+         NONE => NONE
+      | SOME l1' => case olmap f l2 of
+                       NONE => NONE
+                     | SOME l2' => SOME (l1' ++ l2')``,
   Q.ID_SPEC_TAC `l2` THEN Induct_on`l1` THEN SRW_TAC [][] THENL [
     Cases_on `olmap f l2` THEN SRW_TAC [][],
     Cases_on `f h` THEN SRW_TAC [][] THEN
@@ -394,29 +395,6 @@ val optimage_image = store_thm(
   ]);
 
 (* ----------------------------------------------------------------------
-    THEOPT : ('a -> bool) -> 'a option
-   ---------------------------------------------------------------------- *)
-
-val THEOPT_def = Define`
-  (THEOPT) P = if (?)P then SOME ((@)P) else NONE
-`
-val _ = add_binder("THEOPT", 0)
-
-val THEOPT_I = store_thm(
-  "THEOPT_I",
-  ``P x ==> P (THE ((THEOPT) P))``,
-  `P = (\x. P x)` by SRW_TAC [][FUN_EQ_THM] THEN
-  POP_ASSUM SUBST_ALL_TAC THEN SRW_TAC [][THEOPT_def] THENL [
-    SELECT_ELIM_TAC THEN METIS_TAC [],
-    METIS_TAC []
-  ]);
-
-val THEOPT_EQ_NONE = store_thm(
-  "THEOPT_EQ_NONE",
-  ``(!x. ~P x) ==> ((THEOPT x. P x) = NONE)``,
-  SRW_TAC [][THEOPT_def]);
-
-(* ----------------------------------------------------------------------
     SETFN_APPLY
    ---------------------------------------------------------------------- *)
 
@@ -431,4 +409,3 @@ val SETFN_UNIQUE = store_thm(
   SRW_TAC [][SETFN_APPLY_def] THEN SELECT_ELIM_TAC THEN METIS_TAC []);
 
 val _ = export_theory()
-

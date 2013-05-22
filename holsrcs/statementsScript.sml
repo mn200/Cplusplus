@@ -200,11 +200,11 @@ val final_stmt_def = Define`
   (final_stmt Cont c = T) /\
   (final_stmt (Ret e) c =
      case c of
-        LVC f se0 -> (?a t p se. (e = EX (LVal a t p) se) /\ is_null_se se)
-     || RVC f se0 -> final_value e /\
+        LVC f se0 => (?a t p se. (e = EX (LVal a t p) se) /\ is_null_se se)
+      | RVC f se0 => final_value e /\
                      (case e of
-                         EX e0 se -> no_class_lval e0
-                      || ST st c0 -> T)) /\
+                         EX e0 se => no_class_lval e0
+                       | ST st c0 => T)) /\
   (final_stmt (Throw exn) c = ?e. (exn = SOME e) /\ final_value e) /\
   (final_stmt _ c = F)
 `;

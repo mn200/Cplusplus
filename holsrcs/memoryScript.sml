@@ -45,7 +45,7 @@ val byte_index_BIJ_count = store_thm(
 val dimindex_byte_index = store_thm(
   "dimindex_byte_index",
   ``dimindex (:byte_index) = CHAR_BIT``,
-  SRW_TAC [][fcpTheory.dimindex, FINITE_byte_index] THEN
+  SRW_TAC [][fcpTheory.dimindex_def, FINITE_byte_index] THEN
   METIS_TAC [FINITE_BIJ_CARD_EQ, FINITE_COUNT, CARD_COUNT, FINITE_byte_index,
              byte_index_BIJ_count]);
 val _ = export_rewrites ["dimindex_byte_index"]
@@ -96,17 +96,15 @@ val exp2CB_gt_2 = prove(
 fun size_spec n t = let
   val sz_t = rand (rator (#2 (dest_exists t)))
 in
-  Rsyntax.new_specification {
-    consts = [{const_name = n, fixity = Prefix}],
-    name = n,
-    sat_thm = prove(t, SIMP_TAC list_ss [INT_EXP] THEN
-                       Q.SUBGOAL_THEN `?n. ^sz_t = &n`
+  new_specification (n, [n],
+    prove(t, SIMP_TAC list_ss [INT_EXP] THEN
+             Q.SUBGOAL_THEN `?n. ^sz_t = &n`
                         (CHOOSE_THEN SUBST_ALL_TAC) THENL [
                           PROVE_TAC [NUM_POSINT_EXISTS, INT_LE_TRANS,
                                      type_size_constants, INT_LE,
                                      ZERO_LESS_EQ],
                           SIMP_TAC list_ss [INT_LE, log_lemma, exp2CB_gt_2]
-                       ])}
+                       ]))
 end;
 val short_size = size_spec "short_size"
   (--`?x. USHRT_MAX <= (2 ** CHAR_BIT) ** x`--);
